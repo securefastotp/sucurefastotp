@@ -1,5 +1,6 @@
 import "server-only";
 
+import upstreamCatalogCache from "@/lib/upstream-catalog-cache.json";
 import {
   cancelMockOrder,
   createMockOrder,
@@ -56,6 +57,23 @@ type OrderContext = {
   status: Order["status"];
 };
 
+type UpstreamCatalogCache = {
+  updatedAt: string;
+  servers: Record<
+    string,
+    {
+      countries: Array<{
+        id: number;
+        name: string;
+        code: string;
+        availableServices: number;
+        serverId: string;
+      }>;
+      catalogs: Record<string, Service[]>;
+    }
+  >;
+};
+
 const defaultCountry = {
   id: 6,
   name: "Indonesia",
@@ -88,6 +106,8 @@ const serviceNameMap: Record<string, string> = {
   gg: "Google",
   sp: "Shopee",
 };
+
+const upstreamCache = upstreamCatalogCache as UpstreamCatalogCache;
 
 const orderContextGlobal = globalThis as typeof globalThis & {
   __upstreamOrderContext?: Map<string, OrderContext>;
@@ -225,6 +245,35 @@ function getCountryScanIds() {
     .filter((item) => Number.isFinite(item) && item > 0);
 
   return parsed.length > 0 ? parsed : [defaultCountry.id];
+}
+
+function getCachedCountries(serverId: string): CountryOption[] {
+  const serverCache = upstreamCache.servers[resolveServerId(serverId)];
+
+  if (!serverCache) {
+    return [];
+  }
+
+  return serverCache.countries.map((country) => {
+    const meta = getCountryMeta(country.id);
+
+    return {
+      ...country,
+      name: country.name,
+      code: country.code,
+      flagEmoji: meta.flagEmoji,
+    };
+  });
+}
+
+function getCachedCatalog(serverId: string, countryId: number) {
+  const serverCache = upstreamCache.servers[resolveServerId(serverId)];
+
+  if (!serverCache) {
+    return [];
+  }
+
+  return (serverCache.catalogs[String(countryId)] ?? []) as Service[];
 }
 
 function uniqueSorted(values: string[]) {
@@ -744,11 +793,20 @@ export async function getCatalog(filters: CatalogFilters = {}) {
   try {
     const serverId = resolveServerId(filters.serverId);
     const countryId = resolveCountryId(filters.countryId);
+    const cachedServices = getCachedCatalog(serverId, countryId);
     const payload = await fetchServicesPayload(serverId, countryId);
     const services = extractArray(payload)
       .map((item) => normalizeService(item, { serverId, countryId }))
       .filter((service): service is Service => Boolean(service));
     const filteredServices = applyFilters(services, filters);
+
+    if (filteredServices.length === 0 && cachedServices.length > 0) {
+      return buildCatalogResponse(cachedServices, "rest", {
+        source: "fallback",
+        warning:
+          "Katalog live KirimKode dari serverless sedang kosong. Menampilkan cache sinkronisasi terbaru dari KirimKode.",
+      });
+    }
 
     return buildCatalogResponse(filteredServices, "rest", {
       source: "upstream",
@@ -758,6 +816,19 @@ export async function getCatalog(filters: CatalogFilters = {}) {
           : undefined,
     });
   } catch (error) {
+    const cachedServices = getCachedCatalog(
+      resolveServerId(filters.serverId),
+      resolveCountryId(filters.countryId),
+    );
+
+    if (cachedServices.length > 0) {
+      return buildCatalogResponse(cachedServices, "rest", {
+        source: "fallback",
+        warning:
+          "Request live ke KirimKode gagal dari Vercel. Menampilkan cache sinkronisasi terbaru dari KirimKode.",
+      });
+    }
+
     throw new Error(
       error instanceof Error
         ? error.message
@@ -769,6 +840,7 @@ export async function getCatalog(filters: CatalogFilters = {}) {
 export async function getCountries(serverId?: string): Promise<CountryOption[]> {
   const config = getProviderConfig();
   const resolvedServerId = resolveServerId(serverId);
+  const cachedCountries = getCachedCountries(resolvedServerId);
 
   if (config.mode === "mock") {
     return [
@@ -831,6 +903,10 @@ export async function getCountries(serverId?: string): Promise<CountryOption[]> 
       return left.id - right.id;
     });
 
+  if (countries.length === 0 && cachedCountries.length > 0) {
+    return cachedCountries;
+  }
+
   countryCacheStore.set(cacheKey, {
     countries,
     expiresAt:
@@ -838,7 +914,7 @@ export async function getCountries(serverId?: string): Promise<CountryOption[]> 
       (Number.isFinite(config.countryCacheTtlMs) ? config.countryCacheTtlMs : 1800000),
   });
 
-  return countries;
+  return countries.length > 0 ? countries : cachedCountries;
 }
 
 export async function getBalance(): Promise<Balance> {
