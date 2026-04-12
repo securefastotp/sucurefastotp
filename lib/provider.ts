@@ -215,10 +215,28 @@ function resolveCountryId(countryId?: number | string) {
   return defaultCountry.id;
 }
 
+const countryHintMap: Record<
+  number,
+  {
+    name: string;
+    code: string;
+    flagEmoji?: string;
+  }
+> = {
+  5: { name: "Philippines", code: "PH" },
+  6: { name: "Indonesia", code: "ID" },
+  10: { name: "Vietnam", code: "VN" },
+  12: { name: "United States", code: "US" },
+  15: { name: "United Kingdom", code: "GB" },
+  21: { name: "India", code: "IN" },
+  33: { name: "Canada", code: "CA" },
+  61: { name: "Pakistan", code: "PK" },
+};
+
 function getCountryMeta(countryId?: number | string) {
   const resolvedId = resolveCountryId(countryId);
 
-  const knownMeta = countryMetaMap[resolvedId];
+  const knownMeta = countryHintMap[resolvedId] ?? countryMetaMap[resolvedId];
 
   if (knownMeta) {
     return {
@@ -231,8 +249,8 @@ function getCountryMeta(countryId?: number | string) {
 
   return {
     id: resolvedId,
-    name: `Country ${resolvedId}`,
-    code: `C${resolvedId}`,
+    name: `Country ID ${resolvedId}`,
+    code: "",
     flagEmoji: "🏳️",
   };
 }
@@ -259,8 +277,11 @@ function getCachedCountries(serverId: string): CountryOption[] {
 
     return {
       ...country,
-      name: country.name,
-      code: country.code,
+      name:
+        country.name && !country.name.toLowerCase().startsWith("country ")
+          ? country.name
+          : meta.name,
+      code: country.code && /^[a-z]{2}$/i.test(country.code) ? country.code : meta.code,
       flagEmoji: meta.flagEmoji,
     };
   });

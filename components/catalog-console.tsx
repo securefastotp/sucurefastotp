@@ -21,6 +21,9 @@ import type {
 } from "@/lib/types";
 
 type CatalogConsoleProps = {
+  initialCatalog: CatalogResponse | null;
+  initialCountries: CountryOption[];
+  initialCountryId: number | null;
   initialRuntime: RuntimeStatus;
 };
 
@@ -264,6 +267,49 @@ function getCountryGlyph(country?: Pick<CountryOption, "code" | "flagEmoji"> | n
   return toFlagEmoji(country?.code) ?? country?.flagEmoji ?? "🌐";
 }
 
+function getSafeCountryGlyph(country?: Pick<CountryOption, "code"> | null) {
+  if (hasCountryCode(country)) {
+    return getCountryGlyph(country as Pick<CountryOption, "code" | "flagEmoji">);
+  }
+
+  return "🌐";
+}
+
+function hasCountryCode(country?: Pick<CountryOption, "code"> | null) {
+  return Boolean(country?.code && /^[a-z]{2}$/i.test(country.code));
+}
+
+function getCountryCaption(country?: CountryOption | null) {
+  if (!country) {
+    return "";
+  }
+
+  if (hasCountryCode(country)) {
+    return `${country.code.toUpperCase()} - ${country.availableServices} layanan`;
+  }
+
+  return `KirimKode ID ${country.id} - ${country.availableServices} layanan`;
+}
+
+function getCountryListCaption(country: CountryOption) {
+  if (hasCountryCode(country)) {
+    return `KirimKode ID ${country.id} - ${country.code.toUpperCase()}`;
+  }
+
+  return `KirimKode ID ${country.id}`;
+}
+
+function getServiceBadge(serviceName: string) {
+  const compact = serviceName
+    .split(/[^A-Za-z0-9]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+
+  return compact || serviceName.slice(0, 2).toUpperCase() || "OT";
+}
+
 function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
@@ -450,12 +496,21 @@ function SectionTitle({
   );
 }
 
-export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
-  const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
-  const [countries, setCountries] = useState<CountryOption[]>([]);
+export function CatalogConsole({
+  initialCatalog,
+  initialCountries,
+  initialCountryId,
+  initialRuntime,
+}: CatalogConsoleProps) {
+  const [catalog, setCatalog] = useState<CatalogResponse | null>(initialCatalog);
+  const [countries, setCountries] = useState<CountryOption[]>(initialCountries);
   const [selectedServer, setSelectedServer] = useState<ServerId>("bimasakti");
-  const [selectedCountryId, setSelectedCountryId] = useState<number | null>(null);
-  const [selectedServiceId, setSelectedServiceId] = useState("");
+  const [selectedCountryId, setSelectedCountryId] = useState<number | null>(
+    initialCountryId,
+  );
+  const [selectedServiceId, setSelectedServiceId] = useState(
+    initialCatalog?.services[0]?.id ?? "",
+  );
   const [countryPanelOpen, setCountryPanelOpen] = useState(false);
   const [serviceSearch, setServiceSearch] = useState("");
   const [servicePanelOpen, setServicePanelOpen] = useState(false);
@@ -465,8 +520,12 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
   const [orderError, setOrderError] = useState<string | null>(null);
   const [payment, setPayment] = useState<PaymentRecord | null>(null);
   const [order, setOrder] = useState<Order | null>(null);
-  const [isLoadingCountries, setIsLoadingCountries] = useState(true);
-  const [isLoadingCatalog, setIsLoadingCatalog] = useState(true);
+  const [isLoadingCountries, setIsLoadingCountries] = useState(
+    initialCountries.length === 0,
+  );
+  const [isLoadingCatalog, setIsLoadingCatalog] = useState(
+    initialCountryId !== null && initialCatalog === null,
+  );
   const [isCreatingPayment, setIsCreatingPayment] = useState(false);
   const [isRefreshingPayment, setIsRefreshingPayment] = useState(false);
   const [isRefreshingOrder, setIsRefreshingOrder] = useState(false);
@@ -843,7 +902,7 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
             type="button"
           >
             <span className="flex min-w-0 items-center gap-3">
-              <span className="text-2xl">{getCountryGlyph(selectedCountry)}</span>
+              <span className="text-2xl">{getSafeCountryGlyph(selectedCountry)}</span>
               <span className="min-w-0">
                 <span className="block truncate text-base font-medium text-white">
                   {isLoadingCountries
@@ -852,7 +911,7 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
                 </span>
                 {selectedCountry ? (
                   <span className="mt-1 block text-xs uppercase tracking-[0.16em] text-sky-50/55">
-                    ID {selectedCountry.id} - {selectedCountry.availableServices} layanan
+                    {getCountryCaption(selectedCountry)}
                   </span>
                 ) : null}
               </span>
@@ -884,14 +943,14 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
                     >
                       <div className="flex min-w-0 items-center gap-3 pr-3">
                         <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-[#102846] text-[1.4rem]">
-                          {getCountryGlyph(country)}
+                          {getSafeCountryGlyph(country)}
                         </div>
                         <div className="min-w-0">
                           <p className="truncate text-[1rem] font-medium text-white">
                             {country.name}
                           </p>
                           <p className="mt-1 text-xs uppercase tracking-[0.16em] text-sky-50/50">
-                            ID {country.id} - code {country.code}
+                            {getCountryListCaption(country)}
                           </p>
                         </div>
                       </div>
@@ -917,11 +976,11 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
           {selectedCountry ? (
             <div className="mt-4 rounded-[22px] border border-white/10 bg-[#102846] px-4 py-4 text-sm leading-7 text-sky-50/76">
               <div className="flex items-center gap-3">
-                <div className="text-2xl">{getCountryGlyph(selectedCountry)}</div>
+                <div className="text-2xl">{getSafeCountryGlyph(selectedCountry)}</div>
                 <div>
                   <p className="font-semibold text-white">{selectedCountry.name}</p>
                   <p className="text-sky-50/58">
-                    code {selectedCountry.code} - {selectedCountry.availableServices} layanan
+                    {getCountryCaption(selectedCountry)}
                   </p>
                 </div>
               </div>
@@ -957,7 +1016,7 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
                 value={serviceSearch}
               />
 
-              <div className="mt-4 max-h-[300px] space-y-2 overflow-y-auto pr-1">
+              <div className="mt-4 max-h-[360px] space-y-2 overflow-y-auto pr-1">
                 {filteredServices.map((service) => (
                   <button
                     key={service.id}
@@ -971,13 +1030,18 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
                     }}
                     type="button"
                   >
-                    <div className="min-w-0 pr-3">
-                      <p className="truncate text-[1rem] font-medium text-white">
-                        {service.service}
-                      </p>
-                      <p className="mt-1 text-xs uppercase tracking-[0.16em] text-sky-50/50">
-                        {service.serviceCode} - stok {service.stock}
-                      </p>
+                    <div className="flex min-w-0 items-center gap-3 pr-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] bg-[linear-gradient(145deg,rgba(229,248,255,0.28),rgba(116,190,255,0.28))] text-sm font-semibold text-sky-50">
+                        {getServiceBadge(service.service)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-[1rem] font-medium text-white">
+                          {service.service}
+                        </p>
+                        <p className="mt-1 text-xs uppercase tracking-[0.16em] text-sky-50/50">
+                          {service.serviceCode} - stok {service.stock}
+                        </p>
+                      </div>
                     </div>
                     <div className="text-right">
                       <p className="text-[1rem] font-semibold text-sky-100">
@@ -1021,7 +1085,7 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
                   <div>
                     <p className="text-sm text-sky-50/55">Negara</p>
                     <p className="mt-1 text-base font-semibold text-white">
-                      {getCountryGlyph(selectedCountry)} {selectedCountry.name}
+                      {getSafeCountryGlyph(selectedCountry)} {selectedCountry.name}
                     </p>
                     <p className="mt-1 text-xs uppercase tracking-[0.16em] text-sky-50/50">
                       code {selectedService.serviceCode}
