@@ -1,4 +1,4 @@
-# SupplyOTP
+# SecureFastOTP
 
 Website supplier OTP siap deploy ke GitHub + Vercel.
 
@@ -22,19 +22,19 @@ Salin `.env.example` menjadi `.env.local`, lalu isi credential provider Anda.
 ## Environment Penting
 
 ```bash
-NEXT_PUBLIC_SITE_NAME=SupplyOTP
+NEXT_PUBLIC_SITE_NAME=SecureFastOTP
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 
 UPSTREAM_PROVIDER_MODE=rest
-UPSTREAM_BASE_URL=https://provider-anda.example.com/api
+UPSTREAM_BASE_URL=https://api.kirimkode.com/v1
 UPSTREAM_API_KEY=isi_api_key_anda
 UPSTREAM_API_KEY_HEADER=x-api-key
 UPSTREAM_BALANCE_PATH=/balance
-UPSTREAM_SERVICES_PATH=/services
-UPSTREAM_HISTORY_PATH=/orders/history
-UPSTREAM_ORDER_PATH=/orders
-UPSTREAM_ORDER_STATUS_PATH=/orders/{id}
-UPSTREAM_CANCEL_PATH=/orders/{id}/cancel
+UPSTREAM_SERVICES_PATH=/services?page=1&limit=200
+UPSTREAM_HISTORY_PATH=/orders
+UPSTREAM_ORDER_PATH=/order
+UPSTREAM_ORDER_STATUS_PATH=/order/{id}/status
+UPSTREAM_CANCEL_PATH=/order/{id}/cancel
 UPSTREAM_ORDER_METHOD=POST
 UPSTREAM_CANCEL_METHOD=POST
 UPSTREAM_MARKUP_PERCENT=15
@@ -56,4 +56,5 @@ UPSTREAM_TIMEOUT_MS=15000
 - Jika format API provider berbeda, cukup ubah env path atau sesuaikan normalizer di `lib/provider.ts`.
 - Saat `UPSTREAM_PROVIDER_MODE=mock`, aplikasi memakai data demo dan order in-memory.
 - Untuk production volume tinggi, simpan context order ke database atau Redis agar status order tetap stabil antar serverless instance.
-- Berdasarkan aset publik KirimKode, dokumentasi mereka menyinggung endpoint untuk balance, services, countries, order, status, cancel, dan history. Contoh request detailnya tetap login-protected, jadi path exact perlu Anda samakan dari akun Anda sendiri.
+- Dari pengujian live 12 April 2026, KirimKode API menerima auth via header `x-api-key`, memakai `GET /balance`, `GET /orders`, `POST /order`, `GET /order/{id}/status`, dan `POST /order/{id}/cancel`.
+- Endpoint `GET /services` dari KirimKode saat diuji sempat mengembalikan `FETCH_FAILED`, sehingga default di project ini menggunakan query `?page=1&limit=200` agar respons lebih stabil.

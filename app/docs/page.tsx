@@ -42,27 +42,27 @@ const envFields = [
   {
     name: "UPSTREAM_SERVICES_PATH",
     required: "No",
-    description: "Path endpoint katalog layanan. Default `/services`.",
+    description: "Path endpoint katalog layanan. Default `/services?page=1&limit=200`.",
   },
   {
     name: "UPSTREAM_HISTORY_PATH",
     required: "No",
-    description: "Path endpoint riwayat order upstream. Default `/orders/history`.",
+    description: "Path endpoint riwayat order upstream. Default `/orders`.",
   },
   {
     name: "UPSTREAM_ORDER_PATH",
     required: "No",
-    description: "Path endpoint buat order. Default `/orders`.",
+    description: "Path endpoint buat order. Default `/order`.",
   },
   {
     name: "UPSTREAM_ORDER_STATUS_PATH",
     required: "No",
-    description: "Path endpoint cek status order. Gunakan `{id}` atau `:id`.",
+    description: "Path endpoint cek status order. Default `/order/{id}/status`.",
   },
   {
     name: "UPSTREAM_CANCEL_PATH",
     required: "No",
-    description: "Path endpoint cancel order. Gunakan `{id}` atau `:id`.",
+    description: "Path endpoint cancel order. Default `/order/{id}/cancel`.",
   },
   {
     name: "UPSTREAM_ORDER_METHOD",
@@ -106,10 +106,12 @@ export default function DocsPage() {
             website Anda sendiri.
           </p>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-ink/58">
-            Catatan: pada pengecekan publik tanggal 12 April 2026, halaman
-            `https://kirimkode.com/api-docs` diarahkan ke login. Dari aset
-            publiknya tetap terlihat bahwa API docs mereka mencakup balance,
-            services, countries, order, status, cancel, dan history.
+            Catatan: pada pengecekan tanggal 12 April 2026, auth KirimKode API
+            berhasil memakai header <code>x-api-key</code>. Endpoint yang
+            berhasil diuji: <code>GET /balance</code>,{" "}
+            <code>GET /orders</code>, <code>POST /order</code>,{" "}
+            <code>GET /order/{"{id}"}/status</code>, dan{" "}
+            <code>POST /order/{"{id}"}/cancel</code>.
           </p>
         </section>
 

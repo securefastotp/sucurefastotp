@@ -48,9 +48,11 @@ const orderContextStore =
 orderContextGlobal.__upstreamOrderContext = orderContextStore;
 
 function getProviderConfig() {
-  const mode = process.env.UPSTREAM_PROVIDER_MODE === "rest" ? "rest" : "mock";
-  const baseUrl = process.env.UPSTREAM_BASE_URL;
   const apiKey = process.env.UPSTREAM_API_KEY;
+  const requestedMode = process.env.UPSTREAM_PROVIDER_MODE;
+  const mode =
+    requestedMode === "rest" || (!requestedMode && apiKey) ? "rest" : "mock";
+  const baseUrl = process.env.UPSTREAM_BASE_URL ?? "https://api.kirimkode.com/v1";
 
   return {
     mode: mode === "rest" && baseUrl && apiKey ? "rest" : "mock",
@@ -58,12 +60,13 @@ function getProviderConfig() {
     apiKey,
     apiKeyHeader: process.env.UPSTREAM_API_KEY_HEADER ?? "x-api-key",
     balancePath: process.env.UPSTREAM_BALANCE_PATH ?? "/balance",
-    servicesPath: process.env.UPSTREAM_SERVICES_PATH ?? "/services",
-    historyPath: process.env.UPSTREAM_HISTORY_PATH ?? "/orders/history",
-    orderPath: process.env.UPSTREAM_ORDER_PATH ?? "/orders",
+    servicesPath:
+      process.env.UPSTREAM_SERVICES_PATH ?? "/services?page=1&limit=200",
+    historyPath: process.env.UPSTREAM_HISTORY_PATH ?? "/orders",
+    orderPath: process.env.UPSTREAM_ORDER_PATH ?? "/order",
     orderStatusPath:
-      process.env.UPSTREAM_ORDER_STATUS_PATH ?? "/orders/{id}",
-    cancelPath: process.env.UPSTREAM_CANCEL_PATH ?? "/orders/{id}/cancel",
+      process.env.UPSTREAM_ORDER_STATUS_PATH ?? "/order/{id}/status",
+    cancelPath: process.env.UPSTREAM_CANCEL_PATH ?? "/order/{id}/cancel",
     orderMethod:
       process.env.UPSTREAM_ORDER_METHOD === "GET" ? "GET" : "POST",
     cancelMethod:
@@ -164,8 +167,37 @@ async function fetchUpstream(
     | Record<string, unknown>[]
     | null;
 
+  if (
+    payload &&
+    !Array.isArray(payload) &&
+    "success" in payload &&
+    payload.success === false
+  ) {
+    const nestedError =
+      "error" in payload &&
+      payload.error &&
+      typeof payload.error === "object" &&
+      "message" in payload.error &&
+      typeof payload.error.message === "string"
+        ? payload.error.message
+        : null;
+
+    throw new Error(nestedError ?? "Provider upstream mengembalikan status gagal.");
+  }
+
   if (!response.ok) {
+    const nestedError =
+      payload &&
+      !Array.isArray(payload) &&
+      "error" in payload &&
+      payload.error &&
+      typeof payload.error === "object" &&
+      "message" in payload.error &&
+      typeof payload.error.message === "string"
+        ? payload.error.message
+        : null;
     const message =
+      nestedError ||
       (payload &&
         typeof payload === "object" &&
         "message" in payload &&
@@ -302,7 +334,15 @@ function normalizeService(item: unknown): Service | null {
     "rate",
     "amount",
   ]);
-  const service = pickString(record, ["service", "name", "serviceName", "title"]);
+  const service = pickString(record, [
+    "service",
+    "name",
+    "serviceName",
+    "service_name",
+    "title",
+    "slug",
+    "code",
+  ]);
   const country = pickString(record, ["country", "countryName", "region"], "Indonesia");
 
   if (!service || upstreamPrice <= 0) {
@@ -310,7 +350,11 @@ function normalizeService(item: unknown): Service | null {
   }
 
   return {
-    id: pickString(record, ["id", "serviceId", "code", "sku"], `${service}-${country}`),
+    id: pickString(
+      record,
+      ["id", "serviceId", "service_id", "code", "sku", "slug"],
+      `${service}-${country}`,
+    ),
     slug: `${service}-${country}`
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
@@ -477,8 +521,8 @@ export async function createOrder(input: CreateOrderInput) {
   const payload = await fetchUpstream(config.orderPath, {
     method: config.orderMethod,
     body: {
+      service: input.serviceId || input.service,
       serviceId: input.serviceId,
-      service: input.service,
       country: input.country,
       countryName: input.country,
     },
