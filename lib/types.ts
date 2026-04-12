@@ -50,6 +50,9 @@ export type RuntimeStatus = {
   markupPercent: number;
   minMargin: number;
   currency: string;
+  midtransConfigured: boolean;
+  midtransEnvironment: "sandbox" | "production";
+  midtransClientKeyAvailable: boolean;
 };
 
 export type Balance = {
@@ -64,4 +67,33 @@ export type OrderHistoryResponse = {
   mode: ProviderMode;
   total: number;
   orders: Order[];
+};
+
+export type PaymentStatus =
+  | "pending"
+  | "paid"
+  | "failed"
+  | "expired"
+  | "cancelled";
+
+export type PaymentRecord = {
+  id: string;
+  gateway: "midtrans";
+  serviceId: string;
+  service: string;
+  country: string;
+  amount: number;
+  currency: string;
+  status: PaymentStatus;
+  customerName?: string;
+  customerEmail?: string;
+  customerPhone?: string;
+  snapToken?: string;
+  redirectUrl?: string;
+  midtransOrderId: string;
+  statusMessage?: string;
+  paidAt?: string;
+  createdAt: string;
+  updatedAt: string;
+  order?: Order;
 };

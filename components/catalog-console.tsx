@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Script from "next/script";
 import {
   startTransition,
   useDeferredValue,
@@ -14,6 +15,7 @@ import type {
   CatalogResponse,
   Order,
   OrderHistoryResponse,
+  PaymentRecord,
   RuntimeStatus,
   Service,
 } from "@/lib/types";
@@ -25,6 +27,22 @@ type CatalogConsoleProps = {
 };
 
 type HistoryFilter = "all" | Order["status"];
+
+declare global {
+  interface Window {
+    snap?: {
+      pay: (
+        token: string,
+        options?: {
+          onSuccess?: () => void;
+          onPending?: () => void;
+          onError?: () => void;
+          onClose?: () => void;
+        },
+      ) => void;
+    };
+  }
+}
 
 const shellCard =
   "rounded-[32px] border border-white/8 bg-white/6 p-5 shadow-[0_24px_70px_-42px_rgba(0,0,0,0.85)] backdrop-blur";
@@ -150,33 +168,6 @@ async function requestOrderStatus(orderId: string) {
   return payload.order;
 }
 
-async function requestCreateOrder(service: Service) {
-  const response = await fetch("/api/orders", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      serviceId: service.id,
-      service: service.service,
-      country: service.country,
-      price: service.price,
-      currency: service.currency,
-    }),
-  });
-
-  const payload = (await response.json()) as
-    | { order: Order }
-    | { error?: string };
-
-  if (!response.ok || !("order" in payload)) {
-    const message = hasError(payload) ? payload.error : undefined;
-    throw new Error(message ?? "Gagal membuat order.");
-  }
-
-  return payload.order;
-}
-
 async function requestCancelOrder(orderId: string) {
   const response = await fetch(`/api/orders/${orderId}`, {
     method: "DELETE",
@@ -192,6 +183,72 @@ async function requestCancelOrder(orderId: string) {
   }
 
   return payload.order;
+}
+
+async function requestCreatePayment(service: Service, customer: {
+  name: string;
+  email: string;
+  phone: string;
+}) {
+  const response = await fetch("/api/payments", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      serviceId: service.id,
+      service: service.service,
+      country: service.country,
+      price: service.price,
+      currency: service.currency,
+      customerName: customer.name,
+      customerEmail: customer.email,
+      customerPhone: customer.phone,
+    }),
+  });
+
+  const payload = (await response.json()) as
+    | { payment: PaymentRecord }
+    | { error?: string };
+
+  if (!response.ok || !("payment" in payload)) {
+    const message = hasError(payload) ? payload.error : undefined;
+    throw new Error(message ?? "Gagal membuat checkout Midtrans.");
+  }
+
+  return payload.payment;
+}
+
+async function requestPaymentStatus(paymentId: string) {
+  const response = await fetch(`/api/payments/${paymentId}`, {
+    cache: "no-store",
+  });
+  const payload = (await response.json()) as
+    | { payment: PaymentRecord }
+    | { error?: string };
+
+  if (!response.ok || !("payment" in payload)) {
+    const message = hasError(payload) ? payload.error : undefined;
+    throw new Error(message ?? "Gagal membaca status payment.");
+  }
+
+  return payload.payment;
+}
+
+async function requestActivatePayment(paymentId: string) {
+  const response = await fetch(`/api/payments/${paymentId}/activate`, {
+    method: "POST",
+  });
+  const payload = (await response.json()) as
+    | { payment: PaymentRecord; order?: Order | null }
+    | { error?: string };
+
+  if (!response.ok || !("payment" in payload)) {
+    const message = hasError(payload) ? payload.error : undefined;
+    throw new Error(message ?? "Gagal aktivasi order dari Midtrans.");
+  }
+
+  return payload;
 }
 
 export function CatalogConsole({
@@ -211,11 +268,19 @@ export function CatalogConsole({
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [orderError, setOrderError] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
   const [order, setOrder] = useState<Order | null>(null);
+  const [payment, setPayment] = useState<PaymentRecord | null>(null);
+  const [customerName, setCustomerName] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
   const [isLoadingCatalog, setIsLoadingCatalog] = useState(true);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [isOrdering, setIsOrdering] = useState(false);
   const [isRefreshingOrder, setIsRefreshingOrder] = useState(false);
+  const [isCreatingPayment, setIsCreatingPayment] = useState(false);
+  const [isSyncingPayment, setIsSyncingPayment] = useState(false);
+  const [isSnapReady, setIsSnapReady] = useState(false);
   const deferredQuery = useDeferredValue(query);
   const deferredHistoryQuery = useDeferredValue(historyQuery);
 
@@ -276,15 +341,109 @@ export function CatalogConsole({
     }
   }
 
+  function rememberPaymentId(paymentId: string | null) {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (!paymentId) {
+      window.localStorage.removeItem("otp-payment-id");
+      return;
+    }
+
+    window.localStorage.setItem("otp-payment-id", paymentId);
+  }
+
+  async function syncPaymentState(paymentId: string, activateOrder = false) {
+    setIsSyncingPayment(true);
+    setPaymentError(null);
+
+    try {
+      if (activateOrder) {
+        const payload = await requestActivatePayment(paymentId);
+        setPayment(payload.payment);
+        rememberPaymentId(payload.payment.order ? null : payload.payment.id);
+
+        if (payload.order) {
+          setOrder(payload.order);
+          setActiveMenu("order-state");
+        }
+
+        return payload.payment;
+      }
+
+      const currentPayment = await requestPaymentStatus(paymentId);
+
+      setPayment(currentPayment);
+      rememberPaymentId(currentPayment.order ? null : currentPayment.id);
+      if (currentPayment.order) {
+        setOrder(currentPayment.order);
+      }
+      return currentPayment;
+    } catch (error) {
+      setPaymentError(
+        error instanceof Error ? error.message : "Gagal membaca payment.",
+      );
+      return null;
+    } finally {
+      setIsSyncingPayment(false);
+    }
+  }
+
+  function openMidtransSnap(currentPayment: PaymentRecord) {
+    if (!currentPayment.snapToken) {
+      setPaymentError(
+        "Snap token Midtrans belum tersedia. Coba buat checkout ulang.",
+      );
+      return;
+    }
+
+    if (!window.snap) {
+      setPaymentError(
+        "Snap Midtrans belum siap dimuat. Tunggu sebentar lalu coba lagi.",
+      );
+      return;
+    }
+
+    window.snap.pay(currentPayment.snapToken, {
+      onSuccess: () => {
+        void syncPaymentState(currentPayment.id, true);
+      },
+      onPending: () => {
+        void syncPaymentState(currentPayment.id, false);
+      },
+      onError: () => {
+        void syncPaymentState(currentPayment.id, false);
+      },
+      onClose: () => {
+        void syncPaymentState(currentPayment.id, false);
+      },
+    });
+  }
+
   useEffect(() => {
     void loadCatalog();
     void loadHistory();
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const paymentFromQuery = params.get("payment");
+    const paymentFromStorage = window.localStorage.getItem("otp-payment-id");
+    const targetPayment = paymentFromQuery || paymentFromStorage;
+
+    if (targetPayment) {
+      syncPaymentEvent(targetPayment);
+    }
   }, []);
 
   const refreshOrderEvent = useEffectEvent((orderId: string) => {
     startTransition(() => {
       void refreshOrder(orderId);
     });
+  });
+  const syncPaymentEvent = useEffectEvent((paymentId: string) => {
+    void syncPaymentState(paymentId, false);
   });
 
   useEffect(() => {
@@ -365,8 +524,41 @@ export function CatalogConsole({
   const selectedService =
     availableServices.find((service) => service.id === selectedServiceId) ?? null;
 
-  async function handleCreateOrder() {
+  async function handleCreateCheckout() {
     if (!selectedService) {
+      return;
+    }
+
+    setIsCreatingPayment(true);
+    setPaymentError(null);
+
+    try {
+      const createdPayment = await requestCreatePayment(selectedService, {
+        name: customerName,
+        email: customerEmail,
+        phone: customerPhone,
+      });
+
+      setPayment(createdPayment);
+      rememberPaymentId(createdPayment.id);
+      setActiveMenu("payment-state");
+      window.setTimeout(() => {
+        document
+          .getElementById("payment-state")
+          ?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 80);
+      openMidtransSnap(createdPayment);
+    } catch (error) {
+      setPaymentError(
+        error instanceof Error ? error.message : "Gagal membuat checkout Midtrans.",
+      );
+    } finally {
+      setIsCreatingPayment(false);
+    }
+  }
+
+  async function handleActivateOrder() {
+    if (!payment?.id) {
       return;
     }
 
@@ -374,17 +566,12 @@ export function CatalogConsole({
     setOrderError(null);
 
     try {
-      setOrder(await requestCreateOrder(selectedService));
-      setActiveMenu("order-state");
-      window.setTimeout(() => {
-        document
-          .getElementById("order-state")
-          ?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 80);
-    } catch (error) {
-      setOrderError(
-        error instanceof Error ? error.message : "Gagal membuat order.",
-      );
+      const nextPayment = await syncPaymentState(payment.id, true);
+
+      if (nextPayment?.order) {
+        setOrder(nextPayment.order);
+        rememberPaymentId(null);
+      }
     } finally {
       setIsOrdering(false);
     }
@@ -467,6 +654,15 @@ export function CatalogConsole({
     ? formatCurrency(initialBalance.amount, initialBalance.currency)
     : "Tidak terbaca";
   const profileInitials = getProfileInitials();
+  const midtransClientKey = process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY ?? "";
+  const midtransScriptUrl =
+    initialRuntime.midtransEnvironment === "production"
+      ? "https://app.midtrans.com/snap/snap.js"
+      : "https://app.sandbox.midtrans.com/snap/snap.js";
+  const isPaymentReady =
+    initialRuntime.midtransConfigured &&
+    initialRuntime.midtransClientKeyAvailable &&
+    Boolean(midtransClientKey);
   const activeServerId = catalog?.source === "fallback" ? "backup" : "live";
   const totalOrders = history.orders.length;
   const successfulOrders = history.orders.filter(
@@ -499,7 +695,9 @@ export function CatalogConsole({
       note:
         initialBalance && initialBalance.amount > 0
           ? "Ready dipakai order live"
-          : "Isi saldo provider dulu",
+          : isPaymentReady
+            ? "Checkout pakai Midtrans, order aktif setelah bayar"
+            : "Isi saldo provider dulu",
       glyph: "RP",
       chip: "Active balance",
     },
@@ -528,6 +726,15 @@ export function CatalogConsole({
 
   return (
     <div className="relative min-h-[100dvh] overflow-hidden bg-[#06101f] text-white">
+      {isPaymentReady ? (
+        <Script
+          data-client-key={midtransClientKey}
+          onReady={() => setIsSnapReady(true)}
+          src={midtransScriptUrl}
+          strategy="afterInteractive"
+        />
+      ) : null}
+
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute left-[-18%] top-[-8rem] h-[24rem] w-[24rem] rounded-full bg-sky-400/18 blur-3xl" />
         <div className="absolute right-[-12%] top-[10rem] h-[18rem] w-[18rem] rounded-full bg-cyan-300/16 blur-3xl" />
@@ -574,6 +781,7 @@ export function CatalogConsole({
           {[
             { id: "dashboard", label: "Dashboard", glyph: "DB" },
             { id: "buy-number", label: "Buy Number", glyph: "BY" },
+            { id: "payment-state", label: "Payment", glyph: "PG" },
             { id: "deposit", label: "Deposit", glyph: "DP" },
           ].map((item) => (
             <button
@@ -588,7 +796,9 @@ export function CatalogConsole({
               type="button"
             >
               <Glyph label={item.glyph} tone="soft" />
-              <span className="text-[1.45rem] font-semibold">{item.label}</span>
+              <span className="text-[1.1rem] font-semibold sm:text-[1.45rem]">
+                {item.label}
+              </span>
             </button>
           ))}
 
@@ -598,7 +808,9 @@ export function CatalogConsole({
             onClick={() => setDrawerOpen(false)}
           >
             <Glyph label="AP" tone="soft" />
-            <span className="text-[1.45rem] font-semibold">API Docs</span>
+            <span className="text-[1.1rem] font-semibold sm:text-[1.45rem]">
+              API Docs
+            </span>
           </Link>
         </div>
 
@@ -616,52 +828,55 @@ export function CatalogConsole({
             <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1">
               Margin {formatCurrency(initialRuntime.minMargin, initialRuntime.currency)}
             </span>
+            <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1">
+              Midtrans {initialRuntime.midtransConfigured ? "Ready" : "Off"}
+            </span>
           </div>
         </div>
       </aside>
 
-      <div className="relative z-10 mx-auto flex min-h-[100dvh] max-w-6xl flex-col">
+      <div className="relative z-10 mx-auto flex min-h-[100dvh] w-full max-w-[480px] flex-col lg:max-w-6xl">
         <header className="sticky top-0 z-30 border-b border-white/8 bg-[#081224]/84 backdrop-blur-xl">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
+          <div className="mx-auto flex w-full items-center justify-between gap-3 px-4 py-4 sm:px-6">
             <button
-              className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-lg font-semibold text-white/76"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-lg font-semibold text-white/76"
               onClick={() => setDrawerOpen(true)}
               type="button"
             >
               =
             </button>
 
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 rounded-full border border-cyan-300/24 bg-[linear-gradient(135deg,rgba(69,221,255,0.18),rgba(68,117,255,0.18))] px-3 py-2 text-sm font-semibold text-[#8ff4ff]">
+            <div className="flex min-w-0 items-center justify-end gap-2">
+              <div className="flex min-w-0 items-center gap-2 rounded-full border border-cyan-300/24 bg-[linear-gradient(135deg,rgba(69,221,255,0.18),rgba(68,117,255,0.18))] px-2.5 py-2 text-xs font-semibold text-[#8ff4ff] sm:px-3 sm:text-sm">
                 <Glyph className="h-7 w-7 rounded-full text-[0.6rem]" label="RP" tone="cyan" />
-                <span>{balanceLabel}</span>
+                <span className="truncate">{balanceLabel}</span>
               </div>
               <button
-                className="inline-flex h-11 items-center rounded-2xl border border-white/10 bg-white/5 px-3 text-sm font-semibold text-white/78"
+                className="hidden h-11 items-center rounded-2xl border border-white/10 bg-white/5 px-3 text-sm font-semibold text-white/78 sm:inline-flex"
                 type="button"
               >
                 ID / <span className="pl-1 text-[#8ff4ff]">EN</span>
               </button>
               <button
-                className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-xs font-black tracking-[0.18em] text-white/70"
+                className="hidden h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-xs font-black tracking-[0.18em] text-white/70 sm:inline-flex"
                 type="button"
               >
                 LY
               </button>
               <button
-                className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-xs font-black tracking-[0.18em] text-white/70"
+                className="hidden h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-xs font-black tracking-[0.18em] text-white/70 sm:inline-flex"
                 type="button"
               >
                 AL
               </button>
-              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[linear-gradient(135deg,#46d4ff,#2ba2ff)] font-semibold text-[#071422]">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#46d4ff,#2ba2ff)] font-semibold text-[#071422]">
                 {profileInitials}
               </div>
             </div>
           </div>
         </header>
 
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 pb-28 pt-6 sm:px-6">
+        <main className="mx-auto w-full flex-1 px-4 pb-28 pt-6 sm:px-6">
           <section
             className="rounded-[28px] border border-cyan-300/24 bg-[linear-gradient(135deg,rgba(22,92,114,0.72),rgba(8,44,74,0.9))] p-5"
             id="deposit"
@@ -669,7 +884,9 @@ export function CatalogConsole({
             <div className="flex items-start gap-3">
               <Glyph className="mt-0.5 h-11 w-11 rounded-full" label="IN" tone="cyan" />
               <div className="min-w-0 flex-1">
-                <p className="text-[1.55rem] font-semibold text-white">Deposit</p>
+                <p className="text-[1.3rem] font-semibold text-white sm:text-[1.55rem]">
+                  Deposit
+                </p>
                 <p className="mt-1 text-base leading-7 text-[#9fdfff]">
                   Saldo KirimKode Anda memang masih 0. Saya fokuskan dulu UI
                   mobile supaya tampilannya enak dipakai di HP Android.
@@ -682,7 +899,7 @@ export function CatalogConsole({
           </section>
 
           <section className="pt-8" id="dashboard">
-            <p className="text-[2.4rem] font-display font-semibold leading-none text-white">
+            <p className="text-[2rem] font-display font-semibold leading-none text-white sm:text-[2.4rem]">
               Dashboard
             </p>
             <p className="mt-3 max-w-xl text-lg leading-8 text-white/70">
@@ -744,7 +961,7 @@ export function CatalogConsole({
                   <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#8ff4ff]">
                     Buy OTP Number
                   </p>
-                  <h2 className="mt-3 text-[2.05rem] font-display font-semibold leading-tight text-white">
+                  <h2 className="mt-3 text-[1.65rem] font-display font-semibold leading-tight text-white sm:text-[2.05rem]">
                     Select server, country, and service
                   </h2>
                   <p className="mt-3 max-w-2xl text-base leading-8 text-white/62">
@@ -831,7 +1048,7 @@ export function CatalogConsole({
                             <Glyph className="h-14 w-14 text-sm" label={server.glyph} />
                             <div>
                               <div className="flex items-center gap-2">
-                                <p className="text-[1.35rem] font-semibold text-white">
+                                <p className="text-[1.1rem] font-semibold text-white sm:text-[1.35rem]">
                                   {server.title}
                                 </p>
                                 <span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />
@@ -907,6 +1124,53 @@ export function CatalogConsole({
                 </div>
               </div>
 
+              <div className="mt-7 grid gap-4 sm:grid-cols-3">
+                <div className="sm:col-span-3">
+                  <div className="mb-3 flex items-center gap-3 text-[1.05rem] font-semibold text-white">
+                    <Glyph className="h-9 w-9 rounded-xl text-[0.55rem]" label="PG" tone="soft" />
+                    Data Checkout Midtrans
+                  </div>
+                </div>
+                <input
+                  className={inputClass}
+                  onChange={(event) => setCustomerName(event.target.value)}
+                  placeholder="Nama pembeli"
+                  value={customerName}
+                />
+                <input
+                  className={inputClass}
+                  inputMode="email"
+                  onChange={(event) => setCustomerEmail(event.target.value)}
+                  placeholder="Email pembeli"
+                  value={customerEmail}
+                />
+                <input
+                  className={inputClass}
+                  inputMode="tel"
+                  onChange={(event) => setCustomerPhone(event.target.value)}
+                  placeholder="Nomor WhatsApp"
+                  value={customerPhone}
+                />
+              </div>
+
+              <div className="mt-4 rounded-[24px] border border-white/10 bg-[#101b2f]/82 px-4 py-4 text-sm leading-7 text-white/68">
+                {isPaymentReady ? (
+                  <>
+                    Midtrans {initialRuntime.midtransEnvironment} siap dipakai.
+                    Snap {isSnapReady ? "sudah aktif" : "sedang dimuat"}.
+                    Setelah pembayaran sukses, order OTP akan diaktifkan dari
+                    server.
+                  </>
+                ) : (
+                  <>
+                    Midtrans belum dikonfigurasi. Isi
+                    ` MIDTRANS_SERVER_KEY ` dan
+                    ` NEXT_PUBLIC_MIDTRANS_CLIENT_KEY ` di Vercel agar tombol
+                    checkout bisa dipakai live.
+                  </>
+                )}
+              </div>
+
               {isLoadingCatalog ? (
                 <div className="mt-6 rounded-[24px] border border-white/10 bg-[#101b2f]/82 px-4 py-6 text-center text-sm text-white/58">
                   Memuat katalog supplier...
@@ -931,7 +1195,7 @@ export function CatalogConsole({
                           {selectedService.country}
                         </span>
                       </div>
-                      <h3 className="mt-4 text-[1.8rem] font-semibold leading-tight text-white">
+                      <h3 className="mt-4 text-[1.45rem] font-semibold leading-tight text-white sm:text-[1.8rem]">
                         {selectedService.service}
                       </h3>
                       <p className="mt-2 text-sm leading-7 text-white/58">
@@ -944,7 +1208,7 @@ export function CatalogConsole({
                       <p className="text-xs uppercase tracking-[0.18em] text-white/42">
                         Harga Jual
                       </p>
-                      <p className="mt-1 text-[1.85rem] font-semibold text-white">
+                      <p className="mt-1 text-[1.5rem] font-semibold text-white sm:text-[1.85rem]">
                         {formatCurrency(selectedService.price, selectedService.currency)}
                       </p>
                     </div>
@@ -981,17 +1245,161 @@ export function CatalogConsole({
                     </div>
                   </div>
 
-                  <button
-                    className="mt-6 inline-flex w-full items-center justify-center gap-3 rounded-full bg-[linear-gradient(135deg,#67f0ff,#2cb6ff)] px-6 py-4 text-base font-semibold text-[#071422] disabled:cursor-not-allowed disabled:opacity-65"
-                    disabled={isOrdering}
-                    onClick={() => void handleCreateOrder()}
-                    type="button"
-                  >
-                    <Glyph className="h-8 w-8 rounded-full text-[0.55rem]" label="GO" tone="cyan" />
-                    {isOrdering ? "Membuat Order..." : "Buy OTP Number"}
-                  </button>
+                  <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                    <button
+                      className="inline-flex w-full items-center justify-center gap-3 rounded-full bg-[linear-gradient(135deg,#67f0ff,#2cb6ff)] px-6 py-4 text-base font-semibold text-[#071422] disabled:cursor-not-allowed disabled:opacity-65"
+                      disabled={isCreatingPayment || !isPaymentReady}
+                      onClick={() => void handleCreateCheckout()}
+                      type="button"
+                    >
+                      <Glyph className="h-8 w-8 rounded-full text-[0.55rem]" label="PG" tone="cyan" />
+                      {isCreatingPayment ? "Membuat Checkout..." : "Bayar via Midtrans"}
+                    </button>
+
+                    <button
+                      className="inline-flex w-full items-center justify-center gap-3 rounded-full border border-white/10 bg-white/6 px-6 py-4 text-base font-semibold text-white/82 disabled:cursor-not-allowed disabled:opacity-55"
+                      disabled={!payment?.id || isSyncingPayment}
+                      onClick={() => {
+                        if (!payment?.id) {
+                          return;
+                        }
+
+                        void syncPaymentState(payment.id, false);
+                      }}
+                      type="button"
+                    >
+                      <Glyph className="h-8 w-8 rounded-full text-[0.55rem]" label="CK" tone="soft" />
+                      {isSyncingPayment ? "Cek Pembayaran..." : "Cek Payment"}
+                    </button>
+                  </div>
                 </div>
               ) : null}
+            </div>
+          </section>
+
+          <section className="pt-8" id="payment-state">
+            <div className={shellCard}>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#8ff4ff]">
+                    Payment State
+                  </p>
+                  <h2 className="mt-3 text-[1.6rem] font-display font-semibold text-white sm:text-[2rem]">
+                    Midtrans checkout and payment status
+                  </h2>
+                </div>
+                <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-white/55">
+                  {initialRuntime.midtransEnvironment}
+                </span>
+              </div>
+
+              {paymentError ? (
+                <div className="mt-6 rounded-[24px] border border-rose-300/18 bg-rose-400/12 px-4 py-4 text-sm leading-7 text-rose-100">
+                  {paymentError}
+                </div>
+              ) : null}
+
+              {payment ? (
+                <div className="mt-6 rounded-[28px] border border-white/10 bg-[#0e1a2d]/88 p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <h3 className="text-[1.35rem] font-semibold text-white sm:text-[1.7rem]">
+                        {payment.service}
+                      </h3>
+                      <p className="mt-2 text-sm leading-7 text-white/58">
+                        {payment.country} | {formatCurrency(payment.amount, payment.currency)}
+                      </p>
+                    </div>
+                    <span
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]",
+                        payment.status === "paid"
+                          ? "border-emerald-300/20 bg-emerald-400/14 text-emerald-100"
+                          : payment.status === "pending"
+                            ? "border-sky-300/20 bg-sky-400/14 text-sky-100"
+                            : payment.status === "expired"
+                              ? "border-amber-300/20 bg-amber-400/14 text-amber-100"
+                              : "border-rose-300/20 bg-rose-400/14 text-rose-100",
+                      )}
+                    >
+                      {payment.status}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className={innerCard}>
+                      <p className="text-xs uppercase tracking-[0.18em] text-white/40">
+                        Payment ID
+                      </p>
+                      <p className="mt-2 break-all text-sm leading-7 text-white/72">
+                        {payment.id}
+                      </p>
+                    </div>
+                    <div className={innerCard}>
+                      <p className="text-xs uppercase tracking-[0.18em] text-white/40">
+                        Status Message
+                      </p>
+                      <p className="mt-2 text-sm leading-7 text-white/72">
+                        {payment.statusMessage ?? "Menunggu update pembayaran."}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                    <button
+                      className="inline-flex w-full items-center justify-center gap-3 rounded-full bg-[linear-gradient(135deg,#67f0ff,#2cb6ff)] px-5 py-3.5 text-sm font-semibold text-[#071422] disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={!payment.snapToken || !isSnapReady}
+                      onClick={() => openMidtransSnap(payment)}
+                      type="button"
+                    >
+                      <Glyph className="h-8 w-8 rounded-full text-[0.55rem]" label="PY" tone="cyan" />
+                      Buka Midtrans
+                    </button>
+
+                    <button
+                      className="inline-flex w-full items-center justify-center gap-3 rounded-full border border-white/10 bg-white/6 px-5 py-3.5 text-sm font-semibold text-white/82 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={isSyncingPayment}
+                      onClick={() => void syncPaymentState(payment.id, false)}
+                      type="button"
+                    >
+                      <Glyph className="h-8 w-8 rounded-full text-[0.55rem]" label="RF" tone="soft" />
+                      {isSyncingPayment ? "Sinkron..." : "Sync Status"}
+                    </button>
+
+                    <button
+                      className="inline-flex w-full items-center justify-center gap-3 rounded-full border border-emerald-300/16 bg-emerald-400/12 px-5 py-3.5 text-sm font-semibold text-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      disabled={payment.status !== "paid" || isOrdering}
+                      onClick={() => void handleActivateOrder()}
+                      type="button"
+                    >
+                      <Glyph className="h-8 w-8 rounded-full bg-emerald-400/18 text-[0.55rem] text-emerald-50" label="OK" />
+                      {isOrdering ? "Aktivasi..." : "Aktifkan Order"}
+                    </button>
+                  </div>
+
+                  {payment.redirectUrl ? (
+                    <a
+                      className="mt-4 block text-sm font-medium text-[#8ff4ff] underline-offset-4 hover:underline"
+                      href={payment.redirectUrl}
+                      rel="noreferrer"
+                      target="_blank"
+                    >
+                      Buka halaman checkout Midtrans di tab baru
+                    </a>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="mt-6 rounded-[28px] border border-white/10 bg-[#101b2f]/82 px-5 py-12 text-center">
+                  <Glyph className="mx-auto h-12 w-12 rounded-full text-[0.65rem]" label="PG" tone="soft" />
+                  <p className="mt-4 text-lg font-semibold text-white">
+                    Belum ada checkout Midtrans
+                  </p>
+                  <p className="mt-2 text-sm leading-7 text-white/56">
+                    Pilih service lalu tekan tombol Bayar via Midtrans untuk
+                    memulai pembayaran terlebih dulu.
+                  </p>
+                </div>
+              )}
             </div>
           </section>
 
@@ -1002,7 +1410,7 @@ export function CatalogConsole({
                   <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#8ff4ff]">
                     Order State
                   </p>
-                  <h2 className="mt-3 text-[2rem] font-display font-semibold text-white">
+                  <h2 className="mt-3 text-[1.6rem] font-display font-semibold text-white sm:text-[2rem]">
                     Live order and OTP status
                   </h2>
                 </div>
@@ -1021,7 +1429,7 @@ export function CatalogConsole({
                 <div className="mt-6 rounded-[28px] border border-white/10 bg-[#0e1a2d]/88 p-5">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div>
-                      <h3 className="text-[1.75rem] font-semibold text-white">
+                      <h3 className="text-[1.45rem] font-semibold text-white sm:text-[1.75rem]">
                         {order.service}
                       </h3>
                       <p className="mt-2 text-base text-white/58">
@@ -1061,7 +1469,7 @@ export function CatalogConsole({
                     <p className="text-xs uppercase tracking-[0.18em] text-[#8ff4ff]">
                       OTP Code
                     </p>
-                    <p className="mt-3 break-all text-[2rem] font-semibold tracking-[0.08em] text-white">
+                    <p className="mt-3 break-all text-[1.55rem] font-semibold tracking-[0.08em] text-white sm:text-[2rem]">
                       {order.otpCode ?? "MENUNGGU SMS MASUK"}
                     </p>
                   </div>
@@ -1102,8 +1510,8 @@ export function CatalogConsole({
                     Belum ada order aktif
                   </p>
                   <p className="mt-2 text-sm leading-7 text-white/56">
-                    Pilih service di atas lalu tekan tombol Buy OTP Number untuk
-                    menampilkan status order di sini.
+                    Selesaikan checkout Midtrans lebih dulu, lalu aktifkan order
+                    agar status OTP tampil di sini.
                   </p>
                 </div>
               )}

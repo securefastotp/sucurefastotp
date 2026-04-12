@@ -15,6 +15,11 @@ const envFields = [
     description: "URL public website Anda untuk contoh API dan metadata.",
   },
   {
+    name: "NEXT_PUBLIC_MIDTRANS_CLIENT_KEY",
+    required: "Ya",
+    description: "Client key Midtrans untuk memuat Snap di browser.",
+  },
+  {
     name: "UPSTREAM_PROVIDER_MODE",
     required: "No",
     description: "Isi `rest` untuk provider asli atau biarkan `mock` untuk demo.",
@@ -84,6 +89,16 @@ const envFields = [
     required: "No",
     description: "Margin minimum dalam rupiah agar harga jual tetap aman.",
   },
+  {
+    name: "MIDTRANS_ENVIRONMENT",
+    required: "No",
+    description: "Isi `sandbox` atau `production`. Default `sandbox`.",
+  },
+  {
+    name: "MIDTRANS_SERVER_KEY",
+    required: "Ya",
+    description: "Server key Midtrans untuk membuat transaksi dan cek status.",
+  },
 ];
 
 const baseUrl = siteConfig.url.replace(/\/$/, "");
@@ -124,15 +139,16 @@ export default function DocsPage() {
               <p>1. User membuka website Anda dan memilih layanan OTP.</p>
               <p>
                 2. Browser memanggil route internal seperti `/api/catalog`,
-                `/api/balance`, `/api/history`, atau `/api/orders`.
+                `/api/payments`, `/api/payments/:id`, `/api/balance`, atau
+                `/api/orders`.
               </p>
               <p>
-                3. Route server Next.js menambahkan `API key` dan meneruskan
-                request ke provider upstream.
+                3. Checkout dibuka lewat Midtrans Snap, lalu server memverifikasi
+                pembayaran sebelum order OTP dibuat ke provider upstream.
               </p>
               <p>
-                4. Response upstream dinormalisasi agar UI Anda tetap konsisten
-                meski format provider berubah.
+                4. Route server Next.js menambahkan `API key` upstream dan
+                response provider dinormalisasi agar UI Anda tetap konsisten.
               </p>
               <p>
                 5. Markup supplier diterapkan di server agar harga jual aman dan
@@ -142,9 +158,9 @@ export default function DocsPage() {
 
             <pre className="code-block mt-6 overflow-x-auto text-sm">
 {`Browser -> /api/catalog -> Next.js Route -> Upstream Provider
-Browser -> /api/balance -> Next.js Route -> Upstream Provider
-Browser -> /api/history -> Next.js Route -> Upstream Provider
-Browser -> /api/orders  -> Next.js Route -> Upstream Provider
+Browser -> /api/payments -> Next.js Route -> Midtrans Snap
+Browser -> /api/payments/:id -> Next.js Route -> Midtrans Status
+Browser -> /api/orders -> Next.js Route -> Upstream Provider
 Browser -> /api/orders/:id -> Next.js Route -> Upstream Provider`}
             </pre>
           </div>
@@ -160,7 +176,8 @@ Browser -> /api/orders/:id -> Next.js Route -> Upstream Provider`}
                 sebagai Next.js.
               </p>
               <p>
-                3. Tambahkan semua env `UPSTREAM_*` di dashboard Vercel.
+                3. Tambahkan semua env `UPSTREAM_*` dan `MIDTRANS_*` di
+                dashboard Vercel.
               </p>
               <p>
                 4. Setelah deploy, uji endpoint `GET /api/health` dan halaman
@@ -232,6 +249,20 @@ Browser -> /api/orders/:id -> Next.js Route -> Upstream Provider`}
 curl ${baseUrl}/api/balance
 
 curl ${baseUrl}/api/history
+
+curl -X POST ${baseUrl}/api/payments \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "serviceId": "wa-id",
+    "service": "WhatsApp",
+    "country": "Indonesia",
+    "price": 2025,
+    "currency": "IDR",
+    "customerName": "Agus",
+    "customerPhone": "08123456789"
+  }'
+
+curl ${baseUrl}/api/payments/pay_xxxxx
 
 curl -X POST ${baseUrl}/api/orders \\
   -H "Content-Type: application/json" \\

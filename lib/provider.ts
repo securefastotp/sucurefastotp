@@ -7,6 +7,7 @@ import {
   listMockOrders,
   listMockServices,
 } from "@/lib/mock-data";
+import { getPaymentGatewayStatus } from "@/lib/payments";
 import { computeRetailPrice, getPricingConfig } from "@/lib/pricing";
 import type {
   Balance,
@@ -466,6 +467,7 @@ function normalizeHistory(payload: unknown): OrderHistoryResponse {
 export async function getRuntimeStatus(): Promise<RuntimeStatus> {
   const config = getProviderConfig();
   const pricing = getPricingConfig();
+  const paymentGateway = getPaymentGatewayStatus();
 
   return {
     providerMode: config.mode,
@@ -474,6 +476,9 @@ export async function getRuntimeStatus(): Promise<RuntimeStatus> {
     markupPercent: pricing.markupPercent,
     minMargin: pricing.minMargin,
     currency: pricing.currency,
+    midtransConfigured: paymentGateway.midtransConfigured,
+    midtransEnvironment: paymentGateway.midtransEnvironment,
+    midtransClientKeyAvailable: paymentGateway.midtransClientKeyAvailable,
   };
 }
 
