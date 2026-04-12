@@ -82,22 +82,22 @@ const envFields = [
   {
     name: "UPSTREAM_SERVER_BIMASAKTI_CODE",
     required: "No",
-    description: "Kode upstream untuk lane Skyguard. Default `api1`.",
+    description: "Kode upstream untuk provider Mars. Default `api1`.",
   },
   {
     name: "UPSTREAM_SERVER_MARS_CODE",
     required: "No",
-    description: "Kode upstream untuk lane Blueverifi. Default `api2`.",
+    description: "Kode upstream untuk provider Saturn. Default `api2`.",
   },
   {
     name: "UPSTREAM_MARKUP_PERCENT",
     required: "No",
-    description: "Markup jual. Project ini sekarang dikunci ke 100% dari harga upstream.",
+    description: "Markup jual. Project ini sekarang mengikuti harga asli upstream tanpa markup tambahan.",
   },
   {
     name: "UPSTREAM_MIN_MARGIN",
     required: "No",
-    description: "Margin minimum. Default sekarang 0 karena markup 100% sudah dikunci.",
+    description: "Margin minimum. Default sekarang 0 karena harga asli upstream dipakai langsung.",
   },
   {
     name: "MIDTRANS_ENVIRONMENT",
@@ -162,7 +162,8 @@ export default function DocsPage() {
               </p>
               <p>
                 5. Markup supplier diterapkan di server agar harga jual aman dan
-                mudah diatur dari env.
+                mudah diatur dari env. Pada project ini markup saat ini diset 0
+                agar harga mengikuti KirimKode.
               </p>
             </div>
 

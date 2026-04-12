@@ -15,7 +15,7 @@ export const supplierBenefits = [
     kicker: "Markup Aman",
     title: "Harga supplier dikendalikan di server, bukan di browser",
     description:
-      "Harga jual dihitung di server dengan markup 100%, jadi user hanya melihat harga final yang sudah Anda tentukan.",
+      "Harga tetap dihitung di server agar aman, tetapi sekarang mengikuti harga asli upstream KirimKode tanpa markup tambahan.",
   },
   {
     kicker: "Reseller Flow",

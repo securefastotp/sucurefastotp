@@ -43,7 +43,7 @@ export default async function Home() {
                   </h1>
                   <p className="max-w-2xl text-lg leading-8 text-ink/72 sm:text-xl">
                     Website ini sekarang membaca katalog real dari KirimKode,
-                    menampilkan harga jual markup 100%, lalu memproses order
+                    menampilkan harga asli KirimKode, lalu memproses order
                     setelah pembayaran Midtrans berhasil.
                   </p>
                 </div>
@@ -140,8 +140,8 @@ curl ${baseUrl}/api/orders/order_xxxxx`}
                 </h2>
               </div>
               <p className="max-w-2xl text-sm leading-7 text-ink/68">
-                Harga jual di website ini dihitung otomatis dengan markup 100%
-                dari harga upstream.
+                Harga di website ini mengikuti harga asli dari upstream
+                KirimKode tanpa markup tambahan.
               </p>
             </div>
 

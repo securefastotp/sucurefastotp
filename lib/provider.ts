@@ -196,7 +196,7 @@ function resolveUpstreamServer(serverId?: string) {
 }
 
 function getServerName(serverId?: string) {
-  return resolveServerId(serverId) === "mars" ? "Blueverifi" : "Skyguard";
+  return resolveServerId(serverId) === "mars" ? "Saturn" : "Mars";
 }
 
 function resolveCountryId(countryId?: number | string) {

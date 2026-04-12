@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Script from "next/script";
 import {
   type ReactNode,
@@ -55,17 +56,17 @@ declare global {
 const serverOptions = [
   {
     id: "bimasakti" as const,
-    name: "Skyguard",
+    name: "Mars",
     code: "api1",
-    iconKey: "skyguard" as const,
-    description: "Server utama, stok terbanyak",
+    iconKey: "mars" as const,
+    description: "Provider utama, stok terbanyak",
   },
   {
     id: "mars" as const,
-    name: "Blueverifi",
+    name: "Saturn",
     code: "api2",
-    iconKey: "blueverifiy" as const,
-    description: "Server cadangan, lebih stabil",
+    iconKey: "saturn" as const,
+    description: "Provider cadangan, lebih stabil",
   },
 ];
 
@@ -362,52 +363,31 @@ function ServiceStarIcon({ className }: { className?: string }) {
   );
 }
 
-function SkyguardIcon({ className }: { className?: string }) {
+function MarsIcon({ className }: { className?: string }) {
   return (
-    <svg
+    <Image
+      alt=""
       aria-hidden="true"
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-    >
-      <path
-        d="M12 2.7l6.5 2.5v5.6c0 4.4-2.7 8.5-6.5 10.6-3.8-2.1-6.5-6.2-6.5-10.6V5.2L12 2.7z"
-        fill="currentColor"
-        fillOpacity=".18"
-      />
-      <path
-        d="M12 4.8l4.2 1.6v4.1c0 3.2-1.8 6.1-4.2 7.8-2.4-1.7-4.2-4.6-4.2-7.8V6.4L12 4.8z"
-        stroke="currentColor"
-        strokeWidth="1.7"
-      />
-      <path
-        d="M12 7.8l1.3 2.5 2.8.4-2 1.9.5 2.8-2.6-1.4-2.6 1.4.5-2.8-2-1.9 2.8-.4L12 7.8z"
-        fill="currentColor"
-      />
-    </svg>
+      className={cn("provider-svg-icon provider-svg-icon-mars", className)}
+      height={96}
+      src="/mars-provider.svg"
+      unoptimized
+      width={96}
+    />
   );
 }
 
-function BlueverifiyIcon({ className }: { className?: string }) {
+function SaturnIcon({ className }: { className?: string }) {
   return (
-    <svg
+    <Image
+      alt=""
       aria-hidden="true"
-      className={className}
-      fill="none"
-      viewBox="0 0 24 24"
-    >
-      <circle cx="12" cy="12" fill="currentColor" fillOpacity=".18" r="7.2" />
-      <circle cx="12" cy="12" r="5.8" stroke="currentColor" strokeWidth="1.7" />
-      <path
-        d="M9.2 12.2l1.9 1.9 3.8-4.3"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.9"
-      />
-      <path d="M17.5 6.4l1.8-1.7" stroke="currentColor" strokeLinecap="round" strokeWidth="1.4" />
-      <path d="M18.8 6.3v1.9" stroke="currentColor" strokeLinecap="round" strokeWidth="1.4" />
-    </svg>
+      className={cn("provider-svg-icon provider-svg-icon-saturn", className)}
+      height={96}
+      src="/saturn-provider.svg"
+      unoptimized
+      width={96}
+    />
   );
 }
 
@@ -477,11 +457,11 @@ function ChevronIcon({
 }
 
 function getServerGlyph(iconKey: (typeof serverOptions)[number]["iconKey"]) {
-  if (iconKey === "blueverifiy") {
-    return <BlueverifiyIcon className="h-6 w-6" />;
+  if (iconKey === "saturn") {
+    return <SaturnIcon className="h-6 w-6" />;
   }
 
-  return <SkyguardIcon className="h-6 w-6" />;
+  return <MarsIcon className="h-6 w-6" />;
 }
 
 function toFlagEmoji(code?: string) {
@@ -514,6 +494,10 @@ function hasCountryCode(country?: Pick<CountryOption, "code"> | null) {
 
 function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
+}
+
+function toServerId(serverId?: string): ServerId {
+  return serverId === "mars" ? "mars" : "bimasakti";
 }
 
 type FeedbackTone = "open" | "select" | "confirm";
@@ -787,6 +771,9 @@ export function CatalogConsole({
   const [orderError, setOrderError] = useState<string | null>(null);
   const [payment, setPayment] = useState<PaymentRecord | null>(null);
   const [order, setOrder] = useState<Order | null>(null);
+  const [comparisonService, setComparisonService] = useState<Service | null>(null);
+  const [selectedProviderServer, setSelectedProviderServer] =
+    useState<ServerId>("bimasakti");
   const [isLoadingCountries, setIsLoadingCountries] = useState(
     initialCountries.length === 0,
   );
@@ -818,6 +805,23 @@ export function CatalogConsole({
   const selectedServerMeta = serverOptions.find(
     (server) => server.id === selectedServer,
   );
+  const providerEntries = useMemo(
+    () =>
+      serverOptions.map((server) => ({
+        meta: server,
+        service:
+          [selectedService, comparisonService].find(
+            (service) =>
+              Boolean(service) && toServerId(service?.serverId) === server.id,
+          ) ?? null,
+      })),
+    [comparisonService, selectedService],
+  );
+  const selectedProviderService =
+    providerEntries.find((entry) => entry.meta.id === selectedProviderServer)
+      ?.service ??
+    providerEntries.find((entry) => entry.service)?.service ??
+    null;
   const filteredCountries = countries.filter((country) =>
     `${country.name} ${country.code} ${country.id}`
       .toLowerCase()
@@ -833,7 +837,7 @@ export function CatalogConsole({
     {
       id: "server-zone",
       label: "Server",
-      caption: selectedServerMeta?.name ?? "Skyguard",
+      caption: selectedServerMeta?.name ?? "Mars",
       icon: <ServerIcon className="h-4 w-4" />,
     },
     {
@@ -1071,7 +1075,7 @@ export function CatalogConsole({
   }
 
   async function handleCreateCheckout() {
-    if (!selectedService) {
+    if (!selectedProviderService) {
       return;
     }
 
@@ -1080,8 +1084,8 @@ export function CatalogConsole({
 
     try {
       const createdPayment = await requestCreatePayment(
-        selectedService,
-        selectedServer,
+        selectedProviderService,
+        toServerId(selectedProviderService.serverId),
       );
       setPayment(createdPayment);
       rememberPaymentId(createdPayment.id);
@@ -1140,6 +1144,7 @@ export function CatalogConsole({
     setCountryPanelOpen(false);
     setCountrySearch("");
     setServicePanelOpen(false);
+    setSelectedProviderServer(selectedServer);
   }, [selectedServer]);
 
   useEffect(() => {
@@ -1149,20 +1154,73 @@ export function CatalogConsole({
     const introHideTimer = window.setTimeout(() => {
       setShowIntro(false);
     }, 1500);
-    const menuTimer = window.setTimeout(() => {
-      setQuickMenuOpen(true);
-    }, 1750);
 
     return () => {
       window.clearTimeout(introFadeTimer);
       window.clearTimeout(introHideTimer);
-      window.clearTimeout(menuTimer);
     };
   }, []);
 
   useEffect(() => {
     void loadCatalog(selectedServer, selectedCountryId);
   }, [selectedCountryId, selectedServer]);
+
+  useEffect(() => {
+    if (!selectedService?.serviceCode || !selectedCountryId) {
+      setComparisonService(null);
+      return;
+    }
+
+    let cancelled = false;
+    const otherServer = selectedServer === "bimasakti" ? "mars" : "bimasakti";
+    setComparisonService(null);
+
+    void requestCatalog(otherServer, selectedCountryId)
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
+
+        const match =
+          payload.services.find(
+            (service) => service.serviceCode === selectedService.serviceCode,
+          ) ?? null;
+        setComparisonService(match);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setComparisonService(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCountryId, selectedServer, selectedService]);
+
+  useEffect(() => {
+    if (!selectedService) {
+      return;
+    }
+
+    setSelectedProviderServer(toServerId(selectedService.serverId));
+  }, [selectedService]);
+
+  useEffect(() => {
+    const activeEntries = providerEntries.filter((entry) => Boolean(entry.service));
+
+    if (!activeEntries.length) {
+      return;
+    }
+
+    const stillAvailable = activeEntries.some(
+      (entry) => entry.meta.id === selectedProviderServer,
+    );
+
+    if (!stillAvailable) {
+      setSelectedProviderServer(activeEntries[0].meta.id);
+    }
+  }, [providerEntries, selectedProviderServer]);
 
   const syncPaymentEvent = useEffectEvent((paymentId: string) => {
     void syncPayment(paymentId);
@@ -1269,19 +1327,19 @@ export function CatalogConsole({
               <BrandIcon className="lux-brand-mark h-10 w-10" />
             </div>
             <p className="mt-6 text-[0.7rem] font-semibold uppercase tracking-[0.32em] text-sky-100/62">
-              Luxury Access
+              Live OTP Console
             </p>
             <h2 className="mt-3 bg-[linear-gradient(135deg,#ffffff,#ddf5ff_45%,#8ed0ff)] bg-clip-text text-[2rem] font-semibold text-transparent">
               Rahmat OTP
             </h2>
             <p className="mt-3 text-sm leading-7 text-sky-50/72">
-              Menyiapkan lane premium, popup menu, dan jalur order real-time.
+              Menyiapkan data KirimKode dan checkout Midtrans production.
             </p>
             <div className="mt-6 flex items-center gap-3 text-xs uppercase tracking-[0.22em] text-sky-100/58">
               <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_16px_rgba(103,232,249,0.9)]" />
-              Skyguard
+              Mars
               <span className="h-1 w-1 rounded-full bg-white/24" />
-              Blueverifi
+              Saturn
             </div>
           </div>
         </div>
@@ -1516,6 +1574,7 @@ export function CatalogConsole({
                     onClick={() => {
                       playUiFeedback("select");
                       setSelectedServiceId(service.id);
+                      setSelectedProviderServer(toServerId(service.serverId));
                       setServicePanelOpen(false);
                       setServiceSearch("");
                     }}
@@ -1553,7 +1612,7 @@ export function CatalogConsole({
             </div>
           ) : null}
 
-          {selectedService && selectedServerMeta && selectedCountry ? (
+          {selectedService && selectedCountry ? (
             <div className="mt-3 rounded-[18px] bg-[#102846] p-3">
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -1567,32 +1626,60 @@ export function CatalogConsole({
                 </p>
               </div>
 
-              <div className="mt-3 rounded-[16px] border border-white/10 bg-[#0d2240] px-3 py-3">
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-sky-100/10 text-sky-50">
-                      {getServerGlyph(selectedServerMeta.iconKey)}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="truncate text-[13px] font-medium text-white">
-                        {selectedService.service}
-                      </p>
-                      <p className="mt-0.5 text-[10px] text-sky-50/55">
-                        {selectedServerMeta.name}
-                      </p>
-                      <p className="mt-1 text-[10px] uppercase tracking-[0.12em] text-sky-50/40">
-                        {getSafeCountryGlyph(selectedCountry)} {selectedCountry.name} {selectedService.serviceCode}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="shrink-0 text-right">
-                    <p className="text-[13px] font-medium text-[#16f0a9]">
-                      {formatCurrency(selectedService.price, selectedService.currency)}
-                    </p>
-                    <p className="mt-1 text-[11px] text-sky-50/55">
-                      stok: {selectedService.stock}
-                    </p>
-                  </div>
+              <div className="mt-3 space-y-2.5">
+                {providerEntries.map(({ meta, service }) => {
+                  const active = selectedProviderService?.id === service?.id;
+
+                  return (
+                    <button
+                      key={meta.id}
+                      className={cn(
+                        "flex w-full items-center justify-between gap-4 rounded-[16px] border px-3 py-3 text-left transition-colors",
+                        active
+                          ? "border-sky-100/24 bg-[linear-gradient(135deg,rgba(29,82,132,0.96),rgba(13,39,82,0.94))]"
+                          : "border-white/10 bg-[#0d2240]",
+                        !service && "opacity-60",
+                      )}
+                      disabled={!service}
+                      onClick={() => {
+                        if (!service) {
+                          return;
+                        }
+
+                        playUiFeedback("select");
+                        setSelectedProviderServer(meta.id);
+                      }}
+                      type="button"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-sky-100/10 text-sky-50">
+                          {getServerGlyph(meta.iconKey)}
+                        </span>
+                        <div className="min-w-0">
+                          <p className="truncate text-[13px] font-medium text-white">
+                            {selectedService.service}
+                          </p>
+                          <p className="mt-0.5 text-[10px] text-sky-50/55">
+                            {meta.name}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-[13px] font-medium text-[#16f0a9]">
+                          {service
+                            ? formatCurrency(service.price, service.currency)
+                            : "-"}
+                        </p>
+                        <p className="mt-1 text-[11px] text-sky-50/55">
+                          {service ? `stok: ${service.stock}` : "tidak tersedia"}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+
+                <div className="px-1 text-[10px] uppercase tracking-[0.12em] text-sky-50/40">
+                  {getSafeCountryGlyph(selectedCountry)} {selectedCountry.name} {selectedService.serviceCode}
                 </div>
               </div>
             </div>
@@ -1600,7 +1687,7 @@ export function CatalogConsole({
 
           <button
             className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-full bg-[linear-gradient(135deg,#e2f7ff,#93dcff_34%,#5cadff_67%,#3d7eff)] px-5 text-[13px] font-medium text-[#0b2248] shadow-[0_18px_35px_-22px_rgba(64,129,255,0.95)] disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={!selectedService || isCreatingPayment}
+            disabled={!selectedProviderService || isCreatingPayment}
             onClick={() => {
               playUiFeedback("confirm");
               void handleCreateCheckout();
@@ -1768,7 +1855,7 @@ export function CatalogConsole({
           <span className="h-1.5 w-10 rounded-full bg-white/30" />
           <span className="flex items-center gap-2">
             <MenuOrbIcon className="h-4 w-4" />
-            Quick Menu
+            Menu
           </span>
           <span className="text-[0.65rem] uppercase tracking-[0.24em] text-sky-100/55">
             swipe
@@ -1802,7 +1889,7 @@ export function CatalogConsole({
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.26em] text-sky-100/58">
-                  Luxury Menu
+                  Menu
                 </p>
                 <p className="mt-2 text-xl font-semibold text-white">
                   Navigasi cepat console
