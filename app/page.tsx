@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
 import { formatCurrency } from "@/lib/format";
@@ -14,6 +15,8 @@ import { siteConfig } from "@/lib/site-config";
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
+  redirect("/console");
+
   const featuredCatalog = await getCatalog({
     serverId: "bimasakti",
     countryId: 6,

@@ -2,6 +2,7 @@
 
 import Script from "next/script";
 import {
+  type ReactNode,
   startTransition,
   useDeferredValue,
   useEffect,
@@ -52,17 +53,216 @@ const serverOptions = [
     id: "bimasakti" as const,
     name: "Bimasakti",
     code: "api1",
-    icon: "\u2726",
+    iconKey: "bimasakti" as const,
     description: "Server utama KirimKode",
   },
   {
     id: "mars" as const,
     name: "Mars",
     code: "api2",
-    icon: "\u25CE",
+    iconKey: "mars" as const,
     description: "Server cadangan KirimKode",
   },
 ];
+
+function ShellIcon({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "flex h-11 w-11 items-center justify-center rounded-[16px] border border-white/14 bg-sky-100/12 text-sky-50 shadow-[0_16px_30px_-22px_rgba(116,195,255,0.95)]",
+        className,
+      )}
+    >
+      {children}
+    </div>
+  );
+}
+
+function BrandIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <path
+        d="M12 2.5L5.8 12.1h4.3l-1.3 9.4 7.9-11h-4.5L12 2.5z"
+        fill="currentColor"
+      />
+      <path
+        d="M5 6.5h3.3M15.8 17.5H19"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeOpacity=".55"
+        strokeWidth="1.5"
+      />
+    </svg>
+  );
+}
+
+function ServerIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <rect
+        height="5"
+        rx="1.5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        width="16"
+        x="4"
+        y="5"
+      />
+      <rect
+        height="5"
+        rx="1.5"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        width="16"
+        x="4"
+        y="14"
+      />
+      <circle cx="8" cy="7.5" fill="currentColor" r="1" />
+      <circle cx="8" cy="16.5" fill="currentColor" r="1" />
+    </svg>
+  );
+}
+
+function GlobeIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M4.7 9h14.6M4.7 15h14.6M12 4c2.2 2.2 3.4 5 3.4 8S14.2 17.8 12 20m0-16c-2.2 2.2-3.4 5-3.4 8S9.8 17.8 12 20"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.6"
+      />
+    </svg>
+  );
+}
+
+function ServiceIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <path
+        d="M4.5 5.5h2.3l1.4 8.2h8.8l2-6H8.7"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+      <circle cx="10" cy="18" fill="currentColor" r="1.5" />
+      <circle cx="17" cy="18" fill="currentColor" r="1.5" />
+    </svg>
+  );
+}
+
+function BimasaktiIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <path
+        d="M12.8 3.8l-4.1 7h3l-.8 9.4 4.6-7.8h-3.1l.4-8.6z"
+        fill="currentColor"
+      />
+    </svg>
+  );
+}
+
+function MarsIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <circle cx="12" cy="12" fill="currentColor" r="5.2" />
+      <path
+        d="M14.8 9.2l3-3m0 0h-2.1m2.1 0v2.1"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.7"
+      />
+    </svg>
+  );
+}
+
+function ChevronIcon({
+  className,
+  open = false,
+}: {
+  className?: string;
+  open?: boolean;
+}) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={cn("transition-transform", open && "rotate-180", className)}
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <path
+        d="M7 10l5 5 5-5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
+function getServerGlyph(iconKey: (typeof serverOptions)[number]["iconKey"]) {
+  if (iconKey === "mars") {
+    return <MarsIcon className="h-8 w-8" />;
+  }
+
+  return <BimasaktiIcon className="h-8 w-8" />;
+}
+
+function toFlagEmoji(code?: string) {
+  if (!code || !/^[a-z]{2}$/i.test(code)) {
+    return null;
+  }
+
+  return code
+    .toUpperCase()
+    .split("")
+    .map((char) => String.fromCodePoint(127397 + char.charCodeAt(0)))
+    .join("");
+}
+
+function getCountryGlyph(country?: Pick<CountryOption, "code" | "flagEmoji"> | null) {
+  return toFlagEmoji(country?.code) ?? country?.flagEmoji ?? "🌐";
+}
 
 function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
@@ -231,10 +431,16 @@ async function requestCancelOrder(orderId: string) {
   return payload.order;
 }
 
-function SectionTitle({ icon, title }: { icon: string; title: string }) {
+function SectionTitle({
+  icon,
+  title,
+}: {
+  icon: ReactNode;
+  title: string;
+}) {
   return (
     <div className="flex items-center gap-3">
-      <div className="flex h-11 w-11 items-center justify-center rounded-[16px] border border-white/14 bg-sky-100/12 text-lg">
+      <div className="flex h-11 w-11 items-center justify-center rounded-[16px] border border-white/14 bg-sky-100/12 text-sky-50 shadow-[0_16px_30px_-22px_rgba(116,195,255,0.95)]">
         {icon}
       </div>
       <p className="text-[1.12rem] font-semibold text-white sm:text-[1.2rem]">
@@ -250,6 +456,7 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
   const [selectedServer, setSelectedServer] = useState<ServerId>("bimasakti");
   const [selectedCountryId, setSelectedCountryId] = useState<number | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState("");
+  const [countryPanelOpen, setCountryPanelOpen] = useState(false);
   const [serviceSearch, setServiceSearch] = useState("");
   const [servicePanelOpen, setServicePanelOpen] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -296,6 +503,10 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
       setSelectedCountryId((current) => {
         if (current && nextCountries.some((country) => country.id === current)) {
           return current;
+        }
+
+        if (nextCountries.some((country) => country.id === 6)) {
+          return 6;
         }
 
         return nextCountries[0]?.id ?? null;
@@ -475,6 +686,8 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
 
   useEffect(() => {
     void loadCountries(selectedServer);
+    setCountryPanelOpen(false);
+    setServicePanelOpen(false);
   }, [selectedServer]);
 
   useEffect(() => {
@@ -519,7 +732,7 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
     ) ?? [];
 
   return (
-    <div className="min-h-[100dvh] bg-[radial-gradient(circle_at_top_left,#d8f4ff_0%,#9bdcff_18%,#5fafff_45%,#377aff_72%,#2250cf_100%)] text-white">
+    <div className="min-h-[100dvh] bg-[radial-gradient(circle_at_top_left,#effbff_0%,#bfeaff_16%,#7cc8ff_38%,#4f9aff_68%,#3c78f5_100%)] text-white">
       {isPaymentReady ? (
         <Script
           data-client-key={midtransClientKey}
@@ -530,11 +743,11 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
       ) : null}
 
       <main className="mx-auto w-full max-w-[470px] px-3 py-4 sm:px-4 sm:py-5">
-        <div className="rounded-[30px] border border-white/14 bg-[#12305b]/92 px-4 py-5 shadow-[0_24px_80px_-40px_rgba(7,18,52,0.95)] sm:px-5">
+        <div className="rounded-[30px] border border-white/16 bg-[linear-gradient(180deg,rgba(20,59,111,0.96),rgba(17,48,93,0.93))] px-4 py-5 shadow-[0_24px_80px_-40px_rgba(7,18,52,0.95)] sm:px-5">
           <div className="flex items-start gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-[22px] bg-[linear-gradient(145deg,#dbf4ff,#8fd8ff_45%,#4a8cff)] text-[1.6rem] shadow-[0_18px_30px_-18px_rgba(33,93,255,0.9)]">
-              {"\u26A1"}
-            </div>
+            <ShellIcon className="h-14 w-14 rounded-[22px] bg-[linear-gradient(145deg,#edfaff,#9de0ff_48%,#4e8dff)] text-[#113663]">
+              <BrandIcon className="h-8 w-8" />
+            </ShellIcon>
             <div>
               <h1 className="text-[2rem] font-semibold leading-none text-white sm:text-[2.2rem]">
                 Rahmat OTP
@@ -559,14 +772,17 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
           </div>
         ) : null}
 
-        {catalog?.warning ? (
+        {catalog?.warning && catalog.total === 0 ? (
           <div className="mt-4 rounded-[24px] border border-sky-100/20 bg-sky-100/12 px-4 py-4 text-sm leading-7 text-sky-50">
             {catalog.warning}
           </div>
         ) : null}
 
-        <section className="mt-4 rounded-[28px] border border-white/14 bg-[#173764]/92 p-4 sm:p-5">
-          <SectionTitle icon={"\u2699"} title="Select Server" />
+        <section className="mt-4 rounded-[28px] border border-white/14 bg-[linear-gradient(180deg,rgba(24,63,116,0.95),rgba(22,54,100,0.94))] p-4 sm:p-5">
+          <SectionTitle
+            icon={<ServerIcon className="h-5 w-5" />}
+            title="Select Server"
+          />
           <div className="mt-4 grid gap-3">
             {serverOptions.map((server) => {
               const active = selectedServer === server.id;
@@ -577,16 +793,16 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
                   className={cn(
                     "flex w-full items-center justify-between rounded-[24px] border px-4 py-4 text-left transition-colors",
                     active
-                      ? "border-sky-100/85 bg-[linear-gradient(135deg,rgba(176,233,255,0.22),rgba(71,145,255,0.28))]"
-                      : "border-white/10 bg-[#102846]",
+                      ? "border-sky-100/85 bg-[linear-gradient(135deg,rgba(196,239,255,0.24),rgba(87,164,255,0.32))]"
+                      : "border-white/10 bg-[#13315b]",
                   )}
                   onClick={() => setSelectedServer(server.id)}
                   type="button"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-[20px] bg-[linear-gradient(145deg,#dff5ff,#8fd8ff_45%,#3e7fff)] text-[1.55rem] shadow-[0_16px_30px_-20px_rgba(38,101,255,0.95)]">
-                      {server.icon}
-                    </div>
+                    <ShellIcon className="h-14 w-14 rounded-[20px] bg-[linear-gradient(145deg,#edfaff,#9de0ff_48%,#4e8dff)] text-white">
+                      {getServerGlyph(server.iconKey)}
+                    </ShellIcon>
                     <div>
                       <div className="flex items-center gap-2">
                         <p className="text-[1.08rem] font-semibold text-white">
@@ -615,33 +831,97 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
           </div>
         </section>
 
-        <section className="mt-4 rounded-[28px] border border-white/14 bg-[#173764]/92 p-4 sm:p-5">
-          <SectionTitle icon={"\u25CE"} title="Select Country" />
-          <select
-            className="mt-4 h-14 w-full rounded-[22px] border border-sky-100/20 bg-[#102846] px-4 text-base text-white outline-none"
+        <section className="mt-4 rounded-[28px] border border-white/14 bg-[linear-gradient(180deg,rgba(24,63,116,0.95),rgba(22,54,100,0.94))] p-4 sm:p-5">
+          <SectionTitle
+            icon={<GlobeIcon className="h-5 w-5" />}
+            title="Select Country"
+          />
+          <button
+            className="mt-4 flex min-h-14 w-full items-center justify-between rounded-[22px] border border-sky-100/20 bg-[#102846] px-4 py-3 text-left"
             disabled={isLoadingCountries || countries.length === 0}
-            onChange={(event) => setSelectedCountryId(Number(event.target.value))}
-            value={selectedCountryId ?? ""}
+            onClick={() => setCountryPanelOpen((current) => !current)}
+            type="button"
           >
-            {isLoadingCountries ? <option value="">Memuat negara...</option> : null}
-            {!isLoadingCountries && countries.length === 0 ? (
-              <option value="">Negara belum tersedia</option>
-            ) : null}
-            {countries.map((country) => (
-              <option key={`${country.serverId}-${country.id}`} value={country.id}>
-                {(country.flagEmoji ?? "\u2691")} {country.name} - ID {country.id}
-              </option>
-            ))}
-          </select>
+            <span className="flex min-w-0 items-center gap-3">
+              <span className="text-2xl">{getCountryGlyph(selectedCountry)}</span>
+              <span className="min-w-0">
+                <span className="block truncate text-base font-medium text-white">
+                  {isLoadingCountries
+                    ? "Memuat negara..."
+                    : selectedCountry?.name ?? "Pilih negara"}
+                </span>
+                {selectedCountry ? (
+                  <span className="mt-1 block text-xs uppercase tracking-[0.16em] text-sky-50/55">
+                    ID {selectedCountry.id} - {selectedCountry.availableServices} layanan
+                  </span>
+                ) : null}
+              </span>
+            </span>
+            <ChevronIcon
+              className="h-5 w-5 text-sky-100/80"
+              open={countryPanelOpen}
+            />
+          </button>
+
+          {countryPanelOpen ? (
+            <div className="mt-4 rounded-[24px] border border-white/10 bg-[#214571]/92 p-4">
+              <div className="max-h-[300px] space-y-2 overflow-y-auto pr-1">
+                {countries.map((country) => {
+                  const active = selectedCountryId === country.id;
+
+                  return (
+                    <button
+                      key={`${country.serverId}-${country.id}`}
+                      className={cn(
+                        "flex w-full items-center justify-between rounded-[18px] px-3 py-3 text-left transition-colors",
+                        active ? "bg-sky-100/12" : "bg-transparent",
+                      )}
+                      onClick={() => {
+                        setSelectedCountryId(country.id);
+                        setCountryPanelOpen(false);
+                      }}
+                      type="button"
+                    >
+                      <div className="flex min-w-0 items-center gap-3 pr-3">
+                        <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-[#102846] text-[1.4rem]">
+                          {getCountryGlyph(country)}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-[1rem] font-medium text-white">
+                            {country.name}
+                          </p>
+                          <p className="mt-1 text-xs uppercase tracking-[0.16em] text-sky-50/50">
+                            ID {country.id} - code {country.code}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-sky-100">
+                          {country.availableServices}
+                        </p>
+                        <p className="text-xs text-sky-50/50">layanan</p>
+                      </div>
+                    </button>
+                  );
+                })}
+
+                {!countries.length && !isLoadingCountries ? (
+                  <div className="rounded-[18px] bg-[#102846] px-4 py-6 text-center text-sm text-white/60">
+                    Negara real dari KirimKode belum tersedia.
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
 
           {selectedCountry ? (
             <div className="mt-4 rounded-[22px] border border-white/10 bg-[#102846] px-4 py-4 text-sm leading-7 text-sky-50/76">
               <div className="flex items-center gap-3">
-                <div className="text-2xl">{selectedCountry.flagEmoji ?? "\u2691"}</div>
+                <div className="text-2xl">{getCountryGlyph(selectedCountry)}</div>
                 <div>
                   <p className="font-semibold text-white">{selectedCountry.name}</p>
                   <p className="text-sky-50/58">
-                    code {selectedCountry.code} • {selectedCountry.availableServices} layanan
+                    code {selectedCountry.code} - {selectedCountry.availableServices} layanan
                   </p>
                 </div>
               </div>
@@ -649,8 +929,11 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
           ) : null}
         </section>
 
-        <section className="mt-4 rounded-[28px] border border-white/14 bg-[#173764]/92 p-4 sm:p-5">
-          <SectionTitle icon={"\u25A3"} title="Select Service" />
+        <section className="mt-4 rounded-[28px] border border-white/14 bg-[linear-gradient(180deg,rgba(24,63,116,0.95),rgba(22,54,100,0.94))] p-4 sm:p-5">
+          <SectionTitle
+            icon={<ServiceIcon className="h-5 w-5" />}
+            title="Select Service"
+          />
           <button
             className="mt-4 flex min-h-14 w-full items-center justify-between rounded-[22px] border border-sky-100/20 bg-[#102846] px-4 py-3 text-left"
             onClick={() => setServicePanelOpen((current) => !current)}
@@ -659,9 +942,10 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
             <span className="truncate text-base font-medium text-white">
               {selectedService?.service ?? "Select Service"}
             </span>
-            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-sky-100/80">
-              {servicePanelOpen ? "Tutup" : "Buka"}
-            </span>
+            <ChevronIcon
+              className="h-5 w-5 text-sky-100/80"
+              open={servicePanelOpen}
+            />
           </button>
 
           {servicePanelOpen ? (
@@ -692,7 +976,7 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
                         {service.service}
                       </p>
                       <p className="mt-1 text-xs uppercase tracking-[0.16em] text-sky-50/50">
-                        {service.serviceCode} • stok {service.stock}
+                        {service.serviceCode} - stok {service.stock}
                       </p>
                     </div>
                     <div className="text-right">
@@ -724,9 +1008,12 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
                     {selectedService.service}
                   </p>
                 </div>
-                <p className="text-[1.02rem] font-semibold text-white">
-                  {selectedServerMeta.icon} {selectedServerMeta.name}
-                </p>
+                <div className="flex items-center gap-2 text-[1.02rem] font-semibold text-white">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-[14px] bg-sky-100/10">
+                    {getServerGlyph(selectedServerMeta.iconKey)}
+                  </span>
+                  <span>{selectedServerMeta.name}</span>
+                </div>
               </div>
 
               <div className="mt-4 rounded-[22px] border border-white/10 bg-[#0d2240] px-4 py-4">
@@ -734,7 +1021,7 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
                   <div>
                     <p className="text-sm text-sky-50/55">Negara</p>
                     <p className="mt-1 text-base font-semibold text-white">
-                      {(selectedCountry.flagEmoji ?? "\u2691")} {selectedCountry.name}
+                      {getCountryGlyph(selectedCountry)} {selectedCountry.name}
                     </p>
                     <p className="mt-1 text-xs uppercase tracking-[0.16em] text-sky-50/50">
                       code {selectedService.serviceCode}
@@ -770,7 +1057,7 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
         ) : null}
 
         {payment ? (
-          <section className="mt-4 rounded-[28px] border border-white/14 bg-[#173764]/92 p-4 sm:p-5">
+          <section className="mt-4 rounded-[28px] border border-white/14 bg-[linear-gradient(180deg,rgba(24,63,116,0.95),rgba(22,54,100,0.94))] p-4 sm:p-5">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm text-sky-50/55">Payment Status</p>
@@ -813,7 +1100,7 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
           </section>
         ) : null}
 
-        <section className="mt-4 rounded-[28px] border border-white/14 bg-[#173764]/92 p-4 sm:p-5">
+        <section className="mt-4 rounded-[28px] border border-white/14 bg-[linear-gradient(180deg,rgba(24,63,116,0.95),rgba(22,54,100,0.94))] p-4 sm:p-5">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm text-sky-50/55">OTP Result</p>
