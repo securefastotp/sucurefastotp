@@ -22,6 +22,8 @@ export type CatalogResponse = {
   countries: string[];
   categories: string[];
   services: Service[];
+  source?: "upstream" | "fallback";
+  warning?: string;
 };
 
 export type OrderStatus = "pending" | "otp_received" | "expired" | "cancelled";

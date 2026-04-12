@@ -1,12 +1,13 @@
 import { CatalogConsole } from "@/components/catalog-console";
 import { SiteFooter } from "@/components/site-footer";
 import { SiteHeader } from "@/components/site-header";
-import { getRuntimeStatus } from "@/lib/provider";
+import { getBalance, getRuntimeStatus } from "@/lib/provider";
 
 export const dynamic = "force-dynamic";
 
 export default async function ConsolePage() {
   const runtime = await getRuntimeStatus();
+  const balance = await getBalance().catch(() => null);
 
   return (
     <div className="min-h-screen">
@@ -26,7 +27,7 @@ export default async function ConsolePage() {
           </p>
         </div>
 
-        <CatalogConsole initialRuntime={runtime} />
+        <CatalogConsole initialRuntime={runtime} initialBalance={balance} />
       </main>
       <SiteFooter />
     </div>

@@ -113,6 +113,10 @@ function uniqueSorted(values: string[]) {
 function buildCatalogResponse(
   services: Service[],
   mode: RuntimeStatus["providerMode"],
+  extras?: {
+    source?: "upstream" | "fallback";
+    warning?: string;
+  },
 ): CatalogResponse {
   return {
     updatedAt: new Date().toISOString(),
@@ -121,6 +125,8 @@ function buildCatalogResponse(
     countries: uniqueSorted(services.map((service) => service.country)),
     categories: uniqueSorted(services.map((service) => service.category)),
     services,
+    source: extras?.source,
+    warning: extras?.warning,
   };
 }
 
@@ -476,15 +482,31 @@ export async function getCatalog(filters: CatalogFilters = {}) {
 
   if (config.mode === "mock") {
     const services = applyFilters(listMockServices(), filters);
-    return buildCatalogResponse(services, "mock");
+    return buildCatalogResponse(services, "mock", { source: "fallback" });
   }
 
-  const payload = await fetchUpstream(config.servicesPath);
-  const services = extractArray(payload)
-    .map(normalizeService)
-    .filter((service): service is Service => Boolean(service));
+  try {
+    const payload = await fetchUpstream(config.servicesPath);
+    const services = extractArray(payload)
+      .map(normalizeService)
+      .filter((service): service is Service => Boolean(service));
+    const filteredServices = applyFilters(services, filters);
 
-  return buildCatalogResponse(applyFilters(services, filters), "rest");
+    if (filteredServices.length > 0) {
+      return buildCatalogResponse(filteredServices, "rest", {
+        source: "upstream",
+      });
+    }
+  } catch {
+    // Fall back to a curated local catalog when the upstream service
+    // directory is unavailable, while keeping the rest of the runtime live.
+  }
+
+  return buildCatalogResponse(applyFilters(listMockServices(), filters), "rest", {
+    source: "fallback",
+    warning:
+      "Katalog KirimKode sedang kosong atau gagal dimuat. Menampilkan katalog cadangan agar website tetap bisa dipakai.",
+  });
 }
 
 export async function getBalance(): Promise<Balance> {

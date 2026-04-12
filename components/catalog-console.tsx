@@ -8,6 +8,7 @@ import {
 } from "react";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 import type {
+  Balance,
   CatalogResponse,
   Order,
   RuntimeStatus,
@@ -16,6 +17,7 @@ import type {
 
 type CatalogConsoleProps = {
   initialRuntime: RuntimeStatus;
+  initialBalance: Balance | null;
 };
 
 function hasError(payload: unknown): payload is { error?: string } {
@@ -88,7 +90,10 @@ async function requestCancelOrder(orderId: string) {
   return payload.order;
 }
 
-export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
+export function CatalogConsole({
+  initialRuntime,
+  initialBalance,
+}: CatalogConsoleProps) {
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
   const [query, setQuery] = useState("");
   const [country, setCountry] = useState("Semua");
@@ -216,6 +221,9 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
     `Mode: ${initialRuntime.providerMode.toUpperCase()}`,
     `Markup: ${initialRuntime.markupPercent}%`,
     `Min Margin: ${formatCurrency(initialRuntime.minMargin, initialRuntime.currency)}`,
+    initialBalance
+      ? `Saldo: ${formatCurrency(initialBalance.amount, initialBalance.currency)}`
+      : "Saldo: tidak terbaca",
     initialRuntime.baseUrlHost
       ? `Host: ${initialRuntime.baseUrlHost}`
       : "Host: mock-runtime",
@@ -307,6 +315,20 @@ export function CatalogConsole({ initialRuntime }: CatalogConsoleProps) {
           {catalogError ? (
             <div className="mt-6 rounded-[22px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
               {catalogError}
+            </div>
+          ) : null}
+
+          {catalog?.warning ? (
+            <div className="mt-6 rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              {catalog.warning}
+            </div>
+          ) : null}
+
+          {initialBalance && initialBalance.amount <= 0 ? (
+            <div className="mt-4 rounded-[22px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Saldo upstream Anda saat ini 0. Website sudah tersambung ke
+              KirimKode, tetapi order live belum bisa jalan sebelum saldo
+              provider diisi.
             </div>
           ) : null}
 
