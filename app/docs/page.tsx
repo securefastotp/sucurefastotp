@@ -87,7 +87,7 @@ const envFields = [
   {
     name: "UPSTREAM_SERVER_MARS_CODE",
     required: "No",
-    description: "Kode upstream untuk lane Blueverifiy. Default `api2`.",
+    description: "Kode upstream untuk lane Blueverifi. Default `api2`.",
   },
   {
     name: "UPSTREAM_MARKUP_PERCENT",

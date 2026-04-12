@@ -58,14 +58,14 @@ const serverOptions = [
     name: "Skyguard",
     code: "api1",
     iconKey: "skyguard" as const,
-    description: "Jalur utama yang paling agresif dan stabil",
+    description: "Server utama, stok terbanyak",
   },
   {
     id: "mars" as const,
-    name: "Blueverifiy",
+    name: "Blueverifi",
     code: "api2",
     iconKey: "blueverifiy" as const,
-    description: "Jalur cadangan premium untuk verifikasi cepat",
+    description: "Server cadangan, lebih stabil",
   },
 ];
 
@@ -441,10 +441,10 @@ function ChevronIcon({
 
 function getServerGlyph(iconKey: (typeof serverOptions)[number]["iconKey"]) {
   if (iconKey === "blueverifiy") {
-    return <BlueverifiyIcon className="h-8 w-8" />;
+    return <BlueverifiyIcon className="h-6 w-6" />;
   }
 
-  return <SkyguardIcon className="h-8 w-8" />;
+  return <SkyguardIcon className="h-6 w-6" />;
 }
 
 function toFlagEmoji(code?: string) {
@@ -473,26 +473,6 @@ function getSafeCountryGlyph(country?: Pick<CountryOption, "code"> | null) {
 
 function hasCountryCode(country?: Pick<CountryOption, "code"> | null) {
   return Boolean(country?.code && /^[a-z]{2}$/i.test(country.code));
-}
-
-function getCountryCaption(country?: CountryOption | null) {
-  if (!country) {
-    return "";
-  }
-
-  if (hasCountryCode(country)) {
-    return `${country.code.toUpperCase()} - ${country.availableServices} layanan`;
-  }
-
-  return `KirimKode ID ${country.id} - ${country.availableServices} layanan`;
-}
-
-function getCountryListCaption(country: CountryOption) {
-  if (hasCountryCode(country)) {
-    return `KirimKode ID ${country.id} - ${country.code.toUpperCase()}`;
-  }
-
-  return `KirimKode ID ${country.id}`;
 }
 
 function getServiceBadge(serviceName: string) {
@@ -741,11 +721,11 @@ function SectionTitle({
   title: string;
 }) {
   return (
-    <div className="flex items-center gap-3">
-      <div className="flex h-11 w-11 items-center justify-center rounded-[16px] border border-white/14 bg-sky-100/12 text-sky-50 shadow-[0_16px_30px_-22px_rgba(116,195,255,0.95)]">
+    <div className="flex items-center gap-2.5">
+      <div className="flex h-9 w-9 items-center justify-center rounded-[14px] border border-white/14 bg-sky-100/12 text-sky-50 shadow-[0_16px_30px_-22px_rgba(116,195,255,0.95)]">
         {icon}
       </div>
-      <p className="text-[1.12rem] font-semibold text-white sm:text-[1.2rem]">
+      <p className="text-[14px] font-medium text-white">
         {title}
       </p>
     </div>
@@ -1217,7 +1197,7 @@ export function CatalogConsole({
               <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_16px_rgba(103,232,249,0.9)]" />
               Skyguard
               <span className="h-1 w-1 rounded-full bg-white/24" />
-              Blueverifiy
+              Blueverifi
             </div>
           </div>
         </div>
@@ -1226,79 +1206,19 @@ export function CatalogConsole({
       <main className="relative z-10 mx-auto w-full max-w-[470px] px-3 py-4 pb-28 sm:px-4 sm:py-5">
         <div
           id="console-top"
-          className="lux-rise rounded-[34px] border border-white/16 bg-[linear-gradient(145deg,rgba(10,27,61,0.9),rgba(18,59,124,0.88)_56%,rgba(7,111,196,0.8))] px-4 py-5 shadow-[0_28px_90px_-42px_rgba(2,8,25,0.95)] sm:px-5"
+          className="lux-rise rounded-[24px] border border-white/16 bg-[linear-gradient(145deg,rgba(10,27,61,0.9),rgba(18,59,124,0.88)_56%,rgba(7,111,196,0.8))] px-4 py-3 shadow-[0_28px_90px_-42px_rgba(2,8,25,0.95)]"
         >
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-4">
-              <div className="relative">
-                <span className="lux-icon-halo" />
-                <span className="lux-icon-ring lux-icon-ring-a" />
-                <span className="lux-icon-ring lux-icon-ring-b" />
-                <ShellIcon className="lux-brand-frame relative h-15 w-15 rounded-[24px] bg-[linear-gradient(145deg,#f3fdff,#a8e8ff_44%,#4b93ff)] text-[#113663] shadow-[0_20px_40px_-26px_rgba(76,171,255,0.95)]">
-                  <span className="lux-brand-spark lux-brand-spark-a" />
-                  <span className="lux-brand-spark lux-brand-spark-b" />
-                  <BrandIcon className="lux-brand-mark h-8 w-8" />
-                </ShellIcon>
-              </div>
-              <div>
-                <div className="inline-flex items-center gap-2 rounded-full border border-white/14 bg-white/7 px-3 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.28em] text-sky-100/80">
-                  <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_18px_rgba(103,232,249,0.9)]" />
-                  Premium Mobile Console
-                </div>
-                <h1 className="mt-3 bg-[linear-gradient(135deg,#ffffff,#dff6ff_38%,#9fd6ff_72%,#73a7ff)] bg-clip-text text-[2rem] font-semibold leading-none text-transparent sm:text-[2.25rem]">
-                  Rahmat OTP
-                </h1>
-                <p className="mt-2 max-w-[240px] text-sm leading-7 text-sky-50/80 sm:text-base">
-                  Flow beli nomor sekarang tampil lebih premium, tetap langsung ke Midtrans dan KirimKode.
-                </p>
-              </div>
-            </div>
-
+          <div className="flex items-center justify-between gap-3">
+            <h1 className="text-[15px] font-medium leading-none text-white">
+              Rahmat OTP
+            </h1>
             <button
-              className="lux-menu-trigger"
+              className="lux-menu-trigger h-9 w-9"
               onClick={() => openQuickMenuSheet()}
               type="button"
             >
-              <MenuOrbIcon className="h-5 w-5" />
+              <MenuOrbIcon className="h-4 w-4" />
             </button>
-          </div>
-
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            <div className="rounded-[22px] border border-white/10 bg-white/8 px-4 py-3 backdrop-blur">
-              <p className="text-[0.66rem] font-semibold uppercase tracking-[0.22em] text-sky-100/56">
-                Active Lane
-              </p>
-              <div className="mt-2 flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-[15px] bg-[linear-gradient(145deg,rgba(255,255,255,0.22),rgba(106,196,255,0.22))] text-sky-50">
-                  {getServerGlyph(selectedServerMeta?.iconKey ?? "skyguard")}
-                </span>
-                <div>
-                  <p className="text-sm font-semibold text-white">
-                    {selectedServerMeta?.name ?? "Skyguard"}
-                  </p>
-                  <p className="text-xs text-sky-100/58">
-                    {selectedServerMeta?.code ?? "api1"}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-[22px] border border-white/10 bg-white/8 px-4 py-3 backdrop-blur">
-              <p className="text-[0.66rem] font-semibold uppercase tracking-[0.22em] text-sky-100/56">
-                Payment Core
-              </p>
-              <div className="mt-2 flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-[15px] bg-[linear-gradient(145deg,rgba(255,255,255,0.22),rgba(106,196,255,0.22))] text-sky-50">
-                  <OtpBurstIcon className="h-5 w-5 animate-[lux-pulse_2.8s_ease-in-out_infinite]" />
-                </span>
-                <div>
-                  <p className="text-sm font-semibold text-white">Midtrans Live</p>
-                  <p className="text-xs text-sky-100/58">
-                    {isSnapReady ? "Snap siap dibuka" : "Memuat snap..."}
-                  </p>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -1322,13 +1242,13 @@ export function CatalogConsole({
 
         <section
           id="server-zone"
-          className="lux-rise lux-panel mt-4 rounded-[28px] border border-white/14 bg-[linear-gradient(180deg,rgba(15,46,93,0.95),rgba(10,34,72,0.96))] p-4 sm:p-5"
+          className="lux-rise lux-panel mt-4 rounded-[24px] border border-white/14 bg-[linear-gradient(180deg,rgba(15,46,93,0.95),rgba(10,34,72,0.96))] p-3.5 sm:p-4"
         >
           <SectionTitle
-            icon={<ServerIcon className="h-5 w-5" />}
+            icon={<ServerIcon className="h-4 w-4" />}
             title="Select Server"
           />
-          <div className="mt-4 grid gap-3">
+          <div className="mt-3 grid gap-2.5">
             {serverOptions.map((server) => {
               const active = selectedServer === server.id;
 
@@ -1336,7 +1256,7 @@ export function CatalogConsole({
                 <button
                   key={server.id}
                   className={cn(
-                    "flex w-full items-center justify-between rounded-[24px] border px-4 py-4 text-left transition-colors",
+                    "flex w-full items-center justify-between rounded-[18px] border px-3 py-3 text-left transition-colors",
                     active
                       ? "border-sky-100/85 bg-[linear-gradient(135deg,rgba(196,239,255,0.24),rgba(87,164,255,0.32))]"
                       : "border-white/10 bg-[#13315b]",
@@ -1347,31 +1267,27 @@ export function CatalogConsole({
                   }}
                   type="button"
                 >
-                  <div className="flex items-center gap-4">
-                    <div className="relative">
-                      <span className="lux-icon-halo lux-icon-halo-soft" />
-                      <span className="lux-icon-ring lux-icon-ring-a" />
-                      <ShellIcon className="relative h-14 w-14 rounded-[20px] bg-[linear-gradient(145deg,#edfaff,#9de0ff_48%,#4e8dff)] text-white">
-                        <span className="block animate-[lux-float_3.6s_ease-in-out_infinite]">
-                          {getServerGlyph(server.iconKey)}
-                        </span>
-                      </ShellIcon>
-                    </div>
+                  <div className="flex items-center gap-3">
+                    <ShellIcon className="h-10 w-10 rounded-[14px] bg-[linear-gradient(145deg,#edfaff,#9de0ff_48%,#4e8dff)] text-white">
+                      <span className="block animate-[lux-float_3.6s_ease-in-out_infinite]">
+                        {getServerGlyph(server.iconKey)}
+                      </span>
+                    </ShellIcon>
                     <div>
                       <div className="flex items-center gap-2">
-                        <p className="text-[1.08rem] font-semibold text-white">
+                        <p className="text-[13px] font-medium text-white">
                           {server.name}
                         </p>
-                        <span className="h-2.5 w-2.5 rounded-full bg-cyan-300 shadow-[0_0_16px_rgba(103,232,249,0.95)]" />
+                        <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_16px_rgba(103,232,249,0.95)]" />
                       </div>
-                      <p className="mt-1 text-sm leading-6 text-sky-50/62">
-                        {server.description} ({server.code})
+                      <p className="mt-1 text-[10px] leading-4 text-sky-50/62">
+                        {server.description}
                       </p>
                     </div>
                   </div>
                   <div
                     className={cn(
-                      "rounded-full border px-3 py-2 text-xs font-bold",
+                      "rounded-full border px-2.5 py-1.5 text-[10px] font-semibold",
                       active
                         ? "border-sky-100/65 bg-sky-100/12 text-sky-50"
                         : "border-white/10 text-white/45",
@@ -1387,14 +1303,14 @@ export function CatalogConsole({
 
         <section
           id="country-zone"
-          className="lux-rise lux-panel mt-4 rounded-[28px] border border-white/14 bg-[linear-gradient(180deg,rgba(15,46,93,0.95),rgba(10,34,72,0.96))] p-4 sm:p-5"
+          className="lux-rise lux-panel mt-4 rounded-[24px] border border-white/14 bg-[linear-gradient(180deg,rgba(15,46,93,0.95),rgba(10,34,72,0.96))] p-3.5 sm:p-4"
         >
           <SectionTitle
-            icon={<GlobeIcon className="h-5 w-5" />}
+            icon={<GlobeIcon className="h-4 w-4" />}
             title="Select Country"
           />
           <button
-            className="mt-4 flex min-h-14 w-full items-center justify-between rounded-[22px] border border-sky-100/20 bg-[#102846] px-4 py-3 text-left"
+            className="mt-3 flex min-h-12 w-full items-center justify-between rounded-[18px] border border-sky-100/20 bg-[#102846] px-3 py-2.5 text-left"
             disabled={isLoadingCountries || countries.length === 0}
             onClick={() => {
               playUiFeedback("open");
@@ -1403,36 +1319,29 @@ export function CatalogConsole({
             type="button"
           >
             <span className="flex min-w-0 items-center gap-3">
-              <span className="text-2xl">{getSafeCountryGlyph(selectedCountry)}</span>
-              <span className="min-w-0">
-                <span className="block truncate text-base font-medium text-white">
-                  {isLoadingCountries
-                    ? "Memuat negara..."
-                    : selectedCountry?.name ?? "Pilih negara"}
-                </span>
-                {selectedCountry ? (
-                  <span className="mt-1 block text-xs uppercase tracking-[0.16em] text-sky-50/55">
-                    {getCountryCaption(selectedCountry)}
-                  </span>
-                ) : null}
+              <span className="text-[18px]">{getSafeCountryGlyph(selectedCountry)}</span>
+              <span className="block min-w-0 truncate text-[13px] font-medium text-white">
+                {isLoadingCountries
+                  ? "Memuat negara..."
+                  : selectedCountry?.name ?? "Pilih negara"}
               </span>
             </span>
             <ChevronIcon
-              className="h-5 w-5 text-sky-100/80"
+              className="h-4 w-4 text-sky-100/80"
               open={countryPanelOpen}
             />
           </button>
 
           {countryPanelOpen ? (
-            <div className="mt-4 rounded-[24px] border border-white/10 bg-[#214571]/92 p-4">
+            <div className="mt-3 rounded-[18px] border border-white/10 bg-[#214571]/92 p-3">
               <input
-                className="h-13 w-full rounded-[18px] border border-sky-100/20 bg-[#102846] px-4 text-base text-white outline-none placeholder:text-white/35"
+                className="h-11 w-full rounded-[14px] border border-sky-100/20 bg-[#102846] px-3 text-[13px] text-white outline-none placeholder:text-white/35"
                 onChange={(event) => setCountrySearch(event.target.value)}
-                placeholder="Cari negara atau kode..."
+                placeholder="Cari negara..."
                 value={countrySearch}
               />
 
-              <div className="mt-4 max-h-[320px] space-y-2 overflow-y-auto pr-1">
+              <div className="mt-3 max-h-[320px] space-y-1.5 overflow-y-auto pr-1">
                 {filteredCountries.map((country) => {
                   const active = selectedCountryId === country.id;
 
@@ -1440,7 +1349,7 @@ export function CatalogConsole({
                     <button
                       key={`${country.serverId}-${country.id}`}
                       className={cn(
-                        "flex w-full items-center justify-between rounded-[18px] px-3 py-3 text-left transition-colors",
+                        "flex w-full items-center rounded-[14px] px-3 py-2.5 text-left transition-colors",
                         active ? "bg-sky-100/12" : "bg-transparent",
                       )}
                       onClick={() => {
@@ -1452,23 +1361,12 @@ export function CatalogConsole({
                       type="button"
                     >
                       <div className="flex min-w-0 items-center gap-3 pr-3">
-                        <div className="flex h-11 w-11 items-center justify-center rounded-[16px] bg-[#102846] text-[1.4rem]">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-[12px] bg-[#102846] text-[18px]">
                           {getSafeCountryGlyph(country)}
                         </div>
-                        <div className="min-w-0">
-                          <p className="truncate text-[1rem] font-medium text-white">
-                            {country.name}
-                          </p>
-                          <p className="mt-1 text-xs uppercase tracking-[0.16em] text-sky-50/50">
-                            {getCountryListCaption(country)}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-semibold text-sky-100">
-                          {country.availableServices}
+                        <p className="truncate text-[13px] font-medium text-white">
+                          {country.name}
                         </p>
-                        <p className="text-xs text-sky-50/50">layanan</p>
                       </div>
                     </button>
                   );
@@ -1482,43 +1380,29 @@ export function CatalogConsole({
               </div>
             </div>
           ) : null}
-
-          {selectedCountry ? (
-            <div className="mt-4 rounded-[22px] border border-white/10 bg-[#102846] px-4 py-4 text-sm leading-7 text-sky-50/76">
-              <div className="flex items-center gap-3">
-                <div className="text-2xl">{getSafeCountryGlyph(selectedCountry)}</div>
-                <div>
-                  <p className="font-semibold text-white">{selectedCountry.name}</p>
-                  <p className="text-sky-50/58">
-                    {getCountryCaption(selectedCountry)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          ) : null}
         </section>
 
         <section
           id="service-zone"
-          className="lux-rise lux-panel mt-4 rounded-[28px] border border-white/14 bg-[linear-gradient(180deg,rgba(15,46,93,0.95),rgba(10,34,72,0.96))] p-4 sm:p-5"
+          className="lux-rise lux-panel mt-4 rounded-[24px] border border-white/14 bg-[linear-gradient(180deg,rgba(15,46,93,0.95),rgba(10,34,72,0.96))] p-3.5 sm:p-4"
         >
           <SectionTitle
-            icon={<ServiceIcon className="h-5 w-5" />}
+            icon={<ServiceIcon className="h-4 w-4" />}
             title="Select Service"
           />
           <button
-            className="mt-4 flex min-h-14 w-full items-center justify-between rounded-[22px] border border-sky-100/20 bg-[#102846] px-4 py-3 text-left"
+            className="mt-3 flex min-h-12 w-full items-center justify-between rounded-[18px] border border-sky-100/20 bg-[#102846] px-3 py-2.5 text-left"
             onClick={() => {
               playUiFeedback("open");
               setServicePanelOpen((current) => !current);
             }}
             type="button"
           >
-            <span className="truncate text-base font-medium text-white">
+            <span className="truncate text-[13px] font-medium text-white">
               {selectedService?.service ?? "Select Service"}
             </span>
             <ChevronIcon
-              className="h-5 w-5 text-sky-100/80"
+              className="h-4 w-4 text-sky-100/80"
               open={servicePanelOpen}
             />
           </button>
@@ -1538,17 +1422,17 @@ export function CatalogConsole({
                   <div className="flex items-start justify-between gap-4">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.26em] text-sky-100/58">
-                        Premium Service Sheet
+                        Service List
                       </p>
-                      <p className="mt-2 text-xl font-semibold text-white">
+                      <p className="mt-2 text-[15px] font-medium text-white">
                         Pilih layanan OTP
                       </p>
-                      <p className="mt-1 text-sm leading-6 text-sky-50/62">
+                      <p className="mt-1 text-[11px] leading-5 text-sky-50/62">
                         {selectedServerMeta?.name} • {selectedCountry?.name ?? "Pilih negara"} • {catalog?.total ?? 0} layanan
                       </p>
                     </div>
                     <button
-                      className="rounded-full border border-white/12 bg-white/8 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-sky-50"
+                      className="rounded-full border border-white/12 bg-white/8 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-sky-50"
                       onClick={() => {
                         setServicePanelOpen(false);
                         setServiceSearch("");
@@ -1564,7 +1448,7 @@ export function CatalogConsole({
                       <p className="text-[0.62rem] uppercase tracking-[0.2em] text-sky-100/52">
                         Active
                       </p>
-                      <p className="mt-2 text-sm font-semibold text-white">
+                      <p className="mt-2 text-[12px] font-medium text-white">
                         {selectedServerMeta?.name}
                       </p>
                     </div>
@@ -1572,7 +1456,7 @@ export function CatalogConsole({
                       <p className="text-[0.62rem] uppercase tracking-[0.2em] text-sky-100/52">
                         Country
                       </p>
-                      <p className="mt-2 truncate text-sm font-semibold text-white">
+                      <p className="mt-2 truncate text-[12px] font-medium text-white">
                         {selectedCountry?.name ?? "-"}
                       </p>
                     </div>
@@ -1580,16 +1464,16 @@ export function CatalogConsole({
                       <p className="text-[0.62rem] uppercase tracking-[0.2em] text-sky-100/52">
                         Results
                       </p>
-                      <p className="mt-2 text-sm font-semibold text-white">
+                      <p className="mt-2 text-[12px] font-medium text-white">
                         {filteredServices.length}
                       </p>
                     </div>
                   </div>
 
                   <input
-                    className="mt-4 h-13 w-full rounded-[18px] border border-sky-100/20 bg-[#102846] px-4 text-base text-white outline-none placeholder:text-white/35"
+                    className="mt-4 h-11 w-full rounded-[14px] border border-sky-100/20 bg-[#102846] px-3 text-[13px] text-white outline-none placeholder:text-white/35"
                     onChange={(event) => setServiceSearch(event.target.value)}
-                    placeholder="Cari layanan premium..."
+                    placeholder="Cari layanan..."
                     value={serviceSearch}
                   />
 
@@ -1612,23 +1496,23 @@ export function CatalogConsole({
                         type="button"
                       >
                         <div className="flex min-w-0 items-center gap-3 pr-3">
-                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] bg-[linear-gradient(145deg,rgba(229,248,255,0.28),rgba(116,190,255,0.28))] text-sm font-semibold text-sky-50 shadow-[0_18px_35px_-24px_rgba(92,176,255,0.9)]">
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] bg-[linear-gradient(145deg,rgba(229,248,255,0.28),rgba(116,190,255,0.28))] text-[11px] font-semibold text-sky-50 shadow-[0_18px_35px_-24px_rgba(92,176,255,0.9)]">
                             {getServiceBadge(service.service)}
                           </div>
                           <div className="min-w-0">
-                            <p className="truncate text-[1rem] font-semibold text-white">
+                            <p className="truncate text-[13px] font-medium text-white">
                               {service.service}
                             </p>
-                            <p className="mt-1 text-xs uppercase tracking-[0.16em] text-sky-50/50">
+                            <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-sky-50/50">
                               {service.serviceCode} • stok {service.stock}
                             </p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="text-[1rem] font-semibold text-sky-100">
+                          <p className="text-[13px] font-medium text-sky-100">
                             {formatCurrency(service.price, service.currency)}
                           </p>
-                          <p className="text-xs text-sky-50/50">
+                          <p className="text-[10px] text-sky-50/50">
                             modal {formatCurrency(service.upstreamPrice, service.currency)}
                           </p>
                         </div>
@@ -1647,38 +1531,38 @@ export function CatalogConsole({
           ) : null}
 
           {selectedService && selectedServerMeta && selectedCountry ? (
-            <div className="mt-4 rounded-[24px] bg-[#102846] p-4">
+            <div className="mt-3 rounded-[18px] bg-[#102846] p-3">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-sm text-sky-50/55">Service</p>
-                  <p className="mt-1 text-[1.2rem] font-semibold text-white">
+                  <p className="text-[11px] text-sky-50/55">Service</p>
+                  <p className="mt-1 text-[14px] font-medium text-white">
                     {selectedService.service}
                   </p>
                 </div>
-                <div className="flex items-center gap-2 text-[1.02rem] font-semibold text-white">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-[14px] bg-sky-100/10">
+                <div className="flex items-center gap-2 text-[12px] font-medium text-white">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-[12px] bg-sky-100/10">
                     {getServerGlyph(selectedServerMeta.iconKey)}
                   </span>
                   <span>{selectedServerMeta.name}</span>
                 </div>
               </div>
 
-              <div className="mt-4 rounded-[22px] border border-white/10 bg-[#0d2240] px-4 py-4">
+              <div className="mt-3 rounded-[16px] border border-white/10 bg-[#0d2240] px-3 py-3">
                 <div className="flex items-center justify-between gap-4">
                   <div>
-                    <p className="text-sm text-sky-50/55">Negara</p>
-                    <p className="mt-1 text-base font-semibold text-white">
+                    <p className="text-[11px] text-sky-50/55">Negara</p>
+                    <p className="mt-1 text-[13px] font-medium text-white">
                       {getSafeCountryGlyph(selectedCountry)} {selectedCountry.name}
                     </p>
-                    <p className="mt-1 text-xs uppercase tracking-[0.16em] text-sky-50/50">
+                    <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-sky-50/50">
                       code {selectedService.serviceCode}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[1.08rem] font-semibold text-sky-100">
+                    <p className="text-[13px] font-medium text-sky-100">
                       {formatCurrency(selectedService.price, selectedService.currency)}
                     </p>
-                    <p className="mt-1 text-sm text-sky-50/55">
+                    <p className="mt-1 text-[11px] text-sky-50/55">
                       stok: {selectedService.stock}
                     </p>
                   </div>
@@ -1688,7 +1572,7 @@ export function CatalogConsole({
           ) : null}
 
           <button
-            className="mt-5 inline-flex h-14 w-full items-center justify-center rounded-full bg-[linear-gradient(135deg,#e2f7ff,#93dcff_34%,#5cadff_67%,#3d7eff)] px-5 text-base font-semibold text-[#0b2248] shadow-[0_18px_35px_-22px_rgba(64,129,255,0.95)] disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-full bg-[linear-gradient(135deg,#e2f7ff,#93dcff_34%,#5cadff_67%,#3d7eff)] px-5 text-[13px] font-medium text-[#0b2248] shadow-[0_18px_35px_-22px_rgba(64,129,255,0.95)] disabled:cursor-not-allowed disabled:opacity-60"
             disabled={!selectedService || !isPaymentReady || isCreatingPayment || !isSnapReady}
             onClick={() => {
               playUiFeedback("confirm");
@@ -1711,18 +1595,18 @@ export function CatalogConsole({
         {payment ? (
           <section
             id="payment-zone"
-            className="lux-rise lux-panel lux-premium-card mt-4 rounded-[28px] border border-white/14 bg-[linear-gradient(180deg,rgba(15,46,93,0.95),rgba(10,34,72,0.96))] p-4 sm:p-5"
+            className="lux-rise lux-panel lux-premium-card mt-4 rounded-[24px] border border-white/14 bg-[linear-gradient(180deg,rgba(15,46,93,0.95),rgba(10,34,72,0.96))] p-3.5 sm:p-4"
           >
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-sm text-sky-50/55">Payment Status</p>
-                <p className="mt-1 text-[1.15rem] font-semibold text-white">
+                <p className="text-[11px] text-sky-50/55">Payment Status</p>
+                <p className="mt-1 text-[14px] font-medium text-white">
                   {payment.service}
                 </p>
               </div>
               <span
                 className={cn(
-                  "rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]",
+                  "rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]",
                   getPaymentStatusClass(payment.status),
                 )}
               >
@@ -1730,13 +1614,13 @@ export function CatalogConsole({
               </span>
             </div>
 
-            <p className="mt-4 break-all text-sm leading-7 text-sky-50/62">
+            <p className="mt-3 break-all text-[12px] leading-6 text-sky-50/62">
               {payment.statusMessage ?? payment.id}
             </p>
 
             <div className="mt-4 grid gap-3 sm:grid-cols-2">
               <button
-                className="inline-flex h-13 w-full items-center justify-center rounded-full border border-white/10 bg-[#102846] px-4 text-sm font-semibold text-white disabled:opacity-60"
+                className="inline-flex h-11 w-full items-center justify-center rounded-full border border-white/10 bg-[#102846] px-4 text-[12px] font-medium text-white disabled:opacity-60"
                 disabled={isRefreshingPayment}
                 onClick={() => {
                   playUiFeedback("select");
@@ -1747,7 +1631,7 @@ export function CatalogConsole({
                 {isRefreshingPayment ? "Mengecek..." : "Cek Pembayaran"}
               </button>
               <button
-                className="inline-flex h-13 w-full items-center justify-center rounded-full border border-white/10 bg-[#102846] px-4 text-sm font-semibold text-white disabled:opacity-60"
+                className="inline-flex h-11 w-full items-center justify-center rounded-full border border-white/10 bg-[#102846] px-4 text-[12px] font-medium text-white disabled:opacity-60"
                 disabled={!payment.snapToken || !isSnapReady}
                 onClick={() => {
                   playUiFeedback("confirm");
@@ -1763,19 +1647,19 @@ export function CatalogConsole({
 
         <section
           id="otp-zone"
-          className="lux-rise lux-panel lux-premium-card mt-4 rounded-[28px] border border-white/14 bg-[linear-gradient(180deg,rgba(15,46,93,0.95),rgba(10,34,72,0.96))] p-4 sm:p-5"
+          className="lux-rise lux-panel lux-premium-card mt-4 rounded-[24px] border border-white/14 bg-[linear-gradient(180deg,rgba(15,46,93,0.95),rgba(10,34,72,0.96))] p-3.5 sm:p-4"
         >
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm text-sky-50/55">OTP Result</p>
-              <p className="mt-1 text-[1.15rem] font-semibold text-white">
+              <p className="text-[11px] text-sky-50/55">OTP Result</p>
+              <p className="mt-1 text-[14px] font-medium text-white">
                 OTP tampil setelah payment sukses
               </p>
             </div>
             {order ? (
               <span
                 className={cn(
-                  "rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em]",
+                  "rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]",
                   getOrderStatusClass(order.status),
                 )}
               >
@@ -1792,18 +1676,18 @@ export function CatalogConsole({
 
           {order ? (
             <div className="mt-4">
-              <div className="lux-premium-surface p-4">
-                <p className="text-sm text-sky-50/55">Nomor</p>
-                <p className="mt-1 break-all text-xl font-semibold text-white">
+              <div className="lux-premium-surface p-3">
+                <p className="text-[11px] text-sky-50/55">Nomor</p>
+                <p className="mt-1 break-all text-[16px] font-medium text-white">
                   {order.phoneNumber}
                 </p>
 
-                <p className="mt-5 text-sm text-sky-50/55">OTP Code</p>
-                <p className="mt-2 break-all text-[1.85rem] font-semibold tracking-[0.08em] text-sky-100 sm:text-[2rem]">
+                <p className="mt-4 text-[11px] text-sky-50/55">OTP Code</p>
+                <p className="mt-2 break-all text-[24px] font-semibold tracking-[0.08em] text-sky-100 sm:text-[26px]">
                   {order.otpCode ?? "MENUNGGU SMS MASUK"}
                 </p>
 
-                <div className="mt-5 grid gap-3 text-sm text-sky-50/60">
+                <div className="mt-4 grid gap-2 text-[11px] text-sky-50/60">
                   <p>Dibuat: {formatDateTime(order.createdAt)}</p>
                   <p>Kedaluwarsa: {formatDateTime(order.expiresAt)}</p>
                   <p>Harga: {formatCurrency(order.price, order.currency)}</p>
@@ -1812,7 +1696,7 @@ export function CatalogConsole({
 
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 <button
-                  className="inline-flex h-13 w-full items-center justify-center rounded-full border border-white/10 bg-[#102846] px-4 text-sm font-semibold text-white disabled:opacity-60"
+                  className="inline-flex h-11 w-full items-center justify-center rounded-full border border-white/10 bg-[#102846] px-4 text-[12px] font-medium text-white disabled:opacity-60"
                   disabled={isRefreshingOrder}
                   onClick={() => {
                     playUiFeedback("select");
@@ -1825,7 +1709,7 @@ export function CatalogConsole({
                   {isRefreshingOrder ? "Refresh..." : "Refresh OTP"}
                 </button>
                 <button
-                  className="inline-flex h-13 w-full items-center justify-center rounded-full border border-rose-200/18 bg-rose-300/12 px-4 text-sm font-semibold text-rose-50 disabled:opacity-60"
+                  className="inline-flex h-11 w-full items-center justify-center rounded-full border border-rose-200/18 bg-rose-300/12 px-4 text-[12px] font-medium text-rose-50 disabled:opacity-60"
                   disabled={isRefreshingOrder || order.status !== "pending"}
                   onClick={() => {
                     playUiFeedback("select");
@@ -1838,7 +1722,7 @@ export function CatalogConsole({
               </div>
             </div>
           ) : (
-            <div className="lux-premium-surface mt-4 px-4 py-8 text-center text-sm leading-7 text-sky-50/58">
+            <div className="lux-premium-surface mt-4 px-4 py-6 text-center text-[12px] leading-6 text-sky-50/58">
               Setelah checkout Midtrans berhasil, website akan membuat order ke
               KirimKode lalu menampilkan nomor dan OTP di sini.
             </div>
@@ -1933,3 +1817,4 @@ export function CatalogConsole({
     </div>
   );
 }
+

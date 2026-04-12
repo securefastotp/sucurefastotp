@@ -18,8 +18,8 @@
   --color-muted: var(--muted);
   --color-brand: var(--brand);
   --color-brand-2: var(--brand-2);
-  --font-sans: "Segoe UI", "Trebuchet MS", Tahoma, sans-serif;
-  --font-display: "Trebuchet MS", "Arial Narrow", "Segoe UI", sans-serif;
+  --font-sans: "Roboto", "Segoe UI", Tahoma, sans-serif;
+  --font-display: "Roboto", "Segoe UI", Tahoma, sans-serif;
 }
 
 body {
