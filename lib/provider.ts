@@ -223,13 +223,34 @@ const countryHintMap: Record<
     flagEmoji?: string;
   }
 > = {
-  5: { name: "Philippines", code: "PH" },
+  1: { name: "Ukraine", code: "UA" },
+  2: { name: "Kazakhstan", code: "KZ" },
+  3: { name: "China", code: "CN" },
+  4: { name: "Philippines", code: "PH" },
+  5: { name: "Myanmar", code: "MM" },
   6: { name: "Indonesia", code: "ID" },
+  7: { name: "Malaysia", code: "MY" },
+  8: { name: "Kenya", code: "KE" },
+  9: { name: "Tanzania", code: "TZ" },
   10: { name: "Vietnam", code: "VN" },
+  11: { name: "Kyrgyzstan", code: "KG" },
   12: { name: "United States", code: "US" },
-  15: { name: "United Kingdom", code: "GB" },
-  21: { name: "India", code: "IN" },
-  33: { name: "Canada", code: "CA" },
+  13: { name: "Israel", code: "IL" },
+  14: { name: "Hong Kong", code: "HK" },
+  15: { name: "Poland", code: "PL" },
+  16: { name: "United Kingdom", code: "GB" },
+  21: { name: "Egypt", code: "EG" },
+  22: { name: "India", code: "IN" },
+  25: { name: "Laos", code: "LA" },
+  31: { name: "South Africa", code: "ZA" },
+  32: { name: "Romania", code: "RO" },
+  33: { name: "Colombia", code: "CO" },
+  34: { name: "Estonia", code: "EE" },
+  35: { name: "Azerbaijan", code: "AZ" },
+  36: { name: "Canada", code: "CA" },
+  37: { name: "Morocco", code: "MA" },
+  39: { name: "Argentina", code: "AR" },
+  40: { name: "Uzbekistan", code: "UZ" },
   61: { name: "Pakistan", code: "PK" },
 };
 
@@ -243,7 +264,7 @@ function getCountryMeta(countryId?: number | string) {
       id: resolvedId,
       name: knownMeta.name,
       code: knownMeta.code,
-      flagEmoji: knownMeta.flagEmoji,
+      flagEmoji: undefined,
     };
   }
 
@@ -251,7 +272,7 @@ function getCountryMeta(countryId?: number | string) {
     id: resolvedId,
     name: `Country ID ${resolvedId}`,
     code: "",
-    flagEmoji: "🏳️",
+    flagEmoji: undefined,
   };
 }
 
@@ -869,7 +890,7 @@ export async function getCountries(serverId?: string): Promise<CountryOption[]> 
         id: defaultCountry.id,
         name: defaultCountry.name,
         code: defaultCountry.code,
-        flagEmoji: defaultCountry.flagEmoji,
+        flagEmoji: undefined,
         availableServices: listMockServices({ serverId: resolvedServerId, countryId: defaultCountry.id }).length,
         serverId: resolvedServerId,
       },

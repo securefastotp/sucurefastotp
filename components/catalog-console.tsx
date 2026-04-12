@@ -264,7 +264,7 @@ function toFlagEmoji(code?: string) {
 }
 
 function getCountryGlyph(country?: Pick<CountryOption, "code" | "flagEmoji"> | null) {
-  return toFlagEmoji(country?.code) ?? country?.flagEmoji ?? "🌐";
+  return toFlagEmoji(country?.code) ?? country?.flagEmoji ?? "\u{1F310}";
 }
 
 function getSafeCountryGlyph(country?: Pick<CountryOption, "code"> | null) {
@@ -272,7 +272,7 @@ function getSafeCountryGlyph(country?: Pick<CountryOption, "code"> | null) {
     return getCountryGlyph(country as Pick<CountryOption, "code" | "flagEmoji">);
   }
 
-  return "🌐";
+  return "\u{1F310}";
 }
 
 function hasCountryCode(country?: Pick<CountryOption, "code"> | null) {
@@ -512,6 +512,7 @@ export function CatalogConsole({
     initialCatalog?.services[0]?.id ?? "",
   );
   const [countryPanelOpen, setCountryPanelOpen] = useState(false);
+  const [countrySearch, setCountrySearch] = useState("");
   const [serviceSearch, setServiceSearch] = useState("");
   const [servicePanelOpen, setServicePanelOpen] = useState(false);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -530,6 +531,7 @@ export function CatalogConsole({
   const [isRefreshingPayment, setIsRefreshingPayment] = useState(false);
   const [isRefreshingOrder, setIsRefreshingOrder] = useState(false);
   const [isSnapReady, setIsSnapReady] = useState(false);
+  const deferredCountrySearch = useDeferredValue(countrySearch);
   const deferredServiceSearch = useDeferredValue(serviceSearch);
 
   const midtransClientKey = process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY ?? "";
@@ -550,6 +552,11 @@ export function CatalogConsole({
     catalog?.services.find((service) => service.id === selectedServiceId) ?? null;
   const selectedServerMeta = serverOptions.find(
     (server) => server.id === selectedServer,
+  );
+  const filteredCountries = countries.filter((country) =>
+    `${country.name} ${country.code} ${country.id}`
+      .toLowerCase()
+      .includes(deferredCountrySearch.toLowerCase()),
   );
 
   async function loadCountries(serverId: ServerId) {
@@ -746,6 +753,7 @@ export function CatalogConsole({
   useEffect(() => {
     void loadCountries(selectedServer);
     setCountryPanelOpen(false);
+    setCountrySearch("");
     setServicePanelOpen(false);
   }, [selectedServer]);
 
@@ -924,8 +932,15 @@ export function CatalogConsole({
 
           {countryPanelOpen ? (
             <div className="mt-4 rounded-[24px] border border-white/10 bg-[#214571]/92 p-4">
-              <div className="max-h-[300px] space-y-2 overflow-y-auto pr-1">
-                {countries.map((country) => {
+              <input
+                className="h-13 w-full rounded-[18px] border border-sky-100/20 bg-[#102846] px-4 text-base text-white outline-none placeholder:text-white/35"
+                onChange={(event) => setCountrySearch(event.target.value)}
+                placeholder="Cari negara atau kode..."
+                value={countrySearch}
+              />
+
+              <div className="mt-4 max-h-[320px] space-y-2 overflow-y-auto pr-1">
+                {filteredCountries.map((country) => {
                   const active = selectedCountryId === country.id;
 
                   return (
@@ -938,6 +953,7 @@ export function CatalogConsole({
                       onClick={() => {
                         setSelectedCountryId(country.id);
                         setCountryPanelOpen(false);
+                        setCountrySearch("");
                       }}
                       type="button"
                     >
@@ -964,9 +980,9 @@ export function CatalogConsole({
                   );
                 })}
 
-                {!countries.length && !isLoadingCountries ? (
+                {!filteredCountries.length && !isLoadingCountries ? (
                   <div className="rounded-[18px] bg-[#102846] px-4 py-6 text-center text-sm text-white/60">
-                    Negara real dari KirimKode belum tersedia.
+                    Negara untuk pencarian ini belum ditemukan.
                   </div>
                 ) : null}
               </div>
