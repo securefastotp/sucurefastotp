@@ -315,7 +315,12 @@ function getCachedCatalog(serverId: string, countryId: number) {
     return [];
   }
 
-  return (serverCache.catalogs[String(countryId)] ?? []) as Service[];
+  return ((serverCache.catalogs[String(countryId)] ?? []) as Service[]).map((service) =>
+    normalizeCachedService(service, {
+      serverId,
+      countryId,
+    }),
+  );
 }
 
 function uniqueSorted(values: string[]) {
@@ -340,6 +345,48 @@ function buildCatalogResponse(
     source: extras?.source,
     warning: extras?.warning,
   };
+}
+
+function normalizeCachedService(
+  service: Service,
+  context: {
+    serverId: string;
+    countryId: number;
+  },
+) {
+  const countryMeta = getCountryMeta(context.countryId);
+  const serviceCode = service.serviceCode || service.id || service.slug;
+  const upstreamPrice =
+    Number.isFinite(service.upstreamPrice) && service.upstreamPrice > 0
+      ? service.upstreamPrice
+      : service.price;
+  const stock =
+    typeof service.stock === "number" && Number.isFinite(service.stock)
+      ? service.stock
+      : 0;
+
+  return {
+    ...service,
+    id: `${context.serverId}-${countryMeta.id}-${serviceCode}`,
+    slug: `${context.serverId}-${countryMeta.id}-${serviceCode}`,
+    serverId: resolveServerId(context.serverId),
+    serviceCode,
+    service: formatServiceName(serviceCode, service.service),
+    country: countryMeta.name,
+    countryId: countryMeta.id,
+    countryCode: countryMeta.code,
+    category: service.category || "OTP",
+    upstreamPrice,
+    price: computeRetailPrice(upstreamPrice),
+    stock,
+    currency: service.currency || getPricingConfig().currency,
+    deliveryEtaSeconds:
+      typeof service.deliveryEtaSeconds === "number" &&
+      Number.isFinite(service.deliveryEtaSeconds)
+        ? service.deliveryEtaSeconds
+        : 20,
+    tags: ["KirimKode Cache", getServerName(context.serverId)],
+  } satisfies Service;
 }
 
 function pickString(record: Record<string, unknown>, keys: string[], fallback = "") {
@@ -835,7 +882,10 @@ export async function getCatalog(filters: CatalogFilters = {}) {
   try {
     const serverId = resolveServerId(filters.serverId);
     const countryId = resolveCountryId(filters.countryId);
-    const cachedServices = getCachedCatalog(serverId, countryId);
+    const cachedServices = applyFilters(
+      getCachedCatalog(serverId, countryId),
+      filters,
+    );
     const payload = await fetchServicesPayload(serverId, countryId);
     const services = extractArray(payload)
       .map((item) => normalizeService(item, { serverId, countryId }))
@@ -858,9 +908,12 @@ export async function getCatalog(filters: CatalogFilters = {}) {
           : undefined,
     });
   } catch (error) {
-    const cachedServices = getCachedCatalog(
-      resolveServerId(filters.serverId),
-      resolveCountryId(filters.countryId),
+    const cachedServices = applyFilters(
+      getCachedCatalog(
+        resolveServerId(filters.serverId),
+        resolveCountryId(filters.countryId),
+      ),
+      filters,
     );
 
     if (cachedServices.length > 0) {
