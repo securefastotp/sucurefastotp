@@ -8,7 +8,10 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const catalog = await getCatalog({
       q: searchParams.get("q") ?? undefined,
-      country: searchParams.get("country") ?? undefined,
+      serverId:
+        searchParams.get("server") ?? searchParams.get("serverId") ?? undefined,
+      countryId:
+        searchParams.get("countryId") ?? searchParams.get("country") ?? undefined,
       category: searchParams.get("category") ?? undefined,
     });
 

@@ -3,8 +3,11 @@ export type ProviderMode = "mock" | "rest";
 export type Service = {
   id: string;
   slug: string;
+  serverId: string;
+  serviceCode: string;
   service: string;
   country: string;
+  countryId: number;
   countryCode: string;
   category: string;
   upstreamPrice: number;
@@ -31,8 +34,11 @@ export type OrderStatus = "pending" | "otp_received" | "expired" | "cancelled";
 export type Order = {
   id: string;
   serviceId: string;
+  serviceCode: string;
+  serverId?: string;
   service: string;
   country: string;
+  countryId?: number;
   phoneNumber: string;
   price: number;
   currency: string;
@@ -80,8 +86,12 @@ export type PaymentRecord = {
   id: string;
   gateway: "midtrans";
   serviceId: string;
+  serviceCode: string;
+  serverId: string;
+  operator: string;
   service: string;
   country: string;
+  countryId: number;
   amount: number;
   currency: string;
   status: PaymentStatus;

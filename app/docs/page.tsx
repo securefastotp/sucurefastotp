@@ -47,7 +47,7 @@ const envFields = [
   {
     name: "UPSTREAM_SERVICES_PATH",
     required: "No",
-    description: "Path endpoint katalog layanan. Default `/services?page=1&limit=200`.",
+    description: "Path endpoint katalog layanan. Default `/services`.",
   },
   {
     name: "UPSTREAM_HISTORY_PATH",
@@ -78,6 +78,16 @@ const envFields = [
     name: "UPSTREAM_CANCEL_METHOD",
     required: "No",
     description: "Method cancel upstream. Default `POST` atau ubah `DELETE`.",
+  },
+  {
+    name: "UPSTREAM_SERVER_BIMASAKTI_CODE",
+    required: "No",
+    description: "Kode upstream untuk server Bimasakti. Default `api1`.",
+  },
+  {
+    name: "UPSTREAM_SERVER_MARS_CODE",
+    required: "No",
+    description: "Kode upstream untuk server Mars. Default `api2`.",
   },
   {
     name: "UPSTREAM_MARKUP_PERCENT",
@@ -244,7 +254,7 @@ Browser -> /api/orders/:id -> Next.js Route -> Upstream Provider`}
               Example Request
             </p>
             <pre className="code-block mt-5 overflow-x-auto text-sm">
-{`curl ${baseUrl}/api/catalog
+{`curl "${baseUrl}/api/catalog?server=bimasakti&countryId=6"
 
 curl ${baseUrl}/api/balance
 
@@ -253,9 +263,12 @@ curl ${baseUrl}/api/history
 curl -X POST ${baseUrl}/api/payments \\
   -H "Content-Type: application/json" \\
   -d '{
-    "serviceId": "wa-id",
+    "serviceId": "bimasakti-6-wa",
+    "serviceCode": "wa",
+    "serverId": "bimasakti",
     "service": "WhatsApp",
     "country": "Indonesia",
+    "countryId": 6,
     "price": 2025,
     "currency": "IDR",
     "customerName": "Agus",
@@ -267,9 +280,12 @@ curl ${baseUrl}/api/payments/pay_xxxxx
 curl -X POST ${baseUrl}/api/orders \\
   -H "Content-Type: application/json" \\
   -d '{
-    "serviceId": "wa-id",
+    "serviceId": "bimasakti-6-wa",
+    "serviceCode": "wa",
+    "serverId": "bimasakti",
     "service": "WhatsApp",
     "country": "Indonesia",
+    "countryId": 6,
     "price": 2025,
     "currency": "IDR"
   }'
@@ -287,10 +303,13 @@ curl -X DELETE ${baseUrl}/api/orders/order_xxxxx`}
             <pre className="code-block mt-5 overflow-x-auto text-sm">
 {`{
   "order": {
-    "id": "order_g6t2xv9m",
-    "serviceId": "wa-id",
+    "id": "12003637",
+    "serviceId": "bimasakti-6-wa",
+    "serviceCode": "wa",
+    "serverId": "bimasakti",
     "service": "WhatsApp",
     "country": "Indonesia",
+    "countryId": 6,
     "phoneNumber": "+6283821984456",
     "price": 2025,
     "currency": "IDR",

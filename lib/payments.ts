@@ -14,8 +14,12 @@ import type { PaymentRecord, RuntimeStatus } from "@/lib/types";
 
 type CreatePaymentInput = {
   serviceId: string;
+  serviceCode: string;
+  serverId: string;
+  operator?: string;
   service: string;
   country: string;
+  countryId: number;
   price: number;
   currency?: string;
   customerName?: string;
@@ -97,8 +101,12 @@ export async function createPaymentSession(input: CreatePaymentInput) {
     id: paymentId,
     gateway: "midtrans",
     serviceId: input.serviceId,
+    serviceCode: input.serviceCode,
+    serverId: input.serverId,
+    operator: input.operator ?? "any",
     service: input.service,
     country: input.country,
+    countryId: input.countryId,
     amount,
     currency: input.currency ?? "IDR",
     status: "pending",
@@ -163,8 +171,12 @@ export async function activatePaymentOrder(paymentId: string) {
 
   payment.order = await createOrder({
     serviceId: payment.serviceId,
+    serviceCode: payment.serviceCode,
+    serverId: payment.serverId,
     service: payment.service,
     country: payment.country,
+    countryId: payment.countryId,
+    operator: payment.operator,
     price: payment.amount,
     currency: payment.currency,
   });

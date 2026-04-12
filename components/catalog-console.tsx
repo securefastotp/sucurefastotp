@@ -1,9 +1,22 @@
 "use client";
 
 import Script from "next/script";
-import { startTransition, useDeferredValue, useEffect, useEffectEvent, useState } from "react";
+import {
+  startTransition,
+  useDeferredValue,
+  useEffect,
+  useEffectEvent,
+  useState,
+} from "react";
 import { formatCurrency, formatDateTime } from "@/lib/format";
-import type { Balance, CatalogResponse, Order, PaymentRecord, RuntimeStatus, Service } from "@/lib/types";
+import type {
+  Balance,
+  CatalogResponse,
+  Order,
+  PaymentRecord,
+  RuntimeStatus,
+  Service,
+} from "@/lib/types";
 
 type CatalogConsoleProps = {
   initialBalance: Balance | null;
@@ -11,6 +24,12 @@ type CatalogConsoleProps = {
 };
 
 type ServerId = "bimasakti" | "mars";
+
+type CountryOption = {
+  id: number;
+  code: string;
+  name: string;
+};
 
 declare global {
   interface Window {
@@ -33,15 +52,23 @@ const serverOptions = [
     id: "bimasakti" as const,
     iconLabel: "BM",
     name: "Bimasakti",
-    description: "Server utama, stok terbanyak",
-    gradient: "from-[#7f5bff] to-[#4f86ff]",
+    description: "Server utama, ambil data dari api1",
+    gradient: "from-[#55a7ff] to-[#8bd4ff]",
   },
   {
     id: "mars" as const,
     iconLabel: "MR",
     name: "Mars",
-    description: "Server cadangan, lebih stabil",
-    gradient: "from-[#ff4b64] to-[#ff7a18]",
+    description: "Server cadangan, ambil data dari api2",
+    gradient: "from-[#6ec8ff] to-[#3e86ff]",
+  },
+];
+
+const countryOptions: CountryOption[] = [
+  {
+    id: 6,
+    code: "ID",
+    name: "Indonesia",
   },
 ];
 
@@ -79,24 +106,14 @@ function getOrderStatusClass(status: Order["status"]) {
   }
 }
 
-function getProviderOffer(service: Service, serverId: ServerId) {
-  if (serverId === "mars") {
-    const extra = Math.max(250, Math.round(service.price * 0.1));
-
-    return {
-      price: service.price + extra,
-      stock: Math.max(0, Math.round(service.stock * 0.78)),
-    };
-  }
-
-  return {
-    price: service.price,
-    stock: service.stock,
-  };
-}
-
-async function requestCatalog() {
-  const response = await fetch("/api/catalog", { cache: "no-store" });
+async function requestCatalog(serverId: ServerId, countryId: number) {
+  const params = new URLSearchParams({
+    server: serverId,
+    countryId: String(countryId),
+  });
+  const response = await fetch(`/api/catalog?${params.toString()}`, {
+    cache: "no-store",
+  });
   const payload = (await response.json()) as CatalogResponse | { error?: string };
 
   if (!response.ok || hasError(payload)) {
@@ -107,7 +124,6 @@ async function requestCatalog() {
 }
 
 async function requestCreatePayment(service: Service, serverId: ServerId) {
-  const offer = getProviderOffer(service, serverId);
   const response = await fetch("/api/payments", {
     method: "POST",
     headers: {
@@ -115,10 +131,14 @@ async function requestCreatePayment(service: Service, serverId: ServerId) {
     },
     body: JSON.stringify({
       serviceId: service.id,
+      serviceCode: service.serviceCode,
+      serverId,
+      operator: "any",
       service: service.service,
       country: service.country,
+      countryId: service.countryId,
       currency: service.currency,
-      price: offer.price,
+      price: service.price,
       customerName: "OTP Customer",
     }),
   });
@@ -204,13 +224,27 @@ async function requestCancelOrder(orderId: string) {
   return payload.order;
 }
 
+function SectionBadge({
+  label,
+}: {
+  label: string;
+}) {
+  return (
+    <span className="inline-flex h-8 min-w-8 items-center justify-center rounded-full border border-sky-300/20 bg-sky-400/12 px-3 text-xs font-semibold uppercase tracking-[0.2em] text-sky-100">
+      {label}
+    </span>
+  );
+}
+
 export function CatalogConsole({
   initialBalance,
   initialRuntime,
 }: CatalogConsoleProps) {
   const [catalog, setCatalog] = useState<CatalogResponse | null>(null);
   const [selectedServer, setSelectedServer] = useState<ServerId>("bimasakti");
-  const [selectedCountry, setSelectedCountry] = useState("Semua");
+  const [selectedCountryId, setSelectedCountryId] = useState<number>(
+    countryOptions[0]?.id ?? 6,
+  );
   const [selectedServiceId, setSelectedServiceId] = useState("");
   const [serviceSearch, setServiceSearch] = useState("");
   const [servicePanelOpen, setServicePanelOpen] = useState(false);
@@ -236,28 +270,27 @@ export function CatalogConsole({
     initialRuntime.midtransClientKeyAvailable &&
     Boolean(midtransClientKey);
 
-  async function loadCatalog() {
+  const selectedCountry =
+    countryOptions.find((country) => country.id === selectedCountryId) ??
+    countryOptions[0];
+
+  async function loadCatalog(serverId: ServerId, countryId: number) {
     setIsLoadingCatalog(true);
     setCatalogError(null);
 
     try {
-      const payload = await requestCatalog();
+      const payload = await requestCatalog(serverId, countryId);
       setCatalog(payload);
-      setSelectedCountry((current) => {
-        if (current !== "Semua") {
-          return current;
-        }
-
-        if (payload.countries.includes("Indonesia")) {
-          return "Indonesia";
-        }
-
-        return payload.countries[0] ?? "Semua";
+      setSelectedServiceId((current) => {
+        const nextService = payload.services.find((service) => service.id === current);
+        return nextService?.id ?? payload.services[0]?.id ?? "";
       });
     } catch (error) {
       setCatalogError(
         error instanceof Error ? error.message : "Gagal memuat katalog.",
       );
+      setCatalog(null);
+      setSelectedServiceId("");
     } finally {
       setIsLoadingCatalog(false);
     }
@@ -409,8 +442,8 @@ export function CatalogConsole({
   }
 
   useEffect(() => {
-    void loadCatalog();
-  }, []);
+    void loadCatalog(selectedServer, selectedCountryId);
+  }, [selectedCountryId, selectedServer]);
 
   const syncPaymentEvent = useEffectEvent((paymentId: string) => {
     void syncPayment(paymentId);
@@ -443,61 +476,28 @@ export function CatalogConsole({
     return () => window.clearInterval(intervalId);
   }, [order?.id, order?.status]);
 
-  const services =
+  const filteredServices =
     catalog?.services.filter((service) => {
-      const matchesCountry =
-        selectedCountry === "Semua" || service.country === selectedCountry;
-      const matchesSearch =
-        !deferredServiceSearch ||
-        `${service.service} ${service.country} ${service.category}`
-          .toLowerCase()
-          .includes(deferredServiceSearch.toLowerCase());
+      if (!deferredServiceSearch) {
+        return true;
+      }
 
-      return matchesCountry && matchesSearch;
+      return `${service.service} ${service.serviceCode}`
+        .toLowerCase()
+        .includes(deferredServiceSearch.toLowerCase());
     }) ?? [];
 
-  useEffect(() => {
-    const currentServices =
-      catalog?.services.filter((service) => {
-        const matchesCountry =
-          selectedCountry === "Semua" || service.country === selectedCountry;
-        const matchesSearch =
-          !deferredServiceSearch ||
-          `${service.service} ${service.country} ${service.category}`
-            .toLowerCase()
-            .includes(deferredServiceSearch.toLowerCase());
-
-        return matchesCountry && matchesSearch;
-      }) ?? [];
-
-    if (!currentServices.length) {
-      setSelectedServiceId("");
-      return;
-    }
-
-    const serviceStillVisible = currentServices.some(
-      (service) => service.id === selectedServiceId,
-    );
-
-    if (!serviceStillVisible) {
-      setSelectedServiceId(currentServices[0].id);
-    }
-  }, [catalog?.services, deferredServiceSearch, selectedCountry, selectedServiceId]);
-
   const selectedService =
-    services.find((service) => service.id === selectedServiceId) ?? null;
+    catalog?.services.find((service) => service.id === selectedServiceId) ?? null;
   const selectedServerMeta = serverOptions.find(
     (server) => server.id === selectedServer,
   );
-  const providerOffer = selectedService
-    ? getProviderOffer(selectedService, selectedServer)
-    : null;
   const balanceLabel = initialBalance
     ? formatCurrency(initialBalance.amount, initialBalance.currency)
     : "Saldo tidak terbaca";
 
   return (
-    <div className="min-h-[100dvh] bg-[linear-gradient(180deg,#0a1222_0%,#0f182a_100%)] text-white">
+    <div className="min-h-[100dvh] bg-[radial-gradient(circle_at_top,#2f7dff_0%,#13233b_28%,#0d1728_100%)] text-white">
       {isPaymentReady ? (
         <Script
           data-client-key={midtransClientKey}
@@ -507,18 +507,19 @@ export function CatalogConsole({
         />
       ) : null}
 
-      <main className="mx-auto w-full max-w-[440px] px-4 py-5">
-        <div className="rounded-[28px] border border-white/8 bg-[#111c31] px-5 py-4 shadow-[0_24px_60px_-40px_rgba(0,0,0,0.85)]">
-          <div className="flex items-center justify-between gap-3">
+      <main className="mx-auto w-full max-w-[460px] px-3 py-4 sm:px-4">
+        <div className="rounded-[28px] border border-white/10 bg-[#111c31]/95 px-4 py-4 shadow-[0_24px_60px_-40px_rgba(0,0,0,0.85)] sm:px-5">
+          <div className="flex items-start justify-between gap-3">
             <div>
-              <h1 className="text-[2rem] font-display font-semibold leading-none text-white">
+              <h1 className="text-[1.95rem] font-semibold leading-none text-white sm:text-[2.2rem]">
                 Buy OTP Number
               </h1>
-              <p className="mt-2 text-base leading-7 text-white/60">
-                Select server, country, and service to get a virtual number
+              <p className="mt-2 max-w-[18rem] text-sm leading-6 text-white/65 sm:text-base sm:leading-7">
+                Pilih server, negara, dan layanan. Nomor aktif setelah pembayaran
+                Midtrans sukses.
               </p>
             </div>
-            <div className="rounded-full border border-emerald-300/15 bg-emerald-400/10 px-3 py-2 text-sm font-semibold text-emerald-200">
+            <div className="rounded-full border border-sky-300/20 bg-sky-400/12 px-3 py-2 text-sm font-semibold text-sky-100">
               {balanceLabel}
             </div>
           </div>
@@ -542,13 +543,15 @@ export function CatalogConsole({
           </div>
         ) : null}
 
-        <section className="mt-5 rounded-[28px] border border-white/8 bg-[#1a2438] p-5">
-          <p className="flex items-center gap-3 text-[1.15rem] font-semibold text-white">
-            <span className="text-[#00ff9d]">▣</span>
-            Select Server
-          </p>
+        <section className="mt-4 rounded-[28px] border border-white/10 bg-[#1a2438]/95 p-4 sm:p-5">
+          <div className="flex items-center gap-3">
+            <SectionBadge label="SV" />
+            <p className="text-[1.1rem] font-semibold text-white sm:text-[1.2rem]">
+              Select Server
+            </p>
+          </div>
 
-          <div className="mt-5 grid gap-4">
+          <div className="mt-4 grid gap-3">
             {serverOptions.map((server) => {
               const active = selectedServer === server.id;
 
@@ -558,121 +561,130 @@ export function CatalogConsole({
                   className={cn(
                     "flex w-full items-center justify-between rounded-[24px] border px-4 py-4 text-left transition-colors",
                     active
-                      ? "border-emerald-400 bg-[rgba(15,79,76,0.6)]"
+                      ? "border-sky-300 bg-[linear-gradient(135deg,rgba(71,150,255,0.18),rgba(113,223,255,0.12))]"
                       : "border-white/10 bg-[#121d31]",
                   )}
                   onClick={() => setSelectedServer(server.id)}
                   type="button"
                 >
-                  <div className="flex items-center gap-4">
+                  <div className="flex min-w-0 items-center gap-4">
                     <div
                       className={cn(
-                        "flex h-14 w-14 items-center justify-center rounded-[20px] bg-[linear-gradient(135deg,var(--tw-gradient-stops))] text-base font-black text-white",
+                        "flex h-14 w-14 shrink-0 items-center justify-center rounded-[20px] bg-[linear-gradient(135deg,var(--tw-gradient-stops))] text-base font-black text-white",
                         server.gradient,
                       )}
                     >
                       {server.iconLabel}
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="text-[1.15rem] font-semibold text-white">
+                        <p className="truncate text-[1.05rem] font-semibold text-white sm:text-[1.15rem]">
                           {server.name}
                         </p>
-                        <span className="h-2.5 w-2.5 rounded-full bg-emerald-300" />
+                        <span className="h-2.5 w-2.5 rounded-full bg-sky-300" />
                       </div>
                       <p className="mt-1 text-sm leading-6 text-white/50">
                         {server.description}
                       </p>
                     </div>
                   </div>
-                  <div className="text-xl text-[#00ff9d]">{active ? "◉" : "○"}</div>
+                  <div
+                    className={cn(
+                      "flex h-8 w-8 items-center justify-center rounded-full border text-xs font-bold",
+                      active
+                        ? "border-sky-300 bg-sky-400/10 text-sky-100"
+                        : "border-white/10 text-white/45",
+                    )}
+                  >
+                    {active ? "ON" : "OFF"}
+                  </div>
                 </button>
               );
             })}
           </div>
         </section>
 
-        <section className="mt-5 rounded-[28px] border border-white/8 bg-[#1a2438] p-5">
-          <p className="flex items-center gap-3 text-[1.15rem] font-semibold text-white">
-            <span className="text-[#00ff9d]">◍</span>
-            Select Country
-          </p>
+        <section className="mt-4 rounded-[28px] border border-white/10 bg-[#1a2438]/95 p-4 sm:p-5">
+          <div className="flex items-center gap-3">
+            <SectionBadge label="CT" />
+            <p className="text-[1.1rem] font-semibold text-white sm:text-[1.2rem]">
+              Select Country
+            </p>
+          </div>
 
           <select
-            className="mt-5 h-15 w-full rounded-[22px] border border-white/10 bg-[#121d31] px-4 text-lg text-white outline-none"
-            onChange={(event) => setSelectedCountry(event.target.value)}
-            value={selectedCountry}
+            className="mt-4 h-14 w-full rounded-[22px] border border-white/10 bg-[#121d31] px-4 text-base text-white outline-none sm:text-lg"
+            onChange={(event) => setSelectedCountryId(Number(event.target.value))}
+            value={selectedCountryId}
           >
-            <option value="Semua">All Countries</option>
-            {catalog?.countries.map((country) => (
-              <option key={country} value={country}>
-                {country}
+            {countryOptions.map((country) => (
+              <option key={country.id} value={country.id}>
+                {country.code} - {country.name}
               </option>
             ))}
           </select>
         </section>
 
-        <section className="mt-5 rounded-[28px] border border-white/8 bg-[#1a2438] p-5">
-          <p className="flex items-center gap-3 text-[1.15rem] font-semibold text-white">
-            <span className="text-[#00ff9d]">🛒</span>
-            Select Service
-          </p>
+        <section className="mt-4 rounded-[28px] border border-white/10 bg-[#1a2438]/95 p-4 sm:p-5">
+          <div className="flex items-center gap-3">
+            <SectionBadge label="SC" />
+            <p className="text-[1.1rem] font-semibold text-white sm:text-[1.2rem]">
+              Select Service
+            </p>
+          </div>
 
           <button
-            className="mt-5 flex h-15 w-full items-center justify-between rounded-[22px] border border-emerald-400/60 bg-[#121d31] px-4 text-left text-lg text-white"
+            className="mt-4 flex h-14 w-full items-center justify-between rounded-[22px] border border-sky-300/55 bg-[#121d31] px-4 text-left text-base text-white sm:text-lg"
             onClick={() => setServicePanelOpen((current) => !current)}
             type="button"
           >
-            <span>{selectedService?.service ?? "Select Service"}</span>
-            <span className="text-white/45">{servicePanelOpen ? "⌃" : "⌄"}</span>
+            <span className="truncate">
+              {selectedService?.service ?? "Select Service"}
+            </span>
+            <span className="text-white/45">{servicePanelOpen ? "UP" : "DOWN"}</span>
           </button>
 
           {servicePanelOpen ? (
             <div className="mt-4 rounded-[24px] border border-white/10 bg-[#222f46] p-4">
               <input
-                className="h-13 w-full rounded-[18px] border border-emerald-400/60 bg-[#121d31] px-4 text-base text-white outline-none placeholder:text-white/35"
+                className="h-13 w-full rounded-[18px] border border-sky-300/55 bg-[#121d31] px-4 text-base text-white outline-none placeholder:text-white/35"
                 onChange={(event) => setServiceSearch(event.target.value)}
                 placeholder="Search service..."
                 value={serviceSearch}
               />
 
               <div className="mt-4 max-h-[280px] space-y-2 overflow-y-auto pr-1">
-                {services.map((service) => {
-                  const active = selectedServiceId === service.id;
-                  const offer = getProviderOffer(service, selectedServer);
+                {filteredServices.map((service) => (
+                  <button
+                    key={service.id}
+                    className={cn(
+                      "flex w-full items-center justify-between rounded-[18px] px-3 py-3 text-left transition-colors",
+                      selectedServiceId === service.id ? "bg-white/8" : "bg-transparent",
+                    )}
+                    onClick={() => {
+                      setSelectedServiceId(service.id);
+                      setServicePanelOpen(false);
+                    }}
+                    type="button"
+                  >
+                    <div className="min-w-0 pr-3">
+                      <p className="truncate text-[1rem] font-medium text-white sm:text-[1.05rem]">
+                        {service.service}
+                      </p>
+                      <p className="mt-1 text-xs uppercase tracking-[0.16em] text-white/38">
+                        {service.serviceCode} / {service.countryCode}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-white/45">stok {service.stock}</p>
+                      <p className="mt-1 text-[1rem] font-semibold text-sky-200 sm:text-[1.05rem]">
+                        {formatCurrency(service.price, service.currency)}
+                      </p>
+                    </div>
+                  </button>
+                ))}
 
-                  return (
-                    <button
-                      key={service.id}
-                      className={cn(
-                        "flex w-full items-center justify-between rounded-[18px] px-3 py-3 text-left transition-colors",
-                        active ? "bg-white/8" : "bg-transparent",
-                      )}
-                      onClick={() => {
-                        setSelectedServiceId(service.id);
-                        setServicePanelOpen(false);
-                      }}
-                      type="button"
-                    >
-                      <div className="min-w-0 pr-3">
-                        <p className="truncate text-[1.05rem] font-medium text-white">
-                          {service.service}
-                        </p>
-                        <p className="mt-1 text-xs uppercase tracking-[0.16em] text-white/38">
-                          {service.countryCode}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm text-white/45">{offer.stock}</p>
-                        <p className="mt-1 text-[1.05rem] font-semibold text-[#00ff9d]">
-                          {formatCurrency(offer.price, service.currency)}
-                        </p>
-                      </div>
-                    </button>
-                  );
-                })}
-
-                {!services.length ? (
+                {!filteredServices.length ? (
                   <div className="rounded-[18px] bg-[#121d31] px-4 py-6 text-center text-sm text-white/50">
                     Tidak ada layanan yang cocok.
                   </div>
@@ -681,60 +693,53 @@ export function CatalogConsole({
             </div>
           ) : null}
 
-          {selectedService && providerOffer && selectedServerMeta ? (
+          {selectedService && selectedServerMeta ? (
             <div className="mt-4 rounded-[24px] bg-[#152034] p-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-sm text-white/55">Service</p>
-                  <p className="mt-1 text-[1.3rem] font-semibold text-white">
+                  <p className="mt-1 text-[1.2rem] font-semibold text-white sm:text-[1.3rem]">
                     {selectedService.service}
                   </p>
                 </div>
-                <p className="text-[1.45rem] font-semibold text-white">
+                <p className="text-[1.1rem] font-semibold text-white sm:text-[1.25rem]">
                   {selectedServerMeta.name}
                 </p>
               </div>
 
-              <p className="mt-5 text-sm font-semibold uppercase tracking-[0.16em] text-white/38">
-                Pilih Provider:
-              </p>
-
               <div className="mt-4 rounded-[22px] border border-white/10 bg-[#121d31] px-4 py-4">
                 <div className="flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <div
-                      className={cn(
-                        "flex h-10 w-10 items-center justify-center rounded-full bg-[linear-gradient(135deg,var(--tw-gradient-stops))] text-xs font-black text-white",
-                        selectedServerMeta.gradient,
-                      )}
-                    >
-                      {selectedServerMeta.iconLabel}
-                    </div>
-                    <div>
-                      <p className="text-[1.05rem] font-semibold text-white">
-                        {selectedService.service}
-                      </p>
-                      <p className="text-sm text-white/45">{selectedServerMeta.name}</p>
-                    </div>
+                  <div>
+                    <p className="text-sm text-white/48">Negara</p>
+                    <p className="mt-1 text-base font-semibold text-white">
+                      {selectedCountry?.name ?? selectedService.country}
+                    </p>
+                    <p className="mt-3 text-sm text-white/48">Kode Layanan</p>
+                    <p className="mt-1 text-sm font-semibold uppercase tracking-[0.16em] text-sky-200">
+                      {selectedService.serviceCode}
+                    </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[1.05rem] font-semibold text-[#00ff9d]">
-                      {formatCurrency(providerOffer.price, selectedService.currency)}
+                    <p className="text-[1.05rem] font-semibold text-sky-200 sm:text-[1.1rem]">
+                      {formatCurrency(selectedService.price, selectedService.currency)}
                     </p>
-                    <p className="text-sm text-white/45">stok: {providerOffer.stock}</p>
+                    <p className="mt-1 text-sm text-white/45">
+                      stok: {selectedService.stock}
+                    </p>
                   </div>
                 </div>
               </div>
             </div>
           ) : null}
 
-          <div className="mt-5 rounded-[22px] border border-white/10 bg-[#121d31] px-4 py-4 text-sm leading-7 text-white/60">
+          <div className="mt-4 rounded-[22px] border border-white/10 bg-[#121d31] px-4 py-4 text-sm leading-7 text-white/60">
             Base URL
-            <div className="mt-2 text-[#00ff9d]">
-              https://api.kirimkode.com/v1
+            <div className="mt-2 text-sky-200">https://api.kirimkode.com/v1</div>
+            <div className="mt-4">Payload Order</div>
+            <div className="mt-2 text-white/75">
+              server: {selectedServer === "bimasakti" ? "api1" : "api2"}, country:{" "}
+              {selectedCountryId}, operator: any
             </div>
-            <div className="mt-4">Authentication</div>
-            <div className="mt-2 text-white/75">Header: X-API-Key</div>
             <div className="mt-4">
               {isPaymentReady
                 ? `Midtrans ${initialRuntime.midtransEnvironment} siap dipakai.`
@@ -743,7 +748,7 @@ export function CatalogConsole({
           </div>
 
           <button
-            className="mt-5 inline-flex h-14 w-full items-center justify-center rounded-full bg-[linear-gradient(135deg,#00ff9d,#0ddb75)] px-5 text-base font-semibold text-[#071422] disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-5 inline-flex h-14 w-full items-center justify-center rounded-full bg-[linear-gradient(135deg,#8bd4ff,#52a8ff)] px-5 text-base font-semibold text-[#071422] disabled:cursor-not-allowed disabled:opacity-60"
             disabled={!selectedService || !isPaymentReady || isCreatingPayment || !isSnapReady}
             onClick={() => void handleCreateCheckout()}
             type="button"
@@ -753,17 +758,17 @@ export function CatalogConsole({
         </section>
 
         {paymentError ? (
-          <div className="mt-5 rounded-[22px] border border-rose-300/18 bg-rose-400/12 px-4 py-4 text-sm leading-7 text-rose-100">
+          <div className="mt-4 rounded-[22px] border border-rose-300/18 bg-rose-400/12 px-4 py-4 text-sm leading-7 text-rose-100">
             {paymentError}
           </div>
         ) : null}
 
         {payment ? (
-          <section className="mt-5 rounded-[28px] border border-white/8 bg-[#1a2438] p-5">
+          <section className="mt-4 rounded-[28px] border border-white/10 bg-[#1a2438]/95 p-4 sm:p-5">
             <div className="flex items-center justify-between gap-4">
               <div>
                 <p className="text-sm text-white/45">Payment Status</p>
-                <p className="mt-1 text-[1.25rem] font-semibold text-white">
+                <p className="mt-1 text-[1.15rem] font-semibold text-white sm:text-[1.25rem]">
                   {payment.service}
                 </p>
               </div>
@@ -802,12 +807,12 @@ export function CatalogConsole({
           </section>
         ) : null}
 
-        <section className="mt-5 rounded-[28px] border border-white/8 bg-[#1a2438] p-5">
+        <section className="mt-4 rounded-[28px] border border-white/10 bg-[#1a2438]/95 p-4 sm:p-5">
           <div className="flex items-center justify-between gap-4">
             <div>
               <p className="text-sm text-white/45">OTP Result</p>
-              <p className="mt-1 text-[1.25rem] font-semibold text-white">
-                OTP akan tampil setelah payment sukses
+              <p className="mt-1 text-[1.15rem] font-semibold text-white sm:text-[1.25rem]">
+                OTP tampil setelah payment sukses
               </p>
             </div>
             {order ? (
@@ -832,12 +837,12 @@ export function CatalogConsole({
             <div className="mt-4">
               <div className="rounded-[24px] bg-[#121d31] p-4">
                 <p className="text-sm text-white/48">Nomor</p>
-                <p className="mt-1 text-xl font-semibold text-white">
+                <p className="mt-1 break-all text-xl font-semibold text-white">
                   {order.phoneNumber}
                 </p>
 
                 <p className="mt-5 text-sm text-white/48">OTP Code</p>
-                <p className="mt-2 break-all text-[2rem] font-semibold tracking-[0.08em] text-[#00ff9d]">
+                <p className="mt-2 break-all text-[1.85rem] font-semibold tracking-[0.08em] text-sky-200 sm:text-[2rem]">
                   {order.otpCode ?? "MENUNGGU SMS MASUK"}
                 </p>
 
@@ -874,7 +879,7 @@ export function CatalogConsole({
           ) : (
             <div className="mt-4 rounded-[24px] bg-[#121d31] px-4 py-8 text-center text-sm leading-7 text-white/50">
               Setelah checkout Midtrans berhasil, website akan membuat order ke
-              provider lalu menampilkan nomor dan OTP di sini.
+              KirimKode lalu menampilkan nomor dan OTP di sini.
             </div>
           )}
         </section>

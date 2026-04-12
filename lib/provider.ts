@@ -1,4 +1,5 @@
 import "server-only";
+
 import {
   cancelMockOrder,
   createMockOrder,
@@ -20,24 +21,55 @@ import type {
 
 type CatalogFilters = {
   q?: string;
-  country?: string;
+  serverId?: string;
+  countryId?: number | string;
   category?: string;
 };
 
 type CreateOrderInput = {
   serviceId: string;
+  serviceCode: string;
+  serverId: string;
   service: string;
   country: string;
+  countryId: number;
+  operator?: string;
   price?: number;
   currency?: string;
 };
 
 type OrderContext = {
   serviceId: string;
+  serviceCode: string;
+  serverId: string;
   service: string;
   country: string;
+  countryId: number;
   price: number;
   currency: string;
+  phoneNumber: string;
+  createdAt: string;
+  expiresAt: string;
+  providerRef?: string;
+  otpCode?: string;
+  status: Order["status"];
+};
+
+const defaultCountry = {
+  id: 6,
+  name: "Indonesia",
+  code: "ID",
+};
+
+const serviceNameMap: Record<string, string> = {
+  wa: "WhatsApp",
+  tg: "Telegram",
+  fb: "Facebook",
+  ig: "Instagram",
+  tt: "TikTok",
+  dc: "Discord",
+  gg: "Google",
+  sp: "Shopee",
 };
 
 const orderContextGlobal = globalThis as typeof globalThis & {
@@ -61,8 +93,7 @@ function getProviderConfig() {
     apiKey,
     apiKeyHeader: process.env.UPSTREAM_API_KEY_HEADER ?? "x-api-key",
     balancePath: process.env.UPSTREAM_BALANCE_PATH ?? "/balance",
-    servicesPath:
-      process.env.UPSTREAM_SERVICES_PATH ?? "/services?page=1&limit=200",
+    servicesPath: process.env.UPSTREAM_SERVICES_PATH ?? "/services",
     historyPath: process.env.UPSTREAM_HISTORY_PATH ?? "/orders",
     orderPath: process.env.UPSTREAM_ORDER_PATH ?? "/order",
     orderStatusPath:
@@ -73,6 +104,8 @@ function getProviderConfig() {
     cancelMethod:
       process.env.UPSTREAM_CANCEL_METHOD === "DELETE" ? "DELETE" : "POST",
     timeoutMs: Number(process.env.UPSTREAM_TIMEOUT_MS ?? 15000),
+    bimasaktiCode: process.env.UPSTREAM_SERVER_BIMASAKTI_CODE ?? "api1",
+    marsCode: process.env.UPSTREAM_SERVER_MARS_CODE ?? "api2",
   } as const;
 }
 
@@ -88,23 +121,58 @@ function getBaseHost(baseUrl?: string) {
   }
 }
 
-function applyFilters(services: Service[], filters: CatalogFilters) {
-  const q = filters.q?.trim().toLowerCase();
+function resolveServerId(serverId?: string) {
+  if (serverId === "mars" || serverId === "api2") {
+    return "mars";
+  }
 
-  return services.filter((service) => {
-    const matchesQuery =
-      !q ||
-      `${service.service} ${service.country} ${service.category} ${service.tags.join(" ")}`
-        .toLowerCase()
-        .includes(q);
+  return "bimasakti";
+}
 
-    const matchesCountry =
-      !filters.country || service.country === filters.country;
-    const matchesCategory =
-      !filters.category || service.category === filters.category;
+function resolveUpstreamServer(serverId?: string) {
+  const config = getProviderConfig();
 
-    return matchesQuery && matchesCountry && matchesCategory;
-  });
+  if (serverId === "api1" || serverId === "api2") {
+    return serverId;
+  }
+
+  return resolveServerId(serverId) === "mars"
+    ? config.marsCode
+    : config.bimasaktiCode;
+}
+
+function getServerName(serverId?: string) {
+  return resolveServerId(serverId) === "mars" ? "Mars" : "Bimasakti";
+}
+
+function resolveCountryId(countryId?: number | string) {
+  if (typeof countryId === "number" && Number.isFinite(countryId)) {
+    return countryId;
+  }
+
+  if (typeof countryId === "string") {
+    const parsed = Number(countryId);
+
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+
+  return defaultCountry.id;
+}
+
+function getCountryMeta(countryId?: number | string) {
+  const resolvedId = resolveCountryId(countryId);
+
+  if (resolvedId === defaultCountry.id) {
+    return defaultCountry;
+  }
+
+  return {
+    id: resolvedId,
+    name: `Country ${resolvedId}`,
+    code: `C${resolvedId}`,
+  };
 }
 
 function uniqueSorted(values: string[]) {
@@ -129,6 +197,195 @@ function buildCatalogResponse(
     source: extras?.source,
     warning: extras?.warning,
   };
+}
+
+function pickString(record: Record<string, unknown>, keys: string[], fallback = "") {
+  for (const key of keys) {
+    const value = record[key];
+
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+
+    if (typeof value === "number") {
+      return String(value);
+    }
+  }
+
+  return fallback;
+}
+
+function pickNumber(record: Record<string, unknown>, keys: string[], fallback = 0) {
+  for (const key of keys) {
+    const value = record[key];
+
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === "string") {
+      const parsed = Number(value);
+
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+  }
+
+  return fallback;
+}
+
+function extractArray(payload: unknown) {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+
+  if (!payload || typeof payload !== "object") {
+    return [];
+  }
+
+  const record = payload as Record<string, unknown>;
+
+  if (Array.isArray(record.data)) {
+    return record.data;
+  }
+
+  return [];
+}
+
+function extractRecord(payload: unknown) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return {};
+  }
+
+  const record = payload as Record<string, unknown>;
+
+  if (record.data && typeof record.data === "object" && !Array.isArray(record.data)) {
+    return record.data as Record<string, unknown>;
+  }
+
+  return record;
+}
+
+function extractTimestamp(payload: unknown, fallback: string) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return fallback;
+  }
+
+  const record = payload as Record<string, unknown>;
+  return pickString(record, ["timestamp"], fallback);
+}
+
+function buildPathWithQuery(
+  path: string,
+  query: Record<string, string | number | undefined>,
+) {
+  const base = new URL(path, "https://kirimkode.local");
+
+  for (const [key, value] of Object.entries(query)) {
+    if (value === undefined || value === "") {
+      continue;
+    }
+
+    base.searchParams.set(key, String(value));
+  }
+
+  return `${base.pathname}${base.search}`;
+}
+
+function normalizeStatus(input: string, hasOtpCode = false) {
+  if (hasOtpCode) {
+    return "otp_received" as const;
+  }
+
+  const value = input.toLowerCase();
+
+  if (["otp_received", "received", "success", "done", "completed"].includes(value)) {
+    return "otp_received" as const;
+  }
+
+  if (["expired", "timeout"].includes(value)) {
+    return "expired" as const;
+  }
+
+  if (["cancelled", "canceled", "cancel"].includes(value)) {
+    return "cancelled" as const;
+  }
+
+  return "pending" as const;
+}
+
+function formatServiceName(serviceCode: string, fallback?: string) {
+  if (fallback) {
+    return fallback;
+  }
+
+  return serviceNameMap[serviceCode] ?? serviceCode.toUpperCase();
+}
+
+function normalizeService(
+  item: unknown,
+  context: {
+    serverId: string;
+    countryId: number;
+  },
+): Service | null {
+  if (!item || typeof item !== "object" || Array.isArray(item)) {
+    return null;
+  }
+
+  const record = item as Record<string, unknown>;
+  const serviceCode = pickString(record, ["code", "service"], "");
+  const upstreamPrice = pickNumber(record, ["price"], 0);
+
+  if (!serviceCode || upstreamPrice <= 0) {
+    return null;
+  }
+
+  const countryMeta = getCountryMeta(context.countryId);
+  const serviceName = formatServiceName(
+    serviceCode,
+    pickString(record, ["name"], ""),
+  );
+
+  return {
+    id: `${context.serverId}-${countryMeta.id}-${serviceCode}`,
+    slug: `${context.serverId}-${countryMeta.id}-${serviceCode}`,
+    serverId: context.serverId,
+    serviceCode,
+    service: serviceName,
+    country: countryMeta.name,
+    countryId: countryMeta.id,
+    countryCode: countryMeta.code,
+    category: "OTP",
+    upstreamPrice,
+    price: computeRetailPrice(upstreamPrice),
+    stock: pickNumber(record, ["stock"], 0),
+    currency: getPricingConfig().currency,
+    deliveryEtaSeconds: 20,
+    tags: ["Live API", getServerName(context.serverId)],
+  };
+}
+
+function applyFilters(services: Service[], filters: CatalogFilters) {
+  const q = filters.q?.trim().toLowerCase();
+  const serverId = filters.serverId ? resolveServerId(filters.serverId) : null;
+  const countryId = filters.countryId ? resolveCountryId(filters.countryId) : null;
+
+  return services.filter((service) => {
+    const matchesQuery =
+      !q ||
+      `${service.service} ${service.serviceCode} ${service.country} ${service.tags.join(" ")}`
+        .toLowerCase()
+        .includes(q);
+
+    const matchesServer = !serverId || service.serverId === serverId;
+    const matchesCountry = !countryId || service.countryId === countryId;
+    const matchesCategory =
+      !filters.category || service.category === filters.category;
+
+    return matchesQuery && matchesServer && matchesCountry && matchesCategory;
+  });
 }
 
 async function fetchUpstream(
@@ -180,36 +437,22 @@ async function fetchUpstream(
     "success" in payload &&
     payload.success === false
   ) {
-    const nestedError =
-      "error" in payload &&
-      payload.error &&
-      typeof payload.error === "object" &&
-      "message" in payload.error &&
-      typeof payload.error.message === "string"
-        ? payload.error.message
+    const errorRecord =
+      payload.error && typeof payload.error === "object" && !Array.isArray(payload.error)
+        ? (payload.error as Record<string, unknown>)
         : null;
+    const errorMessage =
+      (errorRecord && pickString(errorRecord, ["message"], "")) ||
+      pickString(payload, ["message"], "Provider upstream mengembalikan status gagal.");
 
-    throw new Error(nestedError ?? "Provider upstream mengembalikan status gagal.");
+    throw new Error(errorMessage);
   }
 
   if (!response.ok) {
-    const nestedError =
-      payload &&
-      !Array.isArray(payload) &&
-      "error" in payload &&
-      payload.error &&
-      typeof payload.error === "object" &&
-      "message" in payload.error &&
-      typeof payload.error.message === "string"
-        ? payload.error.message
-        : null;
     const message =
-      nestedError ||
       (payload &&
-        typeof payload === "object" &&
-        "message" in payload &&
-        typeof payload.message === "string" &&
-        payload.message) ||
+        !Array.isArray(payload) &&
+        pickString(payload, ["message"], "")) ||
       `Provider upstream merespons HTTP ${response.status}.`;
 
     throw new Error(message);
@@ -224,199 +467,85 @@ function replaceOrderId(pathTemplate: string, orderId: string) {
     .replace(":id", encodeURIComponent(orderId));
 }
 
-function extractArray(payload: unknown) {
-  if (Array.isArray(payload)) {
-    return payload;
-  }
-
-  if (!payload || typeof payload !== "object") {
-    return [];
-  }
-
-  const record = payload as Record<string, unknown>;
-
-  for (const key of ["data", "items", "services", "result"]) {
-    if (Array.isArray(record[key])) {
-      return record[key];
-    }
-  }
-
-  return [];
-}
-
-function extractRecord(payload: unknown) {
-  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
-    return {};
-  }
-
-  const record = payload as Record<string, unknown>;
-
-  for (const key of ["data", "item", "order", "result"]) {
-    const value = record[key];
-
-    if (value && typeof value === "object" && !Array.isArray(value)) {
-      return value as Record<string, unknown>;
-    }
-  }
-
-  return record;
-}
-
-function pickString(record: Record<string, unknown>, keys: string[], fallback = "") {
-  for (const key of keys) {
-    const value = record[key];
-
-    if (typeof value === "string" && value.trim()) {
-      return value;
-    }
-
-    if (typeof value === "number") {
-      return String(value);
-    }
-  }
-
-  return fallback;
-}
-
-function pickNumber(record: Record<string, unknown>, keys: string[], fallback = 0) {
-  for (const key of keys) {
-    const value = record[key];
-
-    if (typeof value === "number" && Number.isFinite(value)) {
-      return value;
-    }
-
-    if (typeof value === "string") {
-      const parsed = Number(value);
-
-      if (Number.isFinite(parsed)) {
-        return parsed;
-      }
-    }
-  }
-
-  return fallback;
-}
-
-function pickTags(record: Record<string, unknown>) {
-  const tagValue = record.tags;
-
-  if (Array.isArray(tagValue)) {
-    return tagValue
-      .filter((item): item is string => typeof item === "string")
-      .slice(0, 4);
-  }
-
-  return ["API Relay", "Ready"];
-}
-
-function normalizeStatus(input: string) {
-  const value = input.toLowerCase();
-
-  if (["otp_received", "received", "success", "done", "completed"].includes(value)) {
-    return "otp_received" as const;
-  }
-
-  if (["expired", "timeout"].includes(value)) {
-    return "expired" as const;
-  }
-
-  if (["cancelled", "canceled", "cancel"].includes(value)) {
-    return "cancelled" as const;
-  }
-
-  return "pending" as const;
-}
-
-function normalizeService(item: unknown): Service | null {
-  if (!item || typeof item !== "object" || Array.isArray(item)) {
-    return null;
-  }
-
-  const record = item as Record<string, unknown>;
-  const upstreamPrice = pickNumber(record, [
-    "upstreamPrice",
-    "price",
-    "cost",
-    "rate",
-    "amount",
-  ]);
-  const service = pickString(record, [
-    "service",
-    "name",
-    "serviceName",
-    "service_name",
-    "title",
-    "slug",
-    "code",
-  ]);
-  const country = pickString(record, ["country", "countryName", "region"], "Indonesia");
-
-  if (!service || upstreamPrice <= 0) {
-    return null;
-  }
-
-  return {
-    id: pickString(
-      record,
-      ["id", "serviceId", "service_id", "code", "sku", "slug"],
-      `${service}-${country}`,
-    ),
-    slug: `${service}-${country}`
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, ""),
-    service,
-    country,
-    countryCode: pickString(record, ["countryCode", "country_code"], "ID"),
-    category: pickString(record, ["category", "group"], "General"),
-    upstreamPrice,
-    price: computeRetailPrice(upstreamPrice),
-    stock: pickNumber(record, ["stock", "available", "availability"], 0),
-    currency: pickString(record, ["currency"], getPricingConfig().currency),
-    deliveryEtaSeconds: pickNumber(record, ["deliveryEtaSeconds", "eta", "speed"], 20),
-    tags: pickTags(record),
-  };
-}
-
-function normalizeOrder(
+function normalizeCreatedOrder(
   payload: unknown,
-  fallback: {
-    id?: string;
-    serviceId: string;
-    service: string;
-    country: string;
-    price: number;
-    currency: string;
-  },
+  fallback: Omit<OrderContext, "phoneNumber" | "createdAt" | "expiresAt" | "status">,
 ) {
   const record = extractRecord(payload);
-  const status = normalizeStatus(
-    pickString(record, ["status", "state", "orderStatus"], "pending"),
+  const createdAtFallback = new Date().toISOString();
+  const createdAt = extractTimestamp(payload, createdAtFallback);
+  const expiresAt = pickString(
+    record,
+    ["expires_at", "expiresAt"],
+    new Date(Date.now() + 20 * 60 * 1000).toISOString(),
   );
+  const phoneNumber = pickString(record, ["number", "phoneNumber", "phone"], "-");
+  const orderId = pickString(record, ["order_id", "id", "orderId"], "");
+  const price = pickNumber(record, ["price"], fallback.price);
+  const providerRef =
+    pickString(record, ["id"], "") && pickString(record, ["id"], "") !== orderId
+      ? pickString(record, ["id"], "")
+      : undefined;
 
   return {
-    id: pickString(record, ["id", "orderId", "requestId"], fallback.id ?? ""),
+    id: orderId,
     serviceId: fallback.serviceId,
+    serviceCode: fallback.serviceCode,
+    serverId: fallback.serverId,
     service: fallback.service,
     country: fallback.country,
-    phoneNumber: pickString(
-      record,
-      ["phoneNumber", "number", "phone", "msisdn"],
-      "-",
-    ),
-    price: fallback.price,
+    countryId: fallback.countryId,
+    phoneNumber,
+    price,
     currency: fallback.currency,
+    status: "pending" as const,
+    createdAt,
+    expiresAt,
+    providerRef,
+  } satisfies Order;
+}
+
+function normalizeStatusOrder(
+  payload: unknown,
+  context: OrderContext,
+  orderId: string,
+) {
+  const record = extractRecord(payload);
+  const otpCode = pickString(record, ["code"], "") || undefined;
+  let status = normalizeStatus(
+    pickString(record, ["status"], context.status),
+    Boolean(otpCode),
+  );
+
+  if (
+    status === "pending" &&
+    Date.now() > new Date(context.expiresAt).getTime()
+  ) {
+    status = "expired";
+  }
+
+  return {
+    id:
+      pickString(record, ["order_id", "id", "orderId"], "") ||
+      orderId ||
+      context.providerRef ||
+      "",
+    serviceId: context.serviceId,
+    serviceCode: context.serviceCode,
+    serverId: context.serverId,
+    service: context.service,
+    country: context.country,
+    countryId: context.countryId,
+    phoneNumber:
+      pickString(record, ["number", "phoneNumber", "phone"], context.phoneNumber) ||
+      context.phoneNumber,
+    price: context.price,
+    currency: context.currency,
     status,
-    otpCode: pickString(record, ["otpCode", "otp", "code", "smsCode"]) || undefined,
-    createdAt: pickString(record, ["createdAt", "created_at"], new Date().toISOString()),
-    expiresAt: pickString(
-      record,
-      ["expiresAt", "expiredAt", "validUntil", "expires_at"],
-      new Date(Date.now() + 20 * 60 * 1000).toISOString(),
-    ),
-    providerRef:
-      pickString(record, ["providerRef", "reference", "refId"]) || undefined,
+    otpCode,
+    createdAt: context.createdAt,
+    expiresAt: context.expiresAt,
+    providerRef: context.providerRef,
   } satisfies Order;
 }
 
@@ -424,44 +553,104 @@ function normalizeBalance(payload: unknown): Balance {
   const record = extractRecord(payload);
 
   return {
-    amount: pickNumber(record, ["balance", "amount", "saldo"], 0),
+    amount: pickNumber(record, ["balance"], 0),
     currency: pickString(record, ["currency"], getPricingConfig().currency),
-    updatedAt: new Date().toISOString(),
+    updatedAt: extractTimestamp(payload, new Date().toISOString()),
     mode: getProviderConfig().mode,
   };
 }
 
 function normalizeHistory(payload: unknown): OrderHistoryResponse {
-  const orders: Order[] = extractArray(payload)
-    .map((item) => {
+  const orders = extractArray(payload)
+    .map((item): Order | null => {
       if (!item || typeof item !== "object" || Array.isArray(item)) {
         return null;
       }
 
       const record = item as Record<string, unknown>;
-      const serviceId = pickString(record, ["serviceId", "service_id", "service"], "unknown");
-      const service = pickString(record, ["service", "name"], serviceId);
-      const country = pickString(record, ["country", "countryName"], "Unknown");
-      const price = pickNumber(record, ["price", "amount"], 0);
-      const currency = pickString(record, ["currency"], getPricingConfig().currency);
+      const serviceCode = pickString(record, ["service", "code"], "unknown");
+      const orderId = pickString(record, ["order_id", "id", "orderId"], "");
+      const otpCode = pickString(record, ["code"], "") || undefined;
+      const status = normalizeStatus(
+        pickString(record, ["status"], "pending"),
+        Boolean(otpCode),
+      );
+      const timestamp = extractTimestamp(payload, new Date().toISOString());
 
-      return normalizeOrder(record, {
-        id: pickString(record, ["id", "orderId", "requestId"]),
-        serviceId,
-        service,
-        country,
-        price,
-        currency,
-      });
+      return {
+        id: orderId || pickString(record, ["id"], ""),
+        serviceId: serviceCode,
+        serviceCode,
+        service: formatServiceName(serviceCode),
+        country: defaultCountry.name,
+        countryId: defaultCountry.id,
+        phoneNumber: pickString(record, ["number", "phoneNumber"], "-"),
+        price: pickNumber(record, ["price"], 0),
+        currency: getPricingConfig().currency,
+        status,
+        otpCode,
+        createdAt: timestamp,
+        expiresAt: timestamp,
+        providerRef:
+          pickString(record, ["id"], "") !== orderId
+            ? pickString(record, ["id"], "") || undefined
+            : undefined,
+      } satisfies Order;
     })
-    .filter((order): order is NonNullable<typeof order> => order !== null);
+    .filter((order): order is Order => order !== null);
+
+  const payloadRecord =
+    payload && typeof payload === "object" && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {};
+  const pagination =
+    payloadRecord.pagination &&
+    typeof payloadRecord.pagination === "object" &&
+    !Array.isArray(payloadRecord.pagination)
+      ? (payloadRecord.pagination as Record<string, unknown>)
+      : {};
 
   return {
-    updatedAt: new Date().toISOString(),
+    updatedAt: extractTimestamp(payload, new Date().toISOString()),
     mode: getProviderConfig().mode,
-    total: orders.length,
+    total: pickNumber(pagination, ["total"], orders.length),
     orders,
   };
+}
+
+function toOrderContext(order: Order): OrderContext {
+  return {
+    serviceId: order.serviceId,
+    serviceCode: order.serviceCode,
+    serverId: order.serverId ?? resolveServerId(order.serverId),
+    service: order.service,
+    country: order.country,
+    countryId: order.countryId ?? defaultCountry.id,
+    price: order.price,
+    currency: order.currency,
+    phoneNumber: order.phoneNumber,
+    createdAt: order.createdAt,
+    expiresAt: order.expiresAt,
+    providerRef: order.providerRef,
+    otpCode: order.otpCode,
+    status: order.status,
+  };
+}
+
+function getFallbackCatalog(filters: CatalogFilters) {
+  const services = applyFilters(
+    listMockServices({
+      serverId: resolveServerId(filters.serverId),
+      countryId: resolveCountryId(filters.countryId),
+    }),
+    filters,
+  );
+
+  return buildCatalogResponse(services, getProviderConfig().mode, {
+    source: "fallback",
+    warning:
+      "Katalog upstream sedang kosong atau gagal dimuat. Menampilkan katalog cadangan agar halaman tetap bisa dipakai.",
+  });
 }
 
 export async function getRuntimeStatus(): Promise<RuntimeStatus> {
@@ -486,14 +675,28 @@ export async function getCatalog(filters: CatalogFilters = {}) {
   const config = getProviderConfig();
 
   if (config.mode === "mock") {
-    const services = applyFilters(listMockServices(), filters);
+    const services = applyFilters(
+      listMockServices({
+        serverId: resolveServerId(filters.serverId),
+        countryId: resolveCountryId(filters.countryId),
+      }),
+      filters,
+    );
+
     return buildCatalogResponse(services, "mock", { source: "fallback" });
   }
 
   try {
-    const payload = await fetchUpstream(config.servicesPath);
+    const serverId = resolveServerId(filters.serverId);
+    const countryId = resolveCountryId(filters.countryId);
+    const payload = await fetchUpstream(
+      buildPathWithQuery(config.servicesPath, {
+        server: resolveUpstreamServer(serverId),
+        country: countryId,
+      }),
+    );
     const services = extractArray(payload)
-      .map(normalizeService)
+      .map((item) => normalizeService(item, { serverId, countryId }))
       .filter((service): service is Service => Boolean(service));
     const filteredServices = applyFilters(services, filters);
 
@@ -503,15 +706,10 @@ export async function getCatalog(filters: CatalogFilters = {}) {
       });
     }
   } catch {
-    // Fall back to a curated local catalog when the upstream service
-    // directory is unavailable, while keeping the rest of the runtime live.
+    // Continue to local fallback below.
   }
 
-  return buildCatalogResponse(applyFilters(listMockServices(), filters), "rest", {
-    source: "fallback",
-    warning:
-      "Katalog KirimKode sedang kosong atau gagal dimuat. Menampilkan katalog cadangan agar website tetap bisa dipakai.",
-  });
+  return getFallbackCatalog(filters);
 }
 
 export async function getBalance(): Promise<Balance> {
@@ -540,37 +738,38 @@ export async function createOrder(input: CreateOrderInput) {
   const config = getProviderConfig();
 
   if (config.mode === "mock") {
-    return createMockOrder(input.serviceId);
+    return createMockOrder({
+      serviceId: input.serviceId,
+      serverId: input.serverId,
+      countryId: input.countryId,
+    });
   }
 
-  const fallbackPrice = input.price ?? 0;
   const fallbackCurrency = input.currency ?? getPricingConfig().currency;
   const payload = await fetchUpstream(config.orderPath, {
     method: config.orderMethod,
     body: {
-      service: input.serviceId || input.service,
-      serviceId: input.serviceId,
-      country: input.country,
-      countryName: input.country,
+      server: resolveUpstreamServer(input.serverId),
+      country: input.countryId,
+      service: input.serviceCode,
+      operator: input.operator ?? "any",
     },
   });
 
-  const order = normalizeOrder(payload, {
+  const order = normalizeCreatedOrder(payload, {
     serviceId: input.serviceId,
+    serviceCode: input.serviceCode,
+    serverId: resolveServerId(input.serverId),
     service: input.service,
     country: input.country,
-    price: fallbackPrice,
+    countryId: input.countryId,
+    price: input.price ?? 0,
     currency: fallbackCurrency,
+    providerRef: undefined,
+    otpCode: undefined,
   });
 
-  orderContextStore.set(order.id, {
-    serviceId: order.serviceId,
-    service: order.service,
-    country: order.country,
-    price: order.price,
-    currency: order.currency,
-  });
-
+  orderContextStore.set(order.id, toOrderContext(order));
   return order;
 }
 
@@ -581,16 +780,19 @@ export async function getOrder(orderId: string) {
     return getMockOrder(orderId);
   }
 
-  const payload = await fetchUpstream(replaceOrderId(config.orderStatusPath, orderId));
   const fallback = orderContextStore.get(orderId);
 
   if (!fallback) {
     throw new Error(
-      "Context order tidak ditemukan. Untuk provider production, simpan order ke database atau Redis agar status lebih stabil.",
+      "Context order tidak ditemukan. Untuk production, simpan order ke database agar polling OTP tetap stabil.",
     );
   }
 
-  return normalizeOrder(payload, { id: orderId, ...fallback });
+  const payload = await fetchUpstream(replaceOrderId(config.orderStatusPath, orderId));
+  const order = normalizeStatusOrder(payload, fallback, orderId);
+  orderContextStore.set(orderId, toOrderContext(order));
+
+  return order;
 }
 
 export async function cancelOrder(orderId: string) {
@@ -606,22 +808,28 @@ export async function cancelOrder(orderId: string) {
     return null;
   }
 
-  const payload = await fetchUpstream(replaceOrderId(config.cancelPath, orderId), {
+  await fetchUpstream(replaceOrderId(config.cancelPath, orderId), {
     method: config.cancelMethod,
-    body: {
-      orderId,
-    },
   });
 
-  const order = normalizeOrder(payload, { id: orderId, ...fallback });
-  order.status = "cancelled";
-  orderContextStore.set(orderId, {
-    serviceId: order.serviceId,
-    service: order.service,
-    country: order.country,
-    price: order.price,
-    currency: order.currency,
-  });
+  const order = {
+    id: orderId,
+    serviceId: fallback.serviceId,
+    serviceCode: fallback.serviceCode,
+    serverId: fallback.serverId,
+    service: fallback.service,
+    country: fallback.country,
+    countryId: fallback.countryId,
+    phoneNumber: fallback.phoneNumber,
+    price: fallback.price,
+    currency: fallback.currency,
+    status: "cancelled" as const,
+    otpCode: fallback.otpCode,
+    createdAt: fallback.createdAt,
+    expiresAt: fallback.expiresAt,
+    providerRef: fallback.providerRef,
+  } satisfies Order;
 
+  orderContextStore.set(orderId, toOrderContext(order));
   return order;
 }

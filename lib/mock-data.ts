@@ -1,18 +1,30 @@
 import { computeRetailPrice } from "@/lib/pricing";
 import type { Balance, Order, OrderHistoryResponse, Service } from "@/lib/types";
 
-type RawService = Omit<Service, "price" | "slug" | "currency">;
+type RawService = {
+  serviceCode: string;
+  service: string;
+  category: string;
+  upstreamPrice: number;
+  stock: number;
+  deliveryEtaSeconds: number;
+  tags: string[];
+};
 
 type StoredMockOrder = Order & {
   pollCount: number;
 };
 
+const defaultCountry = {
+  id: 6,
+  name: "Indonesia",
+  code: "ID",
+};
+
 const rawCatalog: RawService[] = [
   {
-    id: "wa-id",
+    serviceCode: "wa",
     service: "WhatsApp",
-    country: "Indonesia",
-    countryCode: "ID",
     category: "Sosial",
     upstreamPrice: 1500,
     stock: 342,
@@ -20,10 +32,8 @@ const rawCatalog: RawService[] = [
     tags: ["Hot", "Fast In"],
   },
   {
-    id: "tg-id",
+    serviceCode: "tg",
     service: "Telegram",
-    country: "Indonesia",
-    countryCode: "ID",
     category: "Sosial",
     upstreamPrice: 1200,
     stock: 521,
@@ -31,10 +41,8 @@ const rawCatalog: RawService[] = [
     tags: ["Stable", "Mass Order"],
   },
   {
-    id: "fb-id",
+    serviceCode: "fb",
     service: "Facebook",
-    country: "Indonesia",
-    countryCode: "ID",
     category: "Sosial",
     upstreamPrice: 2000,
     stock: 189,
@@ -42,10 +50,8 @@ const rawCatalog: RawService[] = [
     tags: ["Verified", "Good Success"],
   },
   {
-    id: "ig-id",
+    serviceCode: "ig",
     service: "Instagram",
-    country: "Indonesia",
-    countryCode: "ID",
     category: "Sosial",
     upstreamPrice: 2500,
     stock: 156,
@@ -53,10 +59,8 @@ const rawCatalog: RawService[] = [
     tags: ["Creator", "Safe"],
   },
   {
-    id: "tt-id",
+    serviceCode: "tt",
     service: "TikTok",
-    country: "Indonesia",
-    countryCode: "ID",
     category: "Sosial",
     upstreamPrice: 1800,
     stock: 278,
@@ -64,10 +68,8 @@ const rawCatalog: RawService[] = [
     tags: ["Trending", "Volume"],
   },
   {
-    id: "dc-id",
+    serviceCode: "dc",
     service: "Discord",
-    country: "Indonesia",
-    countryCode: "ID",
     category: "Komunitas",
     upstreamPrice: 1500,
     stock: 445,
@@ -75,10 +77,8 @@ const rawCatalog: RawService[] = [
     tags: ["Gaming", "Stable"],
   },
   {
-    id: "gg-id",
+    serviceCode: "gg",
     service: "Google",
-    country: "Indonesia",
-    countryCode: "ID",
     category: "Produktivitas",
     upstreamPrice: 3000,
     stock: 67,
@@ -86,59 +86,13 @@ const rawCatalog: RawService[] = [
     tags: ["Premium", "Manual Check"],
   },
   {
-    id: "sp-id",
+    serviceCode: "sp",
     service: "Shopee",
-    country: "Indonesia",
-    countryCode: "ID",
     category: "Marketplace",
     upstreamPrice: 1200,
     stock: 389,
     deliveryEtaSeconds: 17,
     tags: ["Fast In", "Mass Order"],
-  },
-  {
-    id: "wa-us",
-    service: "WhatsApp",
-    country: "Amerika Serikat",
-    countryCode: "US",
-    category: "Sosial",
-    upstreamPrice: 5250,
-    stock: 120,
-    deliveryEtaSeconds: 25,
-    tags: ["Premium", "High Trust"],
-  },
-  {
-    id: "tg-us",
-    service: "Telegram",
-    country: "Amerika Serikat",
-    countryCode: "US",
-    category: "Sosial",
-    upstreamPrice: 4200,
-    stock: 98,
-    deliveryEtaSeconds: 21,
-    tags: ["Premium", "Stable"],
-  },
-  {
-    id: "wa-in",
-    service: "WhatsApp",
-    country: "India",
-    countryCode: "IN",
-    category: "Sosial",
-    upstreamPrice: 1200,
-    stock: 890,
-    deliveryEtaSeconds: 12,
-    tags: ["Cheapest", "Volume"],
-  },
-  {
-    id: "gg-in",
-    service: "Google",
-    country: "India",
-    countryCode: "IN",
-    category: "Produktivitas",
-    upstreamPrice: 2200,
-    stock: 214,
-    deliveryEtaSeconds: 19,
-    tags: ["Testing", "Good Success"],
   },
 ];
 
@@ -158,21 +112,70 @@ function randomDigits(length: number) {
   return Array.from({ length }, () => Math.floor(Math.random() * 10)).join("");
 }
 
-export function listMockServices() {
-  return rawCatalog.map((service) => ({
-    ...service,
-    slug: slugify(`${service.service}-${service.country}`),
-    price: computeRetailPrice(service.upstreamPrice),
-    currency: "IDR",
-  }));
+function getServerMeta(serverId: string) {
+  if (serverId === "mars") {
+    return {
+      id: "mars" as const,
+      stockRatio: 0.78,
+    };
+  }
+
+  return {
+    id: "bimasakti" as const,
+    stockRatio: 1,
+  };
 }
 
-export function getMockServiceById(serviceId: string) {
-  return listMockServices().find((service) => service.id === serviceId) ?? null;
+export function listMockServices(filters?: {
+  serverId?: string;
+  countryId?: number;
+}) {
+  const serverMeta = getServerMeta(filters?.serverId ?? "bimasakti");
+
+  return rawCatalog.map((service) => {
+    const stock = Math.max(0, Math.round(service.stock * serverMeta.stockRatio));
+
+    return {
+      id: `${serverMeta.id}-${defaultCountry.id}-${service.serviceCode}`,
+      slug: slugify(`${service.service}-${defaultCountry.name}-${serverMeta.id}`),
+      serverId: serverMeta.id,
+      serviceCode: service.serviceCode,
+      service: service.service,
+      country: defaultCountry.name,
+      countryId: filters?.countryId ?? defaultCountry.id,
+      countryCode: defaultCountry.code,
+      category: service.category,
+      upstreamPrice: service.upstreamPrice,
+      price: computeRetailPrice(service.upstreamPrice),
+      stock,
+      currency: "IDR",
+      deliveryEtaSeconds: service.deliveryEtaSeconds,
+      tags: service.tags,
+    } satisfies Service;
+  });
 }
 
-export function createMockOrder(serviceId: string) {
-  const service = getMockServiceById(serviceId);
+export function getMockServiceById(
+  serviceId: string,
+  filters?: {
+    serverId?: string;
+    countryId?: number;
+  },
+) {
+  return (
+    listMockServices(filters).find((service) => service.id === serviceId) ?? null
+  );
+}
+
+export function createMockOrder(input: {
+  serviceId: string;
+  serverId: string;
+  countryId: number;
+}) {
+  const service = getMockServiceById(input.serviceId, {
+    serverId: input.serverId,
+    countryId: input.countryId,
+  });
 
   if (!service) {
     throw new Error("Service mock tidak ditemukan.");
@@ -184,8 +187,11 @@ export function createMockOrder(serviceId: string) {
   const order: StoredMockOrder = {
     id: `order_${Math.random().toString(36).slice(2, 10)}`,
     serviceId: service.id,
+    serviceCode: service.serviceCode,
+    serverId: service.serverId,
     service: service.service,
     country: service.country,
+    countryId: service.countryId,
     phoneNumber: `+62${randomDigits(10)}`,
     price: service.price,
     currency: service.currency,
@@ -224,8 +230,11 @@ export function getMockOrder(orderId: string): Order | null {
   return {
     id: stored.id,
     serviceId: stored.serviceId,
+    serviceCode: stored.serviceCode,
+    serverId: stored.serverId,
     service: stored.service,
     country: stored.country,
+    countryId: stored.countryId,
     phoneNumber: stored.phoneNumber,
     price: stored.price,
     currency: stored.currency,
@@ -250,8 +259,11 @@ export function cancelMockOrder(orderId: string): Order | null {
   return {
     id: stored.id,
     serviceId: stored.serviceId,
+    serviceCode: stored.serviceCode,
+    serverId: stored.serverId,
     service: stored.service,
     country: stored.country,
+    countryId: stored.countryId,
     phoneNumber: stored.phoneNumber,
     price: stored.price,
     currency: stored.currency,
@@ -281,8 +293,11 @@ export function listMockOrders(): OrderHistoryResponse {
     .map((stored) => ({
       id: stored.id,
       serviceId: stored.serviceId,
+      serviceCode: stored.serviceCode,
+      serverId: stored.serverId,
       service: stored.service,
       country: stored.country,
+      countryId: stored.countryId,
       phoneNumber: stored.phoneNumber,
       price: stored.price,
       currency: stored.currency,
