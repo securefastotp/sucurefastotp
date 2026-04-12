@@ -92,12 +92,12 @@ const envFields = [
   {
     name: "UPSTREAM_MARKUP_PERCENT",
     required: "No",
-    description: "Persentase markup jual di atas harga modal.",
+    description: "Markup jual. Project ini sekarang dikunci ke 100% dari harga upstream.",
   },
   {
     name: "UPSTREAM_MIN_MARGIN",
     required: "No",
-    description: "Margin minimum dalam rupiah agar harga jual tetap aman.",
+    description: "Margin minimum. Default sekarang 0 karena markup 100% sudah dikunci.",
   },
   {
     name: "MIDTRANS_ENVIRONMENT",

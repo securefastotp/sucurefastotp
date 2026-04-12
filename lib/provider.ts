@@ -637,22 +637,6 @@ function toOrderContext(order: Order): OrderContext {
   };
 }
 
-function getFallbackCatalog(filters: CatalogFilters) {
-  const services = applyFilters(
-    listMockServices({
-      serverId: resolveServerId(filters.serverId),
-      countryId: resolveCountryId(filters.countryId),
-    }),
-    filters,
-  );
-
-  return buildCatalogResponse(services, getProviderConfig().mode, {
-    source: "fallback",
-    warning:
-      "Katalog upstream sedang kosong atau gagal dimuat. Menampilkan katalog cadangan agar halaman tetap bisa dipakai.",
-  });
-}
-
 export async function getRuntimeStatus(): Promise<RuntimeStatus> {
   const config = getProviderConfig();
   const pricing = getPricingConfig();
@@ -700,16 +684,20 @@ export async function getCatalog(filters: CatalogFilters = {}) {
       .filter((service): service is Service => Boolean(service));
     const filteredServices = applyFilters(services, filters);
 
-    if (filteredServices.length > 0) {
-      return buildCatalogResponse(filteredServices, "rest", {
-        source: "upstream",
-      });
-    }
-  } catch {
-    // Continue to local fallback below.
+    return buildCatalogResponse(filteredServices, "rest", {
+      source: "upstream",
+      warning:
+        filteredServices.length === 0
+          ? "Katalog real KirimKode untuk server dan negara ini sedang kosong."
+          : undefined,
+    });
+  } catch (error) {
+    throw new Error(
+      error instanceof Error
+        ? error.message
+        : "Gagal memuat katalog real dari KirimKode.",
+    );
   }
-
-  return getFallbackCatalog(filters);
 }
 
 export async function getBalance(): Promise<Balance> {

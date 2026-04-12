@@ -15,7 +15,7 @@ export const supplierBenefits = [
     kicker: "Markup Aman",
     title: "Harga supplier dikendalikan di server, bukan di browser",
     description:
-      "Anda bisa menambahkan markup persen dan margin minimum dari environment variable sehingga lebih aman dan mudah diatur saat deploy.",
+      "Harga jual dihitung di server dengan markup 100%, jadi user hanya melihat harga final yang sudah Anda tentukan.",
   },
   {
     kicker: "Reseller Flow",
@@ -32,9 +32,9 @@ export const workflowSteps = [
       "Masukkan base URL, API key, dan path endpoint provider upstream ke environment variable Vercel.",
   },
   {
-    title: "Tampilkan katalog",
+    title: "Tampilkan katalog real",
     description:
-      "Route `/api/catalog` menormalisasi data provider lalu mengubahnya menjadi katalog yang rapi untuk website Anda.",
+      "Route `/api/catalog` mengambil data langsung dari KirimKode sesuai server dan negara yang dipilih user.",
   },
   {
     title: "Terima order & OTP",
@@ -55,8 +55,8 @@ export const apiCapabilities = [
       "Path katalog, order, status, dan cancel dapat diubah lewat env tanpa rombak struktur app.",
   },
   {
-    title: "Mock-first workflow",
+    title: "Live catalog relay",
     description:
-      "Saat env belum diisi, website tetap jalan dalam mode mock agar UI dan deployment bisa ditest lebih dulu.",
+      "Katalog live diambil langsung dari KirimKode sementara API key tetap aman di route Next.js Anda.",
   },
 ];

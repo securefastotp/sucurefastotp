@@ -8,22 +8,18 @@ import {
   supplierBenefits,
   workflowSteps,
 } from "@/lib/marketing";
-import { listMockServices } from "@/lib/mock-data";
+import { getCatalog } from "@/lib/provider";
 import { siteConfig } from "@/lib/site-config";
 
-const supportedServices = [
-  "WhatsApp",
-  "Telegram",
-  "Facebook",
-  "Instagram",
-  "TikTok",
-  "Google",
-  "Discord",
-  "Shopee",
-];
+export const dynamic = "force-dynamic";
 
-export default function Home() {
-  const featuredServices = listMockServices().slice(0, 6);
+export default async function Home() {
+  const featuredCatalog = await getCatalog({
+    serverId: "bimasakti",
+    countryId: 6,
+  }).catch(() => null);
+  const featuredServices = featuredCatalog?.services.slice(0, 6) ?? [];
+  const supportedServices = [...new Set(featuredServices.map((service) => service.service))];
   const baseUrl = siteConfig.url.replace(/\/$/, "");
 
   return (
@@ -43,9 +39,9 @@ export default function Home() {
                     Bangun website OTP sendiri, ambil supply via API key.
                   </h1>
                   <p className="max-w-2xl text-lg leading-8 text-ink/72 sm:text-xl">
-                    Template ini dibuat untuk model supplier seperti KirimKode:
-                    ada landing page, console stok, route order, dokumentasi
-                    API, dan adapter upstream yang aman untuk GitHub + Vercel.
+                    Website ini sekarang membaca katalog real dari KirimKode,
+                    menampilkan harga jual markup 100%, lalu memproses order
+                    setelah pembayaran Midtrans berhasil.
                   </p>
                 </div>
                 <div className="flex flex-col gap-3 sm:flex-row">
@@ -116,11 +112,11 @@ export default function Home() {
                   </div>
                 </div>
                 <pre className="code-block mt-5 overflow-x-auto text-sm">
-{`curl ${baseUrl}/api/catalog
+{`curl "${baseUrl}/api/catalog?server=bimasakti&countryId=6"
 
 curl -X POST ${baseUrl}/api/orders \\
   -H "Content-Type: application/json" \\
-  -d '{"serviceId":"wa-id","service":"WhatsApp","country":"Indonesia","price":2025,"currency":"IDR"}'
+  -d '{"serviceId":"bimasakti-6-wa","serviceCode":"wa","serverId":"bimasakti","service":"WhatsApp","country":"Indonesia","countryId":6,"price":3000,"currency":"IDR"}'
 
 curl ${baseUrl}/api/orders/order_xxxxx`}
                 </pre>
@@ -137,68 +133,77 @@ curl ${baseUrl}/api/orders/order_xxxxx`}
                   Layanan populer
                 </p>
                 <h2 className="mt-2 font-display text-3xl text-ink">
-                  Stok dan harga bisa langsung Anda markup
+                  Stok dan harga real dari katalog KirimKode
                 </h2>
               </div>
               <p className="max-w-2xl text-sm leading-7 text-ink/68">
-                Data di bawah memakai mock catalog bawaan agar website tetap
-                jalan sebelum provider upstream asli Anda dihubungkan.
+                Harga jual di website ini dihitung otomatis dengan markup 100%
+                dari harga upstream.
               </p>
             </div>
 
-            <div className="mt-8 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
-              {featuredServices.map((service) => (
-                <div
-                  key={service.id}
-                  className="rounded-[24px] border border-ink/8 bg-white/80 p-5"
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">
-                        {service.category}
-                      </p>
-                      <h3 className="mt-2 font-display text-2xl text-ink">
-                        {service.service}
-                      </h3>
-                      <p className="mt-1 text-sm text-ink/65">
-                        {service.country} • ETA {service.deliveryEtaSeconds}s
-                      </p>
+            {featuredServices.length > 0 ? (
+              <div className="mt-8 grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+                {featuredServices.map((service) => (
+                  <div
+                    key={service.id}
+                    className="rounded-[24px] border border-ink/8 bg-white/80 p-5"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand">
+                          {service.category}
+                        </p>
+                        <h3 className="mt-2 font-display text-2xl text-ink">
+                          {service.service}
+                        </h3>
+                        <p className="mt-1 text-sm text-ink/65">
+                          {service.country} | code {service.serviceCode}
+                        </p>
+                      </div>
+                      <div className="rounded-full bg-ink px-3 py-1 text-sm font-semibold text-white">
+                        {service.stock} stok
+                      </div>
                     </div>
-                    <div className="rounded-full bg-ink px-3 py-1 text-sm font-semibold text-white">
-                      {service.stock} stok
+
+                    <div className="mt-5 flex items-end justify-between">
+                      <div>
+                        <p className="text-xs uppercase tracking-[0.18em] text-ink/45">
+                          Harga jual
+                        </p>
+                        <p className="mt-1 font-display text-3xl text-ink">
+                          {formatCurrency(service.price, service.currency)}
+                        </p>
+                      </div>
+                      <div className="text-right text-sm leading-6 text-ink/55">
+                        <p>
+                          Modal {formatCurrency(service.upstreamPrice, service.currency)}
+                        </p>
+                        <p>{service.tags.join(" | ")}</p>
+                      </div>
                     </div>
                   </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mt-8 rounded-[24px] border border-ink/8 bg-white/80 px-5 py-6 text-sm leading-7 text-ink/68">
+                Katalog real KirimKode sedang kosong atau belum merespons, jadi
+                preview layanan di landing page belum bisa ditampilkan.
+              </div>
+            )}
 
-                  <div className="mt-5 flex items-end justify-between">
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.18em] text-ink/45">
-                        Harga jual
-                      </p>
-                      <p className="mt-1 font-display text-3xl text-ink">
-                        {formatCurrency(service.price, service.currency)}
-                      </p>
-                    </div>
-                    <div className="text-right text-sm leading-6 text-ink/55">
-                      <p>
-                        Modal {formatCurrency(service.upstreamPrice, service.currency)}
-                      </p>
-                      <p>{service.tags.join(" • ")}</p>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="mt-8 flex flex-wrap gap-3">
-              {supportedServices.map((service) => (
-                <span
-                  key={service}
-                  className="rounded-full border border-ink/10 bg-paper px-4 py-2 text-sm font-medium text-ink/75"
-                >
-                  {service}
-                </span>
-              ))}
-            </div>
+            {supportedServices.length > 0 ? (
+              <div className="mt-8 flex flex-wrap gap-3">
+                {supportedServices.map((service) => (
+                  <span
+                    key={service}
+                    className="rounded-full border border-ink/10 bg-paper px-4 py-2 text-sm font-medium text-ink/75"
+                  >
+                    {service}
+                  </span>
+                ))}
+              </div>
+            ) : null}
           </div>
         </section>
 
@@ -263,9 +268,9 @@ curl ${baseUrl}/api/orders/order_xxxxx`}
                   Push ke GitHub, sambungkan ke Vercel, lalu isi env provider.
                 </h2>
                 <p className="mt-4 max-w-2xl text-base leading-8 text-white/70">
-                  Project ini sudah disusun untuk flow yang Anda minta: source
-                  code mandiri, folder baru, server route aman, dan mudah
-                  dijadikan brand sendiri.
+                  Project ini sudah disusun untuk flow yang Anda minta: katalog
+                  real dari KirimKode, payment Midtrans, dan order OTP live
+                  dari website Anda sendiri.
                 </p>
               </div>
               <div className="rounded-[28px] border border-white/10 bg-white/6 p-5">

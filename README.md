@@ -32,15 +32,15 @@ UPSTREAM_BASE_URL=https://api.kirimkode.com/v1
 UPSTREAM_API_KEY=isi_api_key_anda
 UPSTREAM_API_KEY_HEADER=x-api-key
 UPSTREAM_BALANCE_PATH=/balance
-UPSTREAM_SERVICES_PATH=/services?page=1&limit=200
+UPSTREAM_SERVICES_PATH=/services
 UPSTREAM_HISTORY_PATH=/orders
 UPSTREAM_ORDER_PATH=/order
 UPSTREAM_ORDER_STATUS_PATH=/order/{id}/status
 UPSTREAM_CANCEL_PATH=/order/{id}/cancel
 UPSTREAM_ORDER_METHOD=POST
 UPSTREAM_CANCEL_METHOD=POST
-UPSTREAM_MARKUP_PERCENT=15
-UPSTREAM_MIN_MARGIN=500
+UPSTREAM_MARKUP_PERCENT=100
+UPSTREAM_MIN_MARGIN=0
 UPSTREAM_CURRENCY=IDR
 UPSTREAM_TIMEOUT_MS=15000
 
@@ -63,4 +63,5 @@ MIDTRANS_SERVER_KEY=isi_server_key_midtrans
 - Flow Midtrans di template ini memakai Snap + in-memory payment store. Untuk production serius, simpan payment session dan aktivasi order ke database.
 - Untuk production volume tinggi, simpan context order ke database atau Redis agar status order tetap stabil antar serverless instance.
 - Dari pengujian live 12 April 2026, KirimKode API menerima auth via header `x-api-key`, memakai `GET /balance`, `GET /orders`, `POST /order`, `GET /order/{id}/status`, dan `POST /order/{id}/cancel`.
-- Endpoint `GET /services` dari KirimKode saat diuji sempat mengembalikan `FETCH_FAILED`, sehingga default di project ini menggunakan query `?page=1&limit=200` agar respons lebih stabil.
+- Mode live sekarang hanya memakai katalog real dari endpoint `GET /services` KirimKode. Jika upstream kosong atau error, website akan menampilkan status asli upstream tanpa katalog buatan.
+- Harga jual sekarang dikunci ke markup 100% dari harga upstream.
