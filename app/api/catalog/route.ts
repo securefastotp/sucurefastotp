@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getCatalog } from "@/lib/provider";
 
 export const dynamic = "force-dynamic";
+export const preferredRegion = "sin1";
 
 export async function GET(request: Request) {
   try {

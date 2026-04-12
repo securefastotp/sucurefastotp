@@ -8,6 +8,7 @@ type RouteContext = {
 };
 
 export const dynamic = "force-dynamic";
+export const preferredRegion = "sin1";
 
 export async function GET(_request: Request, context: RouteContext) {
   const { orderId } = await context.params;
