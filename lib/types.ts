@@ -18,6 +18,15 @@ export type Service = {
   tags: string[];
 };
 
+export type CountryOption = {
+  id: number;
+  name: string;
+  code: string;
+  flagEmoji?: string;
+  availableServices: number;
+  serverId: string;
+};
+
 export type CatalogResponse = {
   updatedAt: string;
   mode: ProviderMode;

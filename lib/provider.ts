@@ -13,6 +13,7 @@ import { computeRetailPrice, getPricingConfig } from "@/lib/pricing";
 import type {
   Balance,
   CatalogResponse,
+  CountryOption,
   Order,
   OrderHistoryResponse,
   RuntimeStatus,
@@ -59,6 +60,22 @@ const defaultCountry = {
   id: 6,
   name: "Indonesia",
   code: "ID",
+  flagEmoji: "🇮🇩",
+};
+
+const countryMetaMap: Record<
+  number,
+  {
+    name: string;
+    code: string;
+    flagEmoji?: string;
+  }
+> = {
+  6: {
+    name: "Indonesia",
+    code: "ID",
+    flagEmoji: "🇮🇩",
+  },
 };
 
 const serviceNameMap: Record<string, string> = {
@@ -76,9 +93,22 @@ const orderContextGlobal = globalThis as typeof globalThis & {
   __upstreamOrderContext?: Map<string, OrderContext>;
 };
 
+const countryCacheGlobal = globalThis as typeof globalThis & {
+  __upstreamCountryCache?: Map<
+    string,
+    {
+      countries: CountryOption[];
+      expiresAt: number;
+    }
+  >;
+};
+
 const orderContextStore =
   orderContextGlobal.__upstreamOrderContext ?? new Map<string, OrderContext>();
 orderContextGlobal.__upstreamOrderContext = orderContextStore;
+const countryCacheStore =
+  countryCacheGlobal.__upstreamCountryCache ?? new Map<string, { countries: CountryOption[]; expiresAt: number }>();
+countryCacheGlobal.__upstreamCountryCache = countryCacheStore;
 
 function getProviderConfig() {
   const apiKey = process.env.UPSTREAM_API_KEY;
@@ -106,6 +136,10 @@ function getProviderConfig() {
     timeoutMs: Number(process.env.UPSTREAM_TIMEOUT_MS ?? 15000),
     bimasaktiCode: process.env.UPSTREAM_SERVER_BIMASAKTI_CODE ?? "api1",
     marsCode: process.env.UPSTREAM_SERVER_MARS_CODE ?? "api2",
+    countryScanIds:
+      process.env.UPSTREAM_COUNTRY_SCAN_IDS ??
+      "1,2,4,5,6,7,8,9,10,11,12,13,14,15,16,21,25,31,32,34,35,36,37,39,40",
+    countryCacheTtlMs: Number(process.env.UPSTREAM_COUNTRY_CACHE_TTL_MS ?? 1800000),
   } as const;
 }
 
@@ -164,15 +198,33 @@ function resolveCountryId(countryId?: number | string) {
 function getCountryMeta(countryId?: number | string) {
   const resolvedId = resolveCountryId(countryId);
 
-  if (resolvedId === defaultCountry.id) {
-    return defaultCountry;
+  const knownMeta = countryMetaMap[resolvedId];
+
+  if (knownMeta) {
+    return {
+      id: resolvedId,
+      name: knownMeta.name,
+      code: knownMeta.code,
+      flagEmoji: knownMeta.flagEmoji,
+    };
   }
 
   return {
     id: resolvedId,
     name: `Country ${resolvedId}`,
     code: `C${resolvedId}`,
+    flagEmoji: "🏳️",
   };
+}
+
+function getCountryScanIds() {
+  const raw = getProviderConfig().countryScanIds;
+  const parsed = raw
+    .split(",")
+    .map((item) => Number(item.trim()))
+    .filter((item) => Number.isFinite(item) && item > 0);
+
+  return parsed.length > 0 ? parsed : [defaultCountry.id];
 }
 
 function uniqueSorted(values: string[]) {
@@ -461,6 +513,25 @@ async function fetchUpstream(
   return payload;
 }
 
+async function fetchServicesPayload(serverId: string, countryId?: number) {
+  const config = getProviderConfig();
+  const path = buildPathWithQuery(config.servicesPath, {
+    server: resolveUpstreamServer(serverId),
+    country: countryId,
+  });
+
+  let payload = await fetchUpstream(path);
+  let items = extractArray(payload);
+
+  if (items.length === 0) {
+    await new Promise((resolve) => setTimeout(resolve, 180));
+    payload = await fetchUpstream(path);
+    items = extractArray(payload);
+  }
+
+  return payload;
+}
+
 function replaceOrderId(pathTemplate: string, orderId: string) {
   return pathTemplate
     .replace("{id}", encodeURIComponent(orderId))
@@ -673,12 +744,7 @@ export async function getCatalog(filters: CatalogFilters = {}) {
   try {
     const serverId = resolveServerId(filters.serverId);
     const countryId = resolveCountryId(filters.countryId);
-    const payload = await fetchUpstream(
-      buildPathWithQuery(config.servicesPath, {
-        server: resolveUpstreamServer(serverId),
-        country: countryId,
-      }),
-    );
+    const payload = await fetchServicesPayload(serverId, countryId);
     const services = extractArray(payload)
       .map((item) => normalizeService(item, { serverId, countryId }))
       .filter((service): service is Service => Boolean(service));
@@ -698,6 +764,81 @@ export async function getCatalog(filters: CatalogFilters = {}) {
         : "Gagal memuat katalog real dari KirimKode.",
     );
   }
+}
+
+export async function getCountries(serverId?: string): Promise<CountryOption[]> {
+  const config = getProviderConfig();
+  const resolvedServerId = resolveServerId(serverId);
+
+  if (config.mode === "mock") {
+    return [
+      {
+        id: defaultCountry.id,
+        name: defaultCountry.name,
+        code: defaultCountry.code,
+        flagEmoji: defaultCountry.flagEmoji,
+        availableServices: listMockServices({ serverId: resolvedServerId, countryId: defaultCountry.id }).length,
+        serverId: resolvedServerId,
+      },
+    ];
+  }
+
+  const cacheKey = resolvedServerId;
+  const cached = countryCacheStore.get(cacheKey);
+
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.countries;
+  }
+
+  const ids = getCountryScanIds();
+  const results = await Promise.all(
+    ids.map(async (countryId): Promise<CountryOption | null> => {
+      try {
+        const payload = await fetchServicesPayload(resolvedServerId, countryId);
+        const items = extractArray(payload);
+
+        if (items.length === 0) {
+          return null;
+        }
+
+        const meta = getCountryMeta(countryId);
+
+        return {
+          id: countryId,
+          name: meta.name,
+          code: meta.code,
+          flagEmoji: meta.flagEmoji,
+          availableServices: items.length,
+          serverId: resolvedServerId,
+        } satisfies CountryOption;
+      } catch {
+        return null;
+      }
+    }),
+  );
+
+  const countries = results
+    .filter((item): item is NonNullable<typeof item> => item !== null)
+    .sort((left, right) => {
+      if (left.id === defaultCountry.id) {
+        return -1;
+      }
+
+      if (right.id === defaultCountry.id) {
+        return 1;
+      }
+
+      return left.id - right.id;
+    });
+
+  countryCacheStore.set(cacheKey, {
+    countries,
+    expiresAt:
+      Date.now() +
+      (Number.isFinite(config.countryCacheTtlMs) ? config.countryCacheTtlMs : 1800000),
+  });
+
+  return countries;
 }
 
 export async function getBalance(): Promise<Balance> {
