@@ -27,8 +27,13 @@ type MidtransTransactionStatus = {
   status_message?: string;
 };
 
+function normalizeEnvValue(value?: string) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
 function getMidtransEnvironment(): MidtransEnvironment {
-  return process.env.MIDTRANS_ENVIRONMENT === "production"
+  return normalizeEnvValue(process.env.MIDTRANS_ENVIRONMENT).toLowerCase() ===
+    "production"
     ? "production"
     : "sandbox";
 }
@@ -39,8 +44,8 @@ export function getMidtransConfig() {
 
   return {
     environment,
-    serverKey: process.env.MIDTRANS_SERVER_KEY ?? "",
-    clientKey: process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY ?? "",
+    serverKey: normalizeEnvValue(process.env.MIDTRANS_SERVER_KEY),
+    clientKey: normalizeEnvValue(process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY),
     apiBaseUrl: isProduction
       ? "https://api.midtrans.com"
       : "https://api.sandbox.midtrans.com",
@@ -48,6 +53,36 @@ export function getMidtransConfig() {
       ? "https://app.midtrans.com/snap/snap.js"
       : "https://app.sandbox.midtrans.com/snap/snap.js",
   };
+}
+
+function getMidtransConfigIssue(config: ReturnType<typeof getMidtransConfig>) {
+  if (config.environment === "production") {
+    if (
+      /^SB-Mid-server-/i.test(config.serverKey) ||
+      /^SB-Mid-client-/i.test(config.clientKey)
+    ) {
+      return "MIDTRANS_ENVIRONMENT=production tetapi key yang dipakai masih sandbox. Gunakan Mid-server- dan Mid-client- production dari merchant yang sama.";
+    }
+
+    if (config.serverKey && !/^Mid-server-/i.test(config.serverKey)) {
+      return "Format MIDTRANS_SERVER_KEY tidak sesuai. Untuk production gunakan key yang diawali Mid-server-.";
+    }
+
+    if (config.clientKey && !/^Mid-client-/i.test(config.clientKey)) {
+      return "Format NEXT_PUBLIC_MIDTRANS_CLIENT_KEY tidak sesuai. Untuk production gunakan key yang diawali Mid-client-.";
+    }
+  }
+
+  if (config.environment === "sandbox") {
+    if (
+      /^Mid-server-/i.test(config.serverKey) ||
+      /^Mid-client-/i.test(config.clientKey)
+    ) {
+      return "MIDTRANS_ENVIRONMENT=sandbox tetapi key yang dipakai terlihat production. Gunakan SB-Mid-server- dan SB-Mid-client-.";
+    }
+  }
+
+  return null;
 }
 
 function buildBasicAuth(serverKey: string) {
@@ -101,6 +136,12 @@ async function requestMidtrans(
     throw new Error(
       "Midtrans belum dikonfigurasi. Isi MIDTRANS_SERVER_KEY di Vercel.",
     );
+  }
+
+  const configIssue = getMidtransConfigIssue(config);
+
+  if (configIssue) {
+    throw new Error(configIssue);
   }
 
   const response = await fetch(`${config.apiBaseUrl}${path}`, {
