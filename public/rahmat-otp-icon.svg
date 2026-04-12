@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none">
+  <defs>
+    <linearGradient id="rahmat-bg" x1="18" x2="108" y1="14" y2="112" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#f5fdff" />
+      <stop offset="0.22" stop-color="#9ff0ff" />
+      <stop offset="0.58" stop-color="#4f9eff" />
+      <stop offset="1" stop-color="#845dff" />
+    </linearGradient>
+    <linearGradient id="rahmat-core" x1="42" x2="89" y1="37" y2="90" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff0ac" />
+      <stop offset="0.24" stop-color="#ff9e67" />
+      <stop offset="0.64" stop-color="#53ddff" />
+      <stop offset="1" stop-color="#aa78ff" />
+    </linearGradient>
+    <radialGradient id="rahmat-aura" cx="0" cy="0" r="1" gradientTransform="translate(64 64) rotate(90) scale(52)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#dbfbff" stop-opacity=".98" />
+      <stop offset="1" stop-color="#dbfbff" stop-opacity="0" />
+    </radialGradient>
+  </defs>
+  <rect width="128" height="128" rx="34" fill="#081a37" />
+  <rect x="6" y="6" width="116" height="116" rx="28" fill="url(#rahmat-aura)" fill-opacity=".24" />
+  <path d="M64 13.5 99.5 27v31.5c0 24.4-14.5 46.1-35.5 56.7C43 104.6 28.5 82.9 28.5 58.5V27L64 13.5Z" fill="url(#rahmat-bg)" fill-opacity=".2"/>
+  <path d="M64 25.5 88.4 34.8v23.3c0 17.2-10.1 32.9-24.4 41.8-14.3-8.9-24.4-24.6-24.4-41.8V34.8L64 25.5Z" stroke="url(#rahmat-bg)" stroke-width="8.2" stroke-linejoin="round"/>
+  <path d="m49.2 80.4 14.3-35 11 16.9 10.6-5.3" stroke="url(#rahmat-core)" stroke-width="9.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="m63.6 62.3 19.1 17.5" stroke="url(#rahmat-core)" stroke-width="9" stroke-linecap="round"/>
+  <circle cx="89.6" cy="36.9" r="6.6" fill="#fff2b2"/>
+  <circle cx="38.4" cy="44.5" r="5.5" fill="#87f0ff"/>
+  <circle cx="43.3" cy="86" r="4.8" fill="#b2fbff" fill-opacity=".72"/>
+</svg>

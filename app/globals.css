@@ -95,6 +95,51 @@ a {
   }
 }
 
+@keyframes lux-spectrum {
+  0%, 100% {
+    filter: hue-rotate(0deg) saturate(1);
+  }
+
+  32% {
+    filter: hue-rotate(12deg) saturate(1.16);
+  }
+
+  68% {
+    filter: hue-rotate(-14deg) saturate(1.22);
+  }
+}
+
+@keyframes lux-breathe {
+  0%, 100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.035);
+  }
+}
+
+@keyframes lux-beam {
+  0% {
+    transform: translate3d(-145%, 0, 0) skewX(-22deg);
+    opacity: 0;
+  }
+
+  18% {
+    opacity: 0.42;
+  }
+
+  42% {
+    transform: translate3d(165%, 0, 0) skewX(-22deg);
+    opacity: 0;
+  }
+
+  100% {
+    transform: translate3d(165%, 0, 0) skewX(-22deg);
+    opacity: 0;
+  }
+}
+
 @layer components {
   .section-shell {
     @apply mx-auto w-full max-w-7xl px-5 sm:px-8;
@@ -206,5 +251,97 @@ a {
 
   .lux-swipe-pill {
     @apply flex items-center gap-3 rounded-full border border-white/14 bg-[linear-gradient(180deg,rgba(6,18,42,0.94),rgba(8,31,66,0.92))] px-4 py-3 text-xs font-semibold text-white shadow-[0_22px_50px_-26px_rgba(2,8,25,0.98)] backdrop-blur-xl;
+  }
+
+  .lux-brand-frame {
+    @apply relative isolate overflow-hidden;
+    animation: lux-breathe 4.6s ease-in-out infinite;
+  }
+
+  .lux-brand-frame::before {
+    content: "";
+    position: absolute;
+    inset: -18%;
+    border-radius: inherit;
+    background: conic-gradient(from 210deg, rgba(255, 255, 255, 0.08), rgba(129, 231, 255, 0.64), rgba(88, 143, 255, 0.48), rgba(192, 120, 255, 0.44), rgba(255, 255, 255, 0.08));
+    filter: blur(14px);
+    opacity: 0.65;
+    animation: lux-orbit 12s linear infinite;
+  }
+
+  .lux-brand-frame::after {
+    content: "";
+    position: absolute;
+    inset: 1px;
+    border-radius: inherit;
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.16), rgba(98, 202, 255, 0.08), rgba(12, 31, 62, 0.12));
+  }
+
+  .lux-brand-mark {
+    position: relative;
+    z-index: 1;
+    filter: drop-shadow(0 0 18px rgba(186, 246, 255, 0.48)) drop-shadow(0 0 28px rgba(90, 156, 255, 0.32));
+    animation: lux-spectrum 6.2s ease-in-out infinite, lux-float 3.2s ease-in-out infinite;
+  }
+
+  .lux-brand-spark {
+    @apply absolute z-[2] rounded-full blur-[1px];
+    animation: lux-pulse 2.8s ease-in-out infinite;
+  }
+
+  .lux-brand-spark-a {
+    top: 10px;
+    right: 9px;
+    height: 7px;
+    width: 7px;
+    background: #fff3a8;
+    box-shadow: 0 0 16px rgba(255, 237, 153, 0.92);
+  }
+
+  .lux-brand-spark-b {
+    bottom: 12px;
+    left: 10px;
+    height: 6px;
+    width: 6px;
+    background: #93fbff;
+    box-shadow: 0 0 16px rgba(147, 251, 255, 0.92);
+    animation-delay: -1.2s;
+  }
+
+  .lux-premium-card {
+    @apply relative overflow-hidden;
+  }
+
+  .lux-premium-card::before {
+    content: "";
+    position: absolute;
+    inset: auto -16% -44% auto;
+    height: 12rem;
+    width: 12rem;
+    border-radius: 9999px;
+    background: radial-gradient(circle, rgba(135, 227, 255, 0.22), rgba(92, 147, 255, 0.08) 52%, transparent 72%);
+    filter: blur(8px);
+    pointer-events: none;
+  }
+
+  .lux-premium-card::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    width: 42%;
+    background: linear-gradient(90deg, transparent, rgba(226, 249, 255, 0.16), transparent);
+    transform: translate3d(-145%, 0, 0) skewX(-22deg);
+    animation: lux-beam 6.4s ease-in-out infinite;
+    pointer-events: none;
+  }
+
+  .lux-premium-card > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .lux-premium-surface {
+    @apply relative overflow-hidden rounded-[24px] border border-white/10 bg-[#102846];
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
   }
 }

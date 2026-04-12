@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { siteConfig } from "@/lib/site-config";
 import "./globals.css";
 
@@ -9,6 +9,7 @@ export const metadata: Metadata = {
     template: `%s | ${siteConfig.name}`,
   },
   description: siteConfig.description,
+  applicationName: siteConfig.name,
   openGraph: {
     title: siteConfig.name,
     description: siteConfig.description,
@@ -17,6 +18,21 @@ export const metadata: Metadata = {
     locale: "id_ID",
     type: "website",
   },
+  icons: {
+    icon: [
+      {
+        url: "/rahmat-otp-icon.svg",
+        type: "image/svg+xml",
+      },
+    ],
+    shortcut: "/rahmat-otp-icon.svg",
+    apple: "/rahmat-otp-icon.svg",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#348cff",
+  colorScheme: "dark",
 };
 
 export default function RootLayout({

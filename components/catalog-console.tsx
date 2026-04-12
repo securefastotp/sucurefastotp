@@ -7,6 +7,7 @@ import {
   useDeferredValue,
   useEffect,
   useEffectEvent,
+  useId,
   useMemo,
   useState,
 } from "react";
@@ -88,6 +89,12 @@ function ShellIcon({
 }
 
 function BrandIcon({ className }: { className?: string }) {
+  const brandId = useId().replace(/:/g, "");
+  const shellGradientId = `${brandId}-shell`;
+  const coreGradientId = `${brandId}-core`;
+  const auraGradientId = `${brandId}-aura`;
+  const flareGradientId = `${brandId}-flare`;
+
   return (
     <svg
       aria-hidden="true"
@@ -95,29 +102,153 @@ function BrandIcon({ className }: { className?: string }) {
       fill="none"
       viewBox="0 0 24 24"
     >
+      <defs>
+        <linearGradient id={shellGradientId} x1="4" x2="20" y1="4" y2="20" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#f8fbff">
+            <animate
+              attributeName="stop-color"
+              dur="6.2s"
+              repeatCount="indefinite"
+              values="#f8fbff;#9cefff;#f8fbff"
+            />
+          </stop>
+          <stop offset="0.36" stopColor="#7ae3ff">
+            <animate
+              attributeName="stop-color"
+              dur="4.8s"
+              repeatCount="indefinite"
+              values="#7ae3ff;#67c1ff;#b988ff;#7ae3ff"
+            />
+          </stop>
+          <stop offset="0.7" stopColor="#5b9dff">
+            <animate
+              attributeName="stop-color"
+              dur="5.4s"
+              repeatCount="indefinite"
+              values="#5b9dff;#63d6ff;#5b9dff"
+            />
+          </stop>
+          <stop offset="1" stopColor="#935dff">
+            <animate
+              attributeName="stop-color"
+              dur="5s"
+              repeatCount="indefinite"
+              values="#935dff;#ff7db3;#935dff"
+            />
+          </stop>
+        </linearGradient>
+        <linearGradient id={coreGradientId} x1="8" x2="16.8" y1="7" y2="17.6" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#ffe89d">
+            <animate
+              attributeName="stop-color"
+              dur="4.6s"
+              repeatCount="indefinite"
+              values="#ffe89d;#fff5c8;#ffe89d"
+            />
+          </stop>
+          <stop offset="0.28" stopColor="#ff9f67">
+            <animate
+              attributeName="stop-color"
+              dur="5.4s"
+              repeatCount="indefinite"
+              values="#ff9f67;#ff7291;#ff9f67"
+            />
+          </stop>
+          <stop offset="0.62" stopColor="#53dbff">
+            <animate
+              attributeName="stop-color"
+              dur="4.2s"
+              repeatCount="indefinite"
+              values="#53dbff;#9af7ff;#53dbff"
+            />
+          </stop>
+          <stop offset="1" stopColor="#7d67ff">
+            <animate
+              attributeName="stop-color"
+              dur="4.8s"
+              repeatCount="indefinite"
+              values="#7d67ff;#aa76ff;#7d67ff"
+            />
+          </stop>
+        </linearGradient>
+        <radialGradient id={auraGradientId} cx="0" cy="0" r="1" gradientTransform="translate(12 12) rotate(90) scale(9.5)" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#d8fdff" stopOpacity="0.95" />
+          <stop offset="1" stopColor="#d8fdff" stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id={flareGradientId} cx="0" cy="0" r="1" gradientTransform="translate(16.8 7.3) rotate(90) scale(3.2)" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#fff8bf" stopOpacity="0.95" />
+          <stop offset="1" stopColor="#fff8bf" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <circle cx="12" cy="12" fill={`url(#${auraGradientId})`} r="9.4">
+        <animate
+          attributeName="opacity"
+          dur="4.2s"
+          repeatCount="indefinite"
+          values="0.92;0.68;0.96;0.92"
+        />
+      </circle>
+      <circle cx="16.8" cy="7.2" fill={`url(#${flareGradientId})`} r="3.1">
+        <animate
+          attributeName="opacity"
+          dur="3s"
+          repeatCount="indefinite"
+          values="0.92;0.38;0.92"
+        />
+      </circle>
       <path
         d="M12 2.8l6.8 2.7v6.1c0 4.7-2.8 8.9-6.8 10.9-4-2-6.8-6.2-6.8-10.9V5.5L12 2.8z"
-        fill="currentColor"
-        fillOpacity=".18"
+        fill={`url(#${shellGradientId})`}
+        fillOpacity=".2"
       />
       <path
         d="M12 5.1l4.6 1.8v4.4c0 3.5-1.9 6.7-4.6 8.5-2.7-1.8-4.6-5-4.6-8.5V6.9L12 5.1z"
-        stroke="currentColor"
+        stroke={`url(#${shellGradientId})`}
         strokeWidth="1.6"
       />
       <path
-        d="M10 14.6V8.4h2.6c1.7 0 2.7 1 2.7 2.5 0 1.4-1 2.4-2.7 2.4h-1.1"
-        stroke="currentColor"
+        d="M9.1 15.1l2.7-6.6 2.1 3.2 2-1"
+        stroke={`url(#${coreGradientId})`}
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="1.7"
+        strokeWidth="1.8"
       />
       <path
-        d="M11.4 12.3l3.3 3.2"
-        stroke="currentColor"
+        d="M11.8 11.7l3.6 3.3"
+        stroke={`url(#${coreGradientId})`}
         strokeLinecap="round"
-        strokeWidth="1.7"
+        strokeWidth="1.8"
       />
+      <circle cx="16.8" cy="7.2" fill="#fff2ae" r="1.1">
+        <animate
+          attributeName="r"
+          dur="2.6s"
+          repeatCount="indefinite"
+          values="1.1;1.35;1.1"
+        />
+      </circle>
+      <circle cx="7.1" cy="8.3" fill="#7be8ff" fillOpacity=".95" r="0.9">
+        <animate
+          attributeName="opacity"
+          dur="2.2s"
+          repeatCount="indefinite"
+          values="0.95;0.4;0.95"
+        />
+      </circle>
+      <circle cx="8.3" cy="16.4" fill="#9ef9ff" fillOpacity=".66" r="0.75">
+        <animate
+          attributeName="r"
+          dur="3.4s"
+          repeatCount="indefinite"
+          values="0.75;1.05;0.75"
+        />
+        <animate
+          attributeName="opacity"
+          dur="3.4s"
+          repeatCount="indefinite"
+          values="0.66;0.2;0.66"
+        />
+      </circle>
     </svg>
   );
 }
@@ -1068,8 +1199,10 @@ export function CatalogConsole({
             <span className="lux-icon-halo" />
             <span className="lux-icon-ring lux-icon-ring-a" />
             <span className="lux-icon-ring lux-icon-ring-b" />
-            <div className="relative flex h-20 w-20 items-center justify-center rounded-[28px] bg-[linear-gradient(145deg,#f8feff,#b6ecff_42%,#4b96ff)] text-[#0f2d5f] shadow-[0_24px_70px_-34px_rgba(103,201,255,1)]">
-              <BrandIcon className="h-10 w-10 animate-[lux-float_2.9s_ease-in-out_infinite]" />
+            <div className="lux-brand-frame relative flex h-20 w-20 items-center justify-center rounded-[28px] bg-[linear-gradient(145deg,#f8feff,#b6ecff_42%,#4b96ff)] text-[#0f2d5f] shadow-[0_24px_70px_-34px_rgba(103,201,255,1)]">
+              <span className="lux-brand-spark lux-brand-spark-a" />
+              <span className="lux-brand-spark lux-brand-spark-b" />
+              <BrandIcon className="lux-brand-mark h-10 w-10" />
             </div>
             <p className="mt-6 text-[0.7rem] font-semibold uppercase tracking-[0.32em] text-sky-100/62">
               Luxury Access
@@ -1101,8 +1234,10 @@ export function CatalogConsole({
                 <span className="lux-icon-halo" />
                 <span className="lux-icon-ring lux-icon-ring-a" />
                 <span className="lux-icon-ring lux-icon-ring-b" />
-                <ShellIcon className="relative h-15 w-15 rounded-[24px] bg-[linear-gradient(145deg,#f3fdff,#a8e8ff_44%,#4b93ff)] text-[#113663] shadow-[0_20px_40px_-26px_rgba(76,171,255,0.95)]">
-                  <BrandIcon className="h-8 w-8 animate-[lux-float_3.4s_ease-in-out_infinite]" />
+                <ShellIcon className="lux-brand-frame relative h-15 w-15 rounded-[24px] bg-[linear-gradient(145deg,#f3fdff,#a8e8ff_44%,#4b93ff)] text-[#113663] shadow-[0_20px_40px_-26px_rgba(76,171,255,0.95)]">
+                  <span className="lux-brand-spark lux-brand-spark-a" />
+                  <span className="lux-brand-spark lux-brand-spark-b" />
+                  <BrandIcon className="lux-brand-mark h-8 w-8" />
                 </ShellIcon>
               </div>
               <div>
@@ -1576,7 +1711,7 @@ export function CatalogConsole({
         {payment ? (
           <section
             id="payment-zone"
-            className="lux-rise lux-panel mt-4 rounded-[28px] border border-white/14 bg-[linear-gradient(180deg,rgba(15,46,93,0.95),rgba(10,34,72,0.96))] p-4 sm:p-5"
+            className="lux-rise lux-panel lux-premium-card mt-4 rounded-[28px] border border-white/14 bg-[linear-gradient(180deg,rgba(15,46,93,0.95),rgba(10,34,72,0.96))] p-4 sm:p-5"
           >
             <div className="flex items-center justify-between gap-4">
               <div>
@@ -1628,7 +1763,7 @@ export function CatalogConsole({
 
         <section
           id="otp-zone"
-          className="lux-rise lux-panel mt-4 rounded-[28px] border border-white/14 bg-[linear-gradient(180deg,rgba(15,46,93,0.95),rgba(10,34,72,0.96))] p-4 sm:p-5"
+          className="lux-rise lux-panel lux-premium-card mt-4 rounded-[28px] border border-white/14 bg-[linear-gradient(180deg,rgba(15,46,93,0.95),rgba(10,34,72,0.96))] p-4 sm:p-5"
         >
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -1657,7 +1792,7 @@ export function CatalogConsole({
 
           {order ? (
             <div className="mt-4">
-              <div className="rounded-[24px] bg-[#102846] p-4">
+              <div className="lux-premium-surface p-4">
                 <p className="text-sm text-sky-50/55">Nomor</p>
                 <p className="mt-1 break-all text-xl font-semibold text-white">
                   {order.phoneNumber}
@@ -1703,7 +1838,7 @@ export function CatalogConsole({
               </div>
             </div>
           ) : (
-            <div className="mt-4 rounded-[24px] bg-[#102846] px-4 py-8 text-center text-sm leading-7 text-sky-50/58">
+            <div className="lux-premium-surface mt-4 px-4 py-8 text-center text-sm leading-7 text-sky-50/58">
               Setelah checkout Midtrans berhasil, website akan membuat order ke
               KirimKode lalu menampilkan nomor dan OTP di sini.
             </div>
