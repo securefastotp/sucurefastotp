@@ -55,12 +55,20 @@ function buildBasicAuth(serverKey: string) {
 }
 
 function getErrorMessage(payload: unknown, fallback: string) {
+  const normalizeMessage = (message: string) => {
+    if (/unauthorized transaction/i.test(message)) {
+      return "Midtrans menolak kredensial checkout. Pastikan MIDTRANS_SERVER_KEY dan NEXT_PUBLIC_MIDTRANS_CLIENT_KEY production di Vercel berasal dari akun merchant yang sama.";
+    }
+
+    return message;
+  };
+
   if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
     return fallback;
   }
 
   if ("status_message" in payload && typeof payload.status_message === "string") {
-    return payload.status_message;
+    return normalizeMessage(payload.status_message);
   }
 
   if ("error_messages" in payload && Array.isArray(payload.error_messages)) {
@@ -69,12 +77,12 @@ function getErrorMessage(payload: unknown, fallback: string) {
     );
 
     if (message) {
-      return message;
+      return normalizeMessage(message);
     }
   }
 
   if ("message" in payload && typeof payload.message === "string") {
-    return payload.message;
+    return normalizeMessage(payload.message);
   }
 
   return fallback;

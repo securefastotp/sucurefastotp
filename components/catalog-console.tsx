@@ -964,6 +964,19 @@ export function CatalogConsole({
     window.localStorage.setItem("otp-payment-id", paymentId);
   }
 
+  function scrollToPaymentZone() {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.setTimeout(() => {
+      document.getElementById("payment-zone")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 80);
+  }
+
   async function syncPayment(paymentId: string) {
     setIsRefreshingPayment(true);
     setPaymentError(null);
@@ -1003,22 +1016,33 @@ export function CatalogConsole({
   }
 
   function openSnap(currentPayment: PaymentRecord) {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    if (window.snap && currentPayment.snapToken) {
+      window.snap.pay(currentPayment.snapToken, {
+        onClose: () => void syncPayment(currentPayment.id),
+        onError: () => void syncPayment(currentPayment.id),
+        onPending: () => void syncPayment(currentPayment.id),
+        onSuccess: () => void syncPayment(currentPayment.id),
+      });
+      return;
+    }
+
+    if (currentPayment.redirectUrl) {
+      window.location.assign(currentPayment.redirectUrl);
+      return;
+    }
+
     if (!currentPayment.snapToken) {
       setPaymentError("Snap token Midtrans belum tersedia.");
+      scrollToPaymentZone();
       return;
     }
 
-    if (!window.snap) {
-      setPaymentError("Snap Midtrans belum siap dimuat.");
-      return;
-    }
-
-    window.snap.pay(currentPayment.snapToken, {
-      onClose: () => void syncPayment(currentPayment.id),
-      onError: () => void syncPayment(currentPayment.id),
-      onPending: () => void syncPayment(currentPayment.id),
-      onSuccess: () => void syncPayment(currentPayment.id),
-    });
+    setPaymentError("Snap Midtrans belum siap dimuat.");
+    scrollToPaymentZone();
   }
 
   async function handleCreateCheckout() {
@@ -1036,11 +1060,13 @@ export function CatalogConsole({
       );
       setPayment(createdPayment);
       rememberPaymentId(createdPayment.id);
+      scrollToPaymentZone();
       openSnap(createdPayment);
     } catch (error) {
       setPaymentError(
         error instanceof Error ? error.message : "Gagal membuat checkout.",
       );
+      scrollToPaymentZone();
     } finally {
       setIsCreatingPayment(false);
     }
@@ -1143,6 +1169,33 @@ export function CatalogConsole({
     return () => window.clearInterval(intervalId);
   }, [order?.id, order?.status]);
 
+  useEffect(() => {
+    if (!isPaymentReady || typeof window === "undefined") {
+      return;
+    }
+
+    if (window.snap) {
+      setIsSnapReady(true);
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      if (window.snap) {
+        setIsSnapReady(true);
+        window.clearInterval(intervalId);
+      }
+    }, 350);
+
+    const timeoutId = window.setTimeout(() => {
+      window.clearInterval(intervalId);
+    }, 12000);
+
+    return () => {
+      window.clearInterval(intervalId);
+      window.clearTimeout(timeoutId);
+    };
+  }, [isPaymentReady]);
+
   const filteredServices =
     catalog?.services.filter((service) =>
       `${service.service} ${service.serviceCode}`
@@ -1160,6 +1213,12 @@ export function CatalogConsole({
       {isPaymentReady ? (
         <Script
           data-client-key={midtransClientKey}
+          onError={() =>
+            setPaymentError(
+              "Script Midtrans gagal dimuat. Coba refresh halaman atau buka ulang checkout.",
+            )
+          }
+          onLoad={() => setIsSnapReady(true)}
           onReady={() => setIsSnapReady(true)}
           src={snapScriptUrl}
           strategy="afterInteractive"
@@ -1573,7 +1632,7 @@ export function CatalogConsole({
 
           <button
             className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-full bg-[linear-gradient(135deg,#e2f7ff,#93dcff_34%,#5cadff_67%,#3d7eff)] px-5 text-[13px] font-medium text-[#0b2248] shadow-[0_18px_35px_-22px_rgba(64,129,255,0.95)] disabled:cursor-not-allowed disabled:opacity-60"
-            disabled={!selectedService || !isPaymentReady || isCreatingPayment || !isSnapReady}
+            disabled={!selectedService || !isPaymentReady || isCreatingPayment}
             onClick={() => {
               playUiFeedback("confirm");
               void handleCreateCheckout();
@@ -1632,7 +1691,7 @@ export function CatalogConsole({
               </button>
               <button
                 className="inline-flex h-11 w-full items-center justify-center rounded-full border border-white/10 bg-[#102846] px-4 text-[12px] font-medium text-white disabled:opacity-60"
-                disabled={!payment.snapToken || !isSnapReady}
+                disabled={!payment.redirectUrl && (!payment.snapToken || !isSnapReady)}
                 onClick={() => {
                   playUiFeedback("confirm");
                   openSnap(payment);
