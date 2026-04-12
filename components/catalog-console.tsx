@@ -96,15 +96,27 @@ function BrandIcon({ className }: { className?: string }) {
       viewBox="0 0 24 24"
     >
       <path
-        d="M12 2.5L5.8 12.1h4.3l-1.3 9.4 7.9-11h-4.5L12 2.5z"
+        d="M12 2.8l6.8 2.7v6.1c0 4.7-2.8 8.9-6.8 10.9-4-2-6.8-6.2-6.8-10.9V5.5L12 2.8z"
         fill="currentColor"
+        fillOpacity=".18"
       />
       <path
-        d="M5 6.5h3.3M15.8 17.5H19"
+        d="M12 5.1l4.6 1.8v4.4c0 3.5-1.9 6.7-4.6 8.5-2.7-1.8-4.6-5-4.6-8.5V6.9L12 5.1z"
+        stroke="currentColor"
+        strokeWidth="1.6"
+      />
+      <path
+        d="M10 14.6V8.4h2.6c1.7 0 2.7 1 2.7 2.5 0 1.4-1 2.4-2.7 2.4h-1.1"
         stroke="currentColor"
         strokeLinecap="round"
-        strokeOpacity=".55"
-        strokeWidth="1.5"
+        strokeLinejoin="round"
+        strokeWidth="1.7"
+      />
+      <path
+        d="M11.4 12.3l3.3 3.2"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.7"
       />
     </svg>
   );
@@ -367,6 +379,66 @@ function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
+type FeedbackTone = "open" | "select" | "confirm";
+
+function playUiFeedback(tone: FeedbackTone) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    if (typeof navigator !== "undefined" && "vibrate" in navigator) {
+      navigator.vibrate?.(tone === "confirm" ? [14, 18, 12] : 8);
+    }
+  } catch {
+    // Ignore vibration failures on unsupported devices.
+  }
+
+  const browserWindow = window as typeof window & {
+    webkitAudioContext?: typeof AudioContext;
+    __rahmatAudioContext?: AudioContext;
+  };
+  const AudioCtor = browserWindow.AudioContext ?? browserWindow.webkitAudioContext;
+
+  if (!AudioCtor) {
+    return;
+  }
+
+  try {
+    const audioContext =
+      browserWindow.__rahmatAudioContext ?? new AudioCtor();
+    browserWindow.__rahmatAudioContext = audioContext;
+
+    const now = audioContext.currentTime;
+    const oscillator = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+    const toneMap = {
+      open: { start: 520, end: 660, volume: 0.012, type: "triangle" as const, duration: 0.09 },
+      select: { start: 660, end: 760, volume: 0.01, type: "sine" as const, duration: 0.07 },
+      confirm: { start: 560, end: 880, volume: 0.016, type: "triangle" as const, duration: 0.13 },
+    } as const;
+    const preset = toneMap[tone];
+
+    if (audioContext.state === "suspended") {
+      void audioContext.resume();
+    }
+
+    oscillator.type = preset.type;
+    oscillator.frequency.setValueAtTime(preset.start, now);
+    oscillator.frequency.exponentialRampToValueAtTime(preset.end, now + preset.duration);
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.exponentialRampToValueAtTime(preset.volume, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + preset.duration);
+
+    oscillator.connect(gain);
+    gain.connect(audioContext.destination);
+    oscillator.start(now);
+    oscillator.stop(now + preset.duration + 0.02);
+  } catch {
+    // Ignore audio failures in restrictive browsers.
+  }
+}
+
 function hasError(payload: unknown): payload is { error?: string } {
   return Boolean(payload && typeof payload === "object" && "error" in payload);
 }
@@ -564,6 +636,8 @@ export function CatalogConsole({
   const [selectedServiceId, setSelectedServiceId] = useState(
     initialCatalog?.services[0]?.id ?? "",
   );
+  const [showIntro, setShowIntro] = useState(true);
+  const [introClosing, setIntroClosing] = useState(false);
   const [quickMenuOpen, setQuickMenuOpen] = useState(false);
   const [countryPanelOpen, setCountryPanelOpen] = useState(false);
   const [countrySearch, setCountrySearch] = useState("");
@@ -710,6 +784,27 @@ export function CatalogConsole({
     }
   }
 
+  function openQuickMenuSheet(withFeedback = true) {
+    if (withFeedback) {
+      playUiFeedback("open");
+    }
+
+    setQuickMenuOpen(true);
+  }
+
+  function closeQuickMenuSheet() {
+    setQuickMenuOpen(false);
+  }
+
+  function toggleQuickMenuSheet() {
+    if (quickMenuOpen) {
+      closeQuickMenuSheet();
+      return;
+    }
+
+    openQuickMenuSheet();
+  }
+
   function scrollToSection(sectionId: string) {
     if (typeof window === "undefined") {
       return;
@@ -719,7 +814,8 @@ export function CatalogConsole({
       behavior: "smooth",
       block: "start",
     });
-    setQuickMenuOpen(false);
+    playUiFeedback("select");
+    closeQuickMenuSheet();
   }
 
   function handleSwipeStart(clientY: number) {
@@ -734,11 +830,11 @@ export function CatalogConsole({
     const delta = swipeStartY - clientY;
 
     if (delta > 48) {
-      setQuickMenuOpen(true);
+      openQuickMenuSheet();
     }
 
     if (delta < -48) {
-      setQuickMenuOpen(false);
+      closeQuickMenuSheet();
     }
 
     setSwipeStartY(null);
@@ -885,11 +981,21 @@ export function CatalogConsole({
   }, [selectedServer]);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
+    const introFadeTimer = window.setTimeout(() => {
+      setIntroClosing(true);
+    }, 1120);
+    const introHideTimer = window.setTimeout(() => {
+      setShowIntro(false);
+    }, 1500);
+    const menuTimer = window.setTimeout(() => {
       setQuickMenuOpen(true);
-    }, 420);
+    }, 1750);
 
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(introFadeTimer);
+      window.clearTimeout(introHideTimer);
+      window.clearTimeout(menuTimer);
+    };
   }, []);
 
   useEffect(() => {
@@ -949,6 +1055,41 @@ export function CatalogConsole({
         />
       ) : null}
 
+      {showIntro ? (
+        <div
+          className={cn(
+            "lux-intro fixed inset-0 z-[70] flex items-center justify-center bg-[radial-gradient(circle_at_top,#dff8ff_0%,#72c7ff_22%,#1f68ea_58%,#06142c_100%)] px-6 transition-all duration-500",
+            introClosing
+              ? "pointer-events-none scale-[1.04] opacity-0"
+              : "opacity-100",
+          )}
+        >
+          <div className="relative flex w-full max-w-[340px] flex-col items-center rounded-[36px] border border-white/16 bg-[linear-gradient(180deg,rgba(6,20,48,0.82),rgba(10,38,84,0.78))] px-6 py-10 text-center shadow-[0_32px_120px_-36px_rgba(2,8,25,0.98)] backdrop-blur-xl">
+            <span className="lux-icon-halo" />
+            <span className="lux-icon-ring lux-icon-ring-a" />
+            <span className="lux-icon-ring lux-icon-ring-b" />
+            <div className="relative flex h-20 w-20 items-center justify-center rounded-[28px] bg-[linear-gradient(145deg,#f8feff,#b6ecff_42%,#4b96ff)] text-[#0f2d5f] shadow-[0_24px_70px_-34px_rgba(103,201,255,1)]">
+              <BrandIcon className="h-10 w-10 animate-[lux-float_2.9s_ease-in-out_infinite]" />
+            </div>
+            <p className="mt-6 text-[0.7rem] font-semibold uppercase tracking-[0.32em] text-sky-100/62">
+              Luxury Access
+            </p>
+            <h2 className="mt-3 bg-[linear-gradient(135deg,#ffffff,#ddf5ff_45%,#8ed0ff)] bg-clip-text text-[2rem] font-semibold text-transparent">
+              Rahmat OTP
+            </h2>
+            <p className="mt-3 text-sm leading-7 text-sky-50/72">
+              Menyiapkan lane premium, popup menu, dan jalur order real-time.
+            </p>
+            <div className="mt-6 flex items-center gap-3 text-xs uppercase tracking-[0.22em] text-sky-100/58">
+              <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_16px_rgba(103,232,249,0.9)]" />
+              Skyguard
+              <span className="h-1 w-1 rounded-full bg-white/24" />
+              Blueverifiy
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <main className="relative z-10 mx-auto w-full max-w-[470px] px-3 py-4 pb-28 sm:px-4 sm:py-5">
         <div
           id="console-top"
@@ -980,7 +1121,7 @@ export function CatalogConsole({
 
             <button
               className="lux-menu-trigger"
-              onClick={() => setQuickMenuOpen(true)}
+              onClick={() => openQuickMenuSheet()}
               type="button"
             >
               <MenuOrbIcon className="h-5 w-5" />
@@ -1065,7 +1206,10 @@ export function CatalogConsole({
                       ? "border-sky-100/85 bg-[linear-gradient(135deg,rgba(196,239,255,0.24),rgba(87,164,255,0.32))]"
                       : "border-white/10 bg-[#13315b]",
                   )}
-                  onClick={() => setSelectedServer(server.id)}
+                  onClick={() => {
+                    playUiFeedback("select");
+                    setSelectedServer(server.id);
+                  }}
                   type="button"
                 >
                   <div className="flex items-center gap-4">
@@ -1117,7 +1261,10 @@ export function CatalogConsole({
           <button
             className="mt-4 flex min-h-14 w-full items-center justify-between rounded-[22px] border border-sky-100/20 bg-[#102846] px-4 py-3 text-left"
             disabled={isLoadingCountries || countries.length === 0}
-            onClick={() => setCountryPanelOpen((current) => !current)}
+            onClick={() => {
+              playUiFeedback("open");
+              setCountryPanelOpen((current) => !current);
+            }}
             type="button"
           >
             <span className="flex min-w-0 items-center gap-3">
@@ -1162,6 +1309,7 @@ export function CatalogConsole({
                         active ? "bg-sky-100/12" : "bg-transparent",
                       )}
                       onClick={() => {
+                        playUiFeedback("select");
                         setSelectedCountryId(country.id);
                         setCountryPanelOpen(false);
                         setCountrySearch("");
@@ -1225,7 +1373,10 @@ export function CatalogConsole({
           />
           <button
             className="mt-4 flex min-h-14 w-full items-center justify-between rounded-[22px] border border-sky-100/20 bg-[#102846] px-4 py-3 text-left"
-            onClick={() => setServicePanelOpen((current) => !current)}
+            onClick={() => {
+              playUiFeedback("open");
+              setServicePanelOpen((current) => !current);
+            }}
             type="button"
           >
             <span className="truncate text-base font-medium text-white">
@@ -1238,57 +1389,124 @@ export function CatalogConsole({
           </button>
 
           {servicePanelOpen ? (
-            <div className="mt-4 rounded-[24px] border border-white/10 bg-[#214571]/92 p-4">
-              <input
-                className="h-13 w-full rounded-[18px] border border-sky-100/20 bg-[#102846] px-4 text-base text-white outline-none placeholder:text-white/35"
-                onChange={(event) => setServiceSearch(event.target.value)}
-                placeholder="Cari layanan..."
-                value={serviceSearch}
+            <div className="fixed inset-0 z-[45]">
+              <button
+                className="absolute inset-0 bg-[#020614]/56 backdrop-blur-sm"
+                onClick={() => {
+                  setServicePanelOpen(false);
+                  setServiceSearch("");
+                }}
+                type="button"
               />
-
-              <div className="mt-4 max-h-[360px] space-y-2 overflow-y-auto pr-1">
-                {filteredServices.map((service) => (
-                  <button
-                    key={service.id}
-                    className={cn(
-                      "flex w-full items-center justify-between rounded-[18px] px-3 py-3 text-left transition-colors",
-                      selectedServiceId === service.id ? "bg-sky-100/12" : "bg-transparent",
-                    )}
-                    onClick={() => {
-                      setSelectedServiceId(service.id);
-                      setServicePanelOpen(false);
-                    }}
-                    type="button"
-                  >
-                    <div className="flex min-w-0 items-center gap-3 pr-3">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[16px] bg-[linear-gradient(145deg,rgba(229,248,255,0.28),rgba(116,190,255,0.28))] text-sm font-semibold text-sky-50">
-                        {getServiceBadge(service.service)}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-[1rem] font-medium text-white">
-                          {service.service}
-                        </p>
-                        <p className="mt-1 text-xs uppercase tracking-[0.16em] text-sky-50/50">
-                          {service.serviceCode} - stok {service.stock}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[1rem] font-semibold text-sky-100">
-                        {formatCurrency(service.price, service.currency)}
+              <div className="absolute inset-x-0 bottom-0 mx-auto w-full max-w-[470px] px-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
+                <div className="rounded-[32px] border border-white/14 bg-[linear-gradient(180deg,rgba(8,24,54,0.98),rgba(12,39,83,0.96))] p-4 shadow-[0_32px_90px_-30px_rgba(2,8,25,0.98)]">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.26em] text-sky-100/58">
+                        Premium Service Sheet
                       </p>
-                      <p className="text-xs text-sky-50/50">
-                        modal {formatCurrency(service.upstreamPrice, service.currency)}
+                      <p className="mt-2 text-xl font-semibold text-white">
+                        Pilih layanan OTP
+                      </p>
+                      <p className="mt-1 text-sm leading-6 text-sky-50/62">
+                        {selectedServerMeta?.name} • {selectedCountry?.name ?? "Pilih negara"} • {catalog?.total ?? 0} layanan
                       </p>
                     </div>
-                  </button>
-                ))}
-
-                {!filteredServices.length && !isLoadingCatalog ? (
-                  <div className="rounded-[18px] bg-[#102846] px-4 py-6 text-center text-sm text-white/60">
-                    Layanan real dari KirimKode belum masuk untuk pilihan ini.
+                    <button
+                      className="rounded-full border border-white/12 bg-white/8 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-sky-50"
+                      onClick={() => {
+                        setServicePanelOpen(false);
+                        setServiceSearch("");
+                      }}
+                      type="button"
+                    >
+                      Tutup
+                    </button>
                   </div>
-                ) : null}
+
+                  <div className="mt-4 grid grid-cols-3 gap-3">
+                    <div className="rounded-[18px] border border-white/10 bg-white/7 px-3 py-3">
+                      <p className="text-[0.62rem] uppercase tracking-[0.2em] text-sky-100/52">
+                        Active
+                      </p>
+                      <p className="mt-2 text-sm font-semibold text-white">
+                        {selectedServerMeta?.name}
+                      </p>
+                    </div>
+                    <div className="rounded-[18px] border border-white/10 bg-white/7 px-3 py-3">
+                      <p className="text-[0.62rem] uppercase tracking-[0.2em] text-sky-100/52">
+                        Country
+                      </p>
+                      <p className="mt-2 truncate text-sm font-semibold text-white">
+                        {selectedCountry?.name ?? "-"}
+                      </p>
+                    </div>
+                    <div className="rounded-[18px] border border-white/10 bg-white/7 px-3 py-3">
+                      <p className="text-[0.62rem] uppercase tracking-[0.2em] text-sky-100/52">
+                        Results
+                      </p>
+                      <p className="mt-2 text-sm font-semibold text-white">
+                        {filteredServices.length}
+                      </p>
+                    </div>
+                  </div>
+
+                  <input
+                    className="mt-4 h-13 w-full rounded-[18px] border border-sky-100/20 bg-[#102846] px-4 text-base text-white outline-none placeholder:text-white/35"
+                    onChange={(event) => setServiceSearch(event.target.value)}
+                    placeholder="Cari layanan premium..."
+                    value={serviceSearch}
+                  />
+
+                  <div className="mt-4 max-h-[55dvh] space-y-2 overflow-y-auto pr-1">
+                    {filteredServices.map((service) => (
+                      <button
+                        key={service.id}
+                        className={cn(
+                          "flex w-full items-center justify-between rounded-[22px] border px-3 py-3 text-left transition-all duration-200",
+                          selectedServiceId === service.id
+                            ? "border-sky-100/28 bg-[linear-gradient(135deg,rgba(194,238,255,0.18),rgba(64,123,255,0.2))]"
+                            : "border-white/8 bg-white/6",
+                        )}
+                        onClick={() => {
+                          playUiFeedback("select");
+                          setSelectedServiceId(service.id);
+                          setServicePanelOpen(false);
+                          setServiceSearch("");
+                        }}
+                        type="button"
+                      >
+                        <div className="flex min-w-0 items-center gap-3 pr-3">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] bg-[linear-gradient(145deg,rgba(229,248,255,0.28),rgba(116,190,255,0.28))] text-sm font-semibold text-sky-50 shadow-[0_18px_35px_-24px_rgba(92,176,255,0.9)]">
+                            {getServiceBadge(service.service)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate text-[1rem] font-semibold text-white">
+                              {service.service}
+                            </p>
+                            <p className="mt-1 text-xs uppercase tracking-[0.16em] text-sky-50/50">
+                              {service.serviceCode} • stok {service.stock}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[1rem] font-semibold text-sky-100">
+                            {formatCurrency(service.price, service.currency)}
+                          </p>
+                          <p className="text-xs text-sky-50/50">
+                            modal {formatCurrency(service.upstreamPrice, service.currency)}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+
+                    {!filteredServices.length && !isLoadingCatalog ? (
+                      <div className="rounded-[22px] border border-white/8 bg-white/6 px-4 py-8 text-center text-sm text-white/60">
+                        Layanan real dari KirimKode belum masuk untuk pencarian ini.
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
               </div>
             </div>
           ) : null}
@@ -1337,7 +1555,10 @@ export function CatalogConsole({
           <button
             className="mt-5 inline-flex h-14 w-full items-center justify-center rounded-full bg-[linear-gradient(135deg,#e2f7ff,#93dcff_34%,#5cadff_67%,#3d7eff)] px-5 text-base font-semibold text-[#0b2248] shadow-[0_18px_35px_-22px_rgba(64,129,255,0.95)] disabled:cursor-not-allowed disabled:opacity-60"
             disabled={!selectedService || !isPaymentReady || isCreatingPayment || !isSnapReady}
-            onClick={() => void handleCreateCheckout()}
+            onClick={() => {
+              playUiFeedback("confirm");
+              void handleCreateCheckout();
+            }}
             type="button"
           >
             {isCreatingPayment ? "Membuat Checkout..." : "Beli Nomor"}
@@ -1382,7 +1603,10 @@ export function CatalogConsole({
               <button
                 className="inline-flex h-13 w-full items-center justify-center rounded-full border border-white/10 bg-[#102846] px-4 text-sm font-semibold text-white disabled:opacity-60"
                 disabled={isRefreshingPayment}
-                onClick={() => void syncPayment(payment.id)}
+                onClick={() => {
+                  playUiFeedback("select");
+                  void syncPayment(payment.id);
+                }}
                 type="button"
               >
                 {isRefreshingPayment ? "Mengecek..." : "Cek Pembayaran"}
@@ -1390,7 +1614,10 @@ export function CatalogConsole({
               <button
                 className="inline-flex h-13 w-full items-center justify-center rounded-full border border-white/10 bg-[#102846] px-4 text-sm font-semibold text-white disabled:opacity-60"
                 disabled={!payment.snapToken || !isSnapReady}
-                onClick={() => openSnap(payment)}
+                onClick={() => {
+                  playUiFeedback("confirm");
+                  openSnap(payment);
+                }}
                 type="button"
               >
                 Buka Midtrans
@@ -1453,6 +1680,7 @@ export function CatalogConsole({
                   className="inline-flex h-13 w-full items-center justify-center rounded-full border border-white/10 bg-[#102846] px-4 text-sm font-semibold text-white disabled:opacity-60"
                   disabled={isRefreshingOrder}
                   onClick={() => {
+                    playUiFeedback("select");
                     startTransition(() => {
                       void handleRefreshOrder();
                     });
@@ -1464,7 +1692,10 @@ export function CatalogConsole({
                 <button
                   className="inline-flex h-13 w-full items-center justify-center rounded-full border border-rose-200/18 bg-rose-300/12 px-4 text-sm font-semibold text-rose-50 disabled:opacity-60"
                   disabled={isRefreshingOrder || order.status !== "pending"}
-                  onClick={() => void handleCancelOrder()}
+                  onClick={() => {
+                    playUiFeedback("select");
+                    void handleCancelOrder();
+                  }}
                   type="button"
                 >
                   Cancel Order
@@ -1483,7 +1714,7 @@ export function CatalogConsole({
       <div className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <button
           className="lux-swipe-pill"
-          onClick={() => setQuickMenuOpen((current) => !current)}
+          onClick={toggleQuickMenuSheet}
           onTouchEnd={(event) => handleSwipeEnd(event.changedTouches[0]?.clientY ?? 0)}
           onTouchStart={(event) => handleSwipeStart(event.changedTouches[0]?.clientY ?? 0)}
           type="button"
@@ -1511,7 +1742,7 @@ export function CatalogConsole({
             "absolute inset-0 bg-[#020614]/48 backdrop-blur-sm transition-opacity duration-300",
             quickMenuOpen ? "opacity-100" : "opacity-0",
           )}
-          onClick={() => setQuickMenuOpen(false)}
+          onClick={closeQuickMenuSheet}
           type="button"
         />
 
@@ -1536,7 +1767,7 @@ export function CatalogConsole({
               </div>
               <button
                 className="rounded-full border border-white/12 bg-white/8 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-sky-50"
-                onClick={() => setQuickMenuOpen(false)}
+                onClick={closeQuickMenuSheet}
                 type="button"
               >
                 Tutup
