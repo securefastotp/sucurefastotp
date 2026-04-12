@@ -1,6 +1,11 @@
+const configuredSiteName = process.env.NEXT_PUBLIC_SITE_NAME?.trim();
+
 export const siteConfig = {
-  name: process.env.NEXT_PUBLIC_SITE_NAME ?? "SecureFastOTP",
+  name:
+    configuredSiteName && configuredSiteName !== "SecureFastOTP"
+      ? configuredSiteName
+      : "Rahmat OTP",
   url: process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000",
   description:
-    "Website supplier OTP siap GitHub + Vercel dengan landing page, console stok, dan integrasi provider upstream via API key.",
+    "Rahmat OTP siap dipakai di GitHub + Vercel dengan katalog KirimKode, flow Midtrans, dan console supplier mobile.",
 };

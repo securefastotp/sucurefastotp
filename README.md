@@ -1,4 +1,4 @@
-# SecureFastOTP
+# Rahmat OTP
 
 Website supplier OTP siap deploy ke GitHub + Vercel.
 
@@ -23,7 +23,7 @@ Salin `.env.example` menjadi `.env.local`, lalu isi credential provider Anda.
 ## Environment Penting
 
 ```bash
-NEXT_PUBLIC_SITE_NAME=SecureFastOTP
+NEXT_PUBLIC_SITE_NAME=Rahmat OTP
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 NEXT_PUBLIC_MIDTRANS_CLIENT_KEY=isi_client_key_midtrans
 
