@@ -27,7 +27,7 @@ body {
   background:
     radial-gradient(circle at top left, rgba(74, 124, 255, 0.22), transparent 28%),
     radial-gradient(circle at top right, rgba(103, 240, 255, 0.16), transparent 26%),
-    linear-gradient(180deg, #0a1629 0%, #081321 42%, #060e18 100%);
+    linear-gradient(180deg, #081321 0%, #07101d 42%, #040913 100%);
   color: var(--foreground);
 }
 
@@ -39,6 +39,60 @@ a {
 ::selection {
   background: rgba(44, 182, 255, 0.28);
   color: #07111f;
+}
+
+@keyframes lux-float {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+
+  50% {
+    transform: translate3d(0, -5px, 0);
+  }
+}
+
+@keyframes lux-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.92;
+  }
+
+  50% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+}
+
+@keyframes lux-orbit {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes lux-rise-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 16px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes lux-drift {
+  0%, 100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(12px, -18px, 0) scale(1.08);
+  }
 }
 
 @layer components {
@@ -68,5 +122,85 @@ a {
 
   .code-block {
     @apply rounded-[24px] border border-white/10 bg-[#0b1526] p-5 leading-7 text-white/82;
+  }
+
+  .lux-console-shell {
+    @apply relative isolate overflow-x-hidden;
+    background:
+      radial-gradient(circle at top left, rgba(209, 243, 255, 0.92) 0%, rgba(122, 201, 255, 0.82) 24%, rgba(62, 136, 255, 0.76) 52%, rgba(13, 40, 98, 0.96) 100%);
+  }
+
+  .lux-panel {
+    @apply backdrop-blur-xl shadow-[0_24px_90px_-42px_rgba(2,8,25,0.95)];
+  }
+
+  .lux-rise {
+    animation: lux-rise-in 0.52s ease-out both;
+  }
+
+  .lux-orb {
+    @apply absolute rounded-full blur-3xl;
+    animation: lux-drift 9s ease-in-out infinite;
+  }
+
+  .lux-orb-a {
+    top: -6rem;
+    left: -3rem;
+    height: 14rem;
+    width: 14rem;
+    background: rgba(235, 250, 255, 0.54);
+  }
+
+  .lux-orb-b {
+    top: 10rem;
+    right: -4rem;
+    height: 13rem;
+    width: 13rem;
+    background: rgba(92, 186, 255, 0.34);
+    animation-delay: -3s;
+  }
+
+  .lux-orb-c {
+    bottom: 8rem;
+    left: 18%;
+    height: 10rem;
+    width: 10rem;
+    background: rgba(130, 103, 255, 0.2);
+    animation-delay: -5s;
+  }
+
+  .lux-icon-halo {
+    @apply absolute inset-[-10px] rounded-[30px] bg-[radial-gradient(circle,rgba(112,213,255,0.42),transparent_65%)] blur-md;
+    animation: lux-pulse 3.2s ease-in-out infinite;
+  }
+
+  .lux-icon-halo-soft {
+    @apply inset-[-12px] opacity-80;
+  }
+
+  .lux-icon-ring {
+    @apply absolute inset-[-7px] rounded-[28px] border border-white/14;
+    animation: lux-orbit 8s linear infinite;
+  }
+
+  .lux-icon-ring-a {
+    border-style: solid;
+  }
+
+  .lux-icon-ring-b {
+    inset: -13px;
+    border-style: dashed;
+    animation-duration: 12s;
+    animation-direction: reverse;
+    opacity: 0.5;
+  }
+
+  .lux-menu-trigger {
+    @apply inline-flex h-11 w-11 items-center justify-center rounded-full border border-white/14 bg-white/10 text-sky-50 backdrop-blur transition-transform duration-200 hover:-translate-y-0.5;
+    box-shadow: 0 16px 40px -24px rgba(17, 88, 175, 0.9);
+  }
+
+  .lux-swipe-pill {
+    @apply flex items-center gap-3 rounded-full border border-white/14 bg-[linear-gradient(180deg,rgba(6,18,42,0.94),rgba(8,31,66,0.92))] px-4 py-3 text-xs font-semibold text-white shadow-[0_22px_50px_-26px_rgba(2,8,25,0.98)] backdrop-blur-xl;
   }
 }

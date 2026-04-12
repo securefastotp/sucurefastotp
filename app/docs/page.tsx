@@ -82,12 +82,12 @@ const envFields = [
   {
     name: "UPSTREAM_SERVER_BIMASAKTI_CODE",
     required: "No",
-    description: "Kode upstream untuk server Bimasakti. Default `api1`.",
+    description: "Kode upstream untuk lane Skyguard. Default `api1`.",
   },
   {
     name: "UPSTREAM_SERVER_MARS_CODE",
     required: "No",
-    description: "Kode upstream untuk server Mars. Default `api2`.",
+    description: "Kode upstream untuk lane Blueverifiy. Default `api2`.",
   },
   {
     name: "UPSTREAM_MARKUP_PERCENT",
