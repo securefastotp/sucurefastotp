@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  useCallback,
   useDeferredValue,
   useEffect,
   useEffectEvent,
@@ -39,6 +40,15 @@ type CountriesResponse = {
 
 type ErrorResponse = {
   error?: string;
+};
+
+type BalancePayload = {
+  balance: {
+    amount: number;
+    currency: string;
+    updatedAt: string;
+    mode: string;
+  };
 };
 
 type ToastState =
@@ -593,6 +603,21 @@ async function requestAdminPasswordReset(input: {
   return payload;
 }
 
+async function requestUpstreamBalance() {
+  const response = await fetch("/api/balance", {
+    cache: "no-store",
+  });
+  const payload = (await response.json()) as BalancePayload | ErrorResponse;
+
+  if (!response.ok || !("balance" in payload)) {
+    throw new Error(
+      hasError(payload) ? payload.error : "Gagal membaca saldo KirimKode.",
+    );
+  }
+
+  return payload.balance;
+}
+
 export function MemberConsole({
   initialViewer,
   initialSummary,
@@ -655,6 +680,12 @@ export function MemberConsole({
   const [isAdminSaving, setIsAdminSaving] = useState(false);
   const [isAdminPasswordSaving, setIsAdminPasswordSaving] = useState(false);
   const [adminNewPassword, setAdminNewPassword] = useState("");
+  const [adminBalanceOverride, setAdminBalanceOverride] = useState<{
+    amount: number;
+    currency: string;
+    updatedAt: string;
+  } | null>(null);
+  const [adminBalanceError, setAdminBalanceError] = useState<string | null>(null);
 
   const deferredSearch = useDeferredValue(serviceSearch);
   const deferredAdminSearch = useDeferredValue(adminSearch);
@@ -777,7 +808,7 @@ export function MemberConsole({
     }
   });
 
-  const loadAdminUsers = useEffectEvent(async (search: string) => {
+  const loadAdminUsers = useCallback(async (search: string) => {
     if (!canAccessAdmin) {
       return;
     }
@@ -802,7 +833,7 @@ export function MemberConsole({
     } finally {
       setIsAdminUsersLoading(false);
     }
-  });
+  }, [canAccessAdmin]);
 
   useEffect(() => {
     if (!viewer || countries.length) {
@@ -856,7 +887,7 @@ export function MemberConsole({
     }
 
     void loadAdminUsers(deferredAdminSearch);
-  }, [activeTab, canAccessAdmin, deferredAdminSearch]);
+  }, [activeTab, canAccessAdmin, deferredAdminSearch, loadAdminUsers]);
 
   useEffect(() => {
     if (!activeDeposit?.id || activeDeposit.status !== "pending") {
@@ -1236,6 +1267,19 @@ export function MemberConsole({
     }
   }
 
+  async function handleRefreshAdminBalance() {
+    setAdminBalanceError(null);
+
+    try {
+      const balance = await requestUpstreamBalance();
+      setAdminBalanceOverride(balance);
+    } catch (error) {
+      setAdminBalanceError(
+        error instanceof Error ? error.message : "Gagal membaca saldo KirimKode.",
+      );
+    }
+  }
+
   if (!viewer || !summary) {
     return (
       <div className="flex min-h-[100dvh] items-center justify-center px-4 py-8">
@@ -1457,12 +1501,9 @@ export function MemberConsole({
                 Harap lakukan deposit terlebih dahulu untuk memulai transaksi.
               </h1>
               <p className="mt-2 text-[12px] text-sky-100/65">
-                Pastikan saldo anda cukup. Deposit masuk ke saldo akun websitemu.
-              </p>
-              <p className="mt-2 text-[12px] text-sky-100/65">
-                Untuk mulai melakukan pembelian nomor saldo anda harus cukup. Jika anda
-                kurang paham menggunakan panel ini silahkan hubungi admin di menu
-                pengaturan.
+                Pastikan saldo anda cukup. Untuk mulai melakukan pembelian nomor saldo
+                anda harus cukup. Jika anda kurang paham menggunakan panel ini silahkan
+                hubungi admin di menu pengaturan.
               </p>
               <p className="mt-2 text-[13px] leading-6 text-sky-50/72">
                 Deposit user masuk ke saldo akun website Anda. Saat user order OTP, saldo internal user berkurang dan backend tetap memakai supply akun KirimKode Anda.
@@ -1992,23 +2033,36 @@ export function MemberConsole({
               <SectionTitle
                 icon={<WalletIcon className="h-4.5 w-4.5" />}
                 title="Saldo KirimKode"
+                action={
+                  <button
+                    className="rounded-[12px] border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-sky-100/70 transition hover:border-sky-300/40"
+                    onClick={() => void handleRefreshAdminBalance()}
+                    type="button"
+                  >
+                    Refresh
+                  </button>
+                }
               />
               <div className="mt-4 rounded-[18px] border border-white/10 bg-white/4 px-4 py-3">
                 <p className="text-[11px] uppercase tracking-[0.16em] text-sky-100/55">
                   Upstream Balance
                 </p>
                 <p className="mt-3 text-[20px] font-semibold text-cyan-100">
-                  {summary.admin?.upstreamBalance
+                  {adminBalanceOverride ?? summary.admin?.upstreamBalance
                     ? formatCurrency(
-                        summary.admin.upstreamBalance.amount,
-                        summary.admin.upstreamBalance.currency,
+                        (adminBalanceOverride ?? summary.admin?.upstreamBalance)?.amount ?? 0,
+                        (adminBalanceOverride ?? summary.admin?.upstreamBalance)?.currency ??
+                          "IDR",
                       )
                     : "Tidak tersedia"}
                 </p>
                 <p className="mt-2 text-[11px] text-sky-100/58">
-                  {summary.admin?.upstreamBalance
-                    ? `Update ${formatDateTime(summary.admin.upstreamBalance.updatedAt)}`
-                    : summary.admin?.upstreamBalanceError ??
+                  {adminBalanceOverride
+                    ? `Update ${formatDateTime(adminBalanceOverride.updatedAt)}`
+                    : summary.admin?.upstreamBalance
+                      ? `Update ${formatDateTime(summary.admin.upstreamBalance.updatedAt)}`
+                      : adminBalanceError ??
+                        summary.admin?.upstreamBalanceError ??
                       "Saldo akun KirimKode belum bisa dibaca."}
                 </p>
               </div>
@@ -2021,7 +2075,15 @@ export function MemberConsole({
                 action={
                   isAdminUsersLoading ? (
                     <span className="text-[11px] text-sky-100/60">Loading...</span>
-                  ) : null
+                  ) : (
+                    <button
+                      className="rounded-[12px] border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-sky-100/70 transition hover:border-sky-300/40"
+                      onClick={() => void loadAdminUsers(deferredAdminSearch)}
+                      type="button"
+                    >
+                      Refresh
+                    </button>
+                  )
                 }
               />
               <input
