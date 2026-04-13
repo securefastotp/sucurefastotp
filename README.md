@@ -66,7 +66,8 @@ MIDTRANS_QRIS_EXPIRY_MINUTES=15
 - Jika format API provider berbeda, cukup ubah env path atau sesuaikan normalizer di `lib/provider.ts`.
 - Saat `UPSTREAM_PROVIDER_MODE=mock`, aplikasi memakai data demo dan order in-memory.
 - Flow Midtrans sekarang memakai QRIS Core API + signed recovery token, jadi status payment dan order tidak langsung hilang saat serverless Vercel berpindah instance.
-- Untuk production volume tinggi dan multi-device history, sambungkan riwayat transaksi ke Vercel DB/Postgres agar data tetap persisten lintas browser.
+- Saat Neon Postgres terhubung di Vercel, transaksi payment disimpan di tabel `otp_transactions` dan order/OTP disimpan di tabel `otp_orders`.
+- Riwayat transaksi sekarang bisa mengambil snapshot payment dan status OTP terbaru dari database, bukan hanya memory browser.
 - Dari pengujian live 12 April 2026, KirimKode API menerima auth via header `x-api-key`, memakai `GET /balance`, `GET /orders`, `POST /order`, `GET /order/{id}/status`, dan `POST /order/{id}/cancel`.
 - Mode live sekarang hanya memakai katalog real dari endpoint `GET /services` KirimKode. Jika upstream kosong atau error, website akan menampilkan status asli upstream tanpa katalog buatan.
 - Harga jual sekarang mengikuti harga asli upstream tanpa markup tambahan.

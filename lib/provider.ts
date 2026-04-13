@@ -10,6 +10,7 @@ import {
   listMockServices,
 } from "@/lib/mock-data";
 import { getPaymentGatewayStatus } from "@/lib/payments";
+import { getOrderFromDatabase, saveOrderToDatabase } from "@/lib/order-store";
 import { computeRetailPrice, getPricingConfig } from "@/lib/pricing";
 import { attachOrderContextToken, restoreOrderFromContextToken } from "@/lib/session-token";
 import type {
@@ -847,6 +848,19 @@ function toOrderContext(order: Order): OrderContext {
   };
 }
 
+async function persistOrder(order: Order) {
+  const nextOrder = attachOrderContextToken(order);
+  orderContextStore.set(nextOrder.id, toOrderContext(nextOrder));
+
+  try {
+    await saveOrderToDatabase(nextOrder);
+  } catch (error) {
+    console.error("Gagal menyimpan order ke database:", error);
+  }
+
+  return nextOrder;
+}
+
 export async function getRuntimeStatus(): Promise<RuntimeStatus> {
   const config = getProviderConfig();
   const pricing = getPricingConfig();
@@ -1040,7 +1054,7 @@ export async function createOrder(input: CreateOrderInput) {
   const config = getProviderConfig();
 
   if (config.mode === "mock") {
-    return attachOrderContextToken(
+    return await persistOrder(
       createMockOrder({
         serviceId: input.serviceId,
         serverId: input.serverId,
@@ -1073,8 +1087,7 @@ export async function createOrder(input: CreateOrderInput) {
     otpCode: undefined,
   });
 
-  orderContextStore.set(order.id, toOrderContext(order));
-  return attachOrderContextToken(order);
+  return await persistOrder(order);
 }
 
 export async function getOrder(orderId: string, contextToken?: string | null) {
@@ -1082,36 +1095,48 @@ export async function getOrder(orderId: string, contextToken?: string | null) {
 
   if (config.mode === "mock") {
     const order = getMockOrder(orderId);
-    return order ? attachOrderContextToken(order) : order;
+    return order ? await persistOrder(order) : order;
   }
 
-  const fallback =
-    orderContextStore.get(orderId) ??
-    (() => {
-      const restoredOrder = restoreOrderFromContextToken(orderId, contextToken);
+  const resolvedFallback = await (async () => {
+    const localFallback = orderContextStore.get(orderId);
 
-      if (!restoredOrder) {
-        return null;
-      }
+    if (localFallback) {
+      return localFallback;
+    }
 
-      const restoredContext = toOrderContext(restoredOrder);
+    const databaseOrder = await getOrderFromDatabase(orderId).catch((error) => {
+      console.error("Gagal membaca order dari database:", error);
+      return null;
+    });
+
+    if (databaseOrder) {
+      const restoredContext = toOrderContext(databaseOrder);
       orderContextStore.set(orderId, restoredContext);
       return restoredContext;
-    })();
+    }
 
-  if (!fallback) {
+    const restoredOrder = restoreOrderFromContextToken(orderId, contextToken);
+
+    if (!restoredOrder) {
+      return null;
+    }
+
+    const restoredContext = toOrderContext(restoredOrder);
+    orderContextStore.set(orderId, restoredContext);
+    return restoredContext;
+  })();
+
+  if (!resolvedFallback) {
     throw new Error(
-      "Context order tidak ditemukan. Untuk production, simpan order ke database agar polling OTP tetap stabil.",
+      "Context order tidak ditemukan. Pastikan order sudah tersimpan di database atau refresh dari payment terbaru.",
     );
   }
 
   const payload = await fetchUpstream(replaceOrderId(config.orderStatusPath, orderId));
-  const order = attachOrderContextToken(
-    normalizeStatusOrder(payload, fallback, orderId),
-  );
-  orderContextStore.set(orderId, toOrderContext(order));
+  const order = normalizeStatusOrder(payload, resolvedFallback, orderId);
 
-  return order;
+  return await persistOrder(order);
 }
 
 export async function cancelOrder(orderId: string, contextToken?: string | null) {
@@ -1119,22 +1144,37 @@ export async function cancelOrder(orderId: string, contextToken?: string | null)
 
   if (config.mode === "mock") {
     const order = cancelMockOrder(orderId);
-    return order ? attachOrderContextToken(order) : order;
+    return order ? await persistOrder(order) : order;
   }
 
-  const fallback =
-    orderContextStore.get(orderId) ??
-    (() => {
-      const restoredOrder = restoreOrderFromContextToken(orderId, contextToken);
+  const fallback = await (async () => {
+    const localFallback = orderContextStore.get(orderId);
 
-      if (!restoredOrder) {
-        return null;
-      }
+    if (localFallback) {
+      return localFallback;
+    }
 
-      const restoredContext = toOrderContext(restoredOrder);
+    const databaseOrder = await getOrderFromDatabase(orderId).catch((error) => {
+      console.error("Gagal membaca order cancel dari database:", error);
+      return null;
+    });
+
+    if (databaseOrder) {
+      const restoredContext = toOrderContext(databaseOrder);
       orderContextStore.set(orderId, restoredContext);
       return restoredContext;
-    })();
+    }
+
+    const restoredOrder = restoreOrderFromContextToken(orderId, contextToken);
+
+    if (!restoredOrder) {
+      return null;
+    }
+
+    const restoredContext = toOrderContext(restoredOrder);
+    orderContextStore.set(orderId, restoredContext);
+    return restoredContext;
+  })();
 
   if (!fallback) {
     return null;
@@ -1144,7 +1184,7 @@ export async function cancelOrder(orderId: string, contextToken?: string | null)
     method: config.cancelMethod,
   });
 
-  const order = attachOrderContextToken({
+  const order = {
     id: orderId,
     serviceId: fallback.serviceId,
     serviceCode: fallback.serviceCode,
@@ -1160,8 +1200,7 @@ export async function cancelOrder(orderId: string, contextToken?: string | null)
     createdAt: fallback.createdAt,
     expiresAt: fallback.expiresAt,
     providerRef: fallback.providerRef,
-  } satisfies Order);
+  } satisfies Order;
 
-  orderContextStore.set(orderId, toOrderContext(order));
-  return order;
+  return await persistOrder(order);
 }

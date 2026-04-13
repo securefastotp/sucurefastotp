@@ -14,6 +14,7 @@ import {
   listPaymentsFromDatabase,
   savePaymentToDatabase,
 } from "@/lib/payment-store";
+import { getOrderFromDatabase } from "@/lib/order-store";
 import { createOrder } from "@/lib/provider";
 import { attachOrderContextToken, readSessionToken, signSessionToken } from "@/lib/session-token";
 import { siteConfig } from "@/lib/site-config";
@@ -260,9 +261,11 @@ export async function getPaymentSession(
 
   try {
     const statusPayload = await getMidtransTransactionStatus(payment.midtransOrderId);
-    return await updatePaymentRecord(payment, statusPayload);
+    return await hydratePaymentOrder(
+      await updatePaymentRecord(payment, statusPayload),
+    );
   } catch {
-    return await savePaymentRecord(payment);
+    return await hydratePaymentOrder(await savePaymentRecord(payment));
   }
 }
 
@@ -277,11 +280,11 @@ export async function activatePaymentOrder(
   }
 
   if (payment.status !== "paid") {
-    return await savePaymentRecord(payment);
+    return await hydratePaymentOrder(await savePaymentRecord(payment));
   }
 
   if (payment.order) {
-    return await savePaymentRecord(payment);
+    return await hydratePaymentOrder(await savePaymentRecord(payment));
   }
 
   payment.order = await createOrder({
@@ -297,7 +300,7 @@ export async function activatePaymentOrder(
   });
   payment.updatedAt = new Date().toISOString();
   payment.statusMessage = "Pembayaran terverifikasi dan order sudah dibuat.";
-  return await savePaymentRecord(payment);
+  return await hydratePaymentOrder(await savePaymentRecord(payment));
 }
 
 export async function handleMidtransNotification(payload: Record<string, unknown>) {
@@ -342,6 +345,28 @@ function mergePaymentRecords(current: PaymentRecord, incoming: PaymentRecord) {
   return incomingUpdatedAt >= currentUpdatedAt ? incoming : current;
 }
 
+async function hydratePaymentOrder(payment: PaymentRecord) {
+  if (!payment.order?.id) {
+    return payment;
+  }
+
+  try {
+    const latestOrder = await getOrderFromDatabase(payment.order.id);
+
+    if (!latestOrder) {
+      return payment;
+    }
+
+    return {
+      ...payment,
+      order: latestOrder,
+    } satisfies PaymentRecord;
+  } catch (error) {
+    console.error("Gagal hydrate order dari database:", error);
+    return payment;
+  }
+}
+
 export async function listPaymentSessions(limit = 20) {
   const merged = new Map<string, PaymentRecord>();
 
@@ -364,10 +389,12 @@ export async function listPaymentSessions(limit = 20) {
     );
   }
 
-  return [...merged.values()]
+  const latestPayments = [...merged.values()]
     .sort(
       (left, right) =>
         new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
     )
     .slice(0, limit);
+
+  return await Promise.all(latestPayments.map((payment) => hydratePaymentOrder(payment)));
 }
