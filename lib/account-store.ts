@@ -611,11 +611,14 @@ export async function updateUserAccount(
   return viewer;
 }
 
-export async function listAdminUsers(search = "", limit = 30) {
+export async function listAdminUsers(
+  search = "",
+  limit = 30,
+): Promise<AdminUserSummary[]> {
   const sql = getSql();
 
   if (!sql) {
-    return [] as AdminUserSummary[];
+    throw new Error("Database akun belum tersedia.");
   }
 
   await ensureAccountTables();
