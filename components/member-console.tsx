@@ -1452,10 +1452,18 @@ export function MemberConsole({
         {activeTab === "dashboard" ? (
           <div className="space-y-4">
             <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(67,147,255,0.16),rgba(10,20,38,0.36))] p-4">
-              <p className="text-[12px] text-sky-100/70">Sistem wallet internal</p>
+              <p className="text-[12px] text-sky-100/70">Sistem order panel</p>
               <h1 className="mt-1 text-[22px] font-semibold text-white">
-                Deposit saldo, lalu beli OTP dari dashboard.
+                Harap lakukan deposit terlebih dahulu untuk memulai transaksi.
               </h1>
+              <p className="mt-2 text-[12px] text-sky-100/65">
+                Pastikan saldo anda cukup. Deposit masuk ke saldo akun websitemu.
+              </p>
+              <p className="mt-2 text-[12px] text-sky-100/65">
+                Untuk mulai melakukan pembelian nomor saldo anda harus cukup. Jika anda
+                kurang paham menggunakan panel ini silahkan hubungi admin di menu
+                pengaturan.
+              </p>
               <p className="mt-2 text-[13px] leading-6 text-sky-50/72">
                 Deposit user masuk ke saldo akun website Anda. Saat user order OTP, saldo internal user berkurang dan backend tetap memakai supply akun KirimKode Anda.
               </p>
