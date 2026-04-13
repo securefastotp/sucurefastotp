@@ -383,7 +383,24 @@ export async function syncUserOrder(userId: string, orderId: string) {
     return null;
   }
 
-  const latestOrder = await getOrder(orderId, currentOrder.contextToken);
+  let latestOrder: Order | null = null;
+
+  try {
+    latestOrder = await getOrder(
+      currentOrder.providerRef ?? orderId,
+      currentOrder.contextToken,
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    const createdAt = new Date(currentOrder.createdAt).getTime();
+    const ageMs = Number.isFinite(createdAt) ? Date.now() - createdAt : Infinity;
+
+    if (/not found|tidak ditemukan|order/i.test(message) && ageMs < 2 * 60 * 1000) {
+      return currentOrder;
+    }
+
+    throw error;
+  }
 
   if (!latestOrder) {
     return null;
