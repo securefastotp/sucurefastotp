@@ -94,7 +94,7 @@ function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
 }
 
-function getConfiguredAdminEmail() {
+export function getConfiguredAdminEmail() {
   const value =
     process.env.ADMIN_EMAIL?.trim() ||
     process.env.ADMIN_LOGIN_EMAIL?.trim() ||

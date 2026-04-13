@@ -5,11 +5,13 @@ import {
   applyDepositCredit,
   createDepositRecord,
   createWalletEntry,
+  getConfiguredAdminEmail,
   getDepositById,
   getDepositByMidtransOrderId,
   getUserOrder,
   hasWalletLedgerReference,
   getViewerById,
+  updateUserAccount,
   listAdminUsers,
   listDepositsByUser,
   listUserOrders,
@@ -22,6 +24,7 @@ import {
   normalizeMidtransPaymentStatus,
   verifyMidtransSignature,
 } from "@/lib/midtrans";
+import { hashPasswordForStorage } from "@/lib/auth";
 import { cancelOrder, createOrder, getBalance, getCatalog, getOrder } from "@/lib/provider";
 import { siteConfig } from "@/lib/site-config";
 import type { DashboardSummary, DepositRecord, Order } from "@/lib/types";
@@ -69,6 +72,15 @@ function computeBuyerFee(subtotalAmount: number) {
   return Math.max(0, percentageFee + Math.max(0, Math.round(flatFee)));
 }
 
+function isAdminViewer(viewer: { role: string; email: string }) {
+  const adminEmail = getConfiguredAdminEmail();
+  if (!adminEmail) {
+    return viewer.role === "admin";
+  }
+
+  return viewer.email.trim().toLowerCase() === adminEmail;
+}
+
 async function saveDepositRecord(deposit: DepositRecord) {
   await createDepositRecord(deposit);
   return deposit;
@@ -85,7 +97,7 @@ export async function getDashboardSummary(userId: string): Promise<DashboardSumm
     listDepositsByUser(userId, 10),
     listUserOrders(userId, 20),
     listWalletLedger(userId, 20),
-    viewer.role === "admin"
+    isAdminViewer(viewer)
       ? getBalance()
           .then((balance) => ({ balance, error: null }))
           .catch((error) => ({
@@ -109,7 +121,7 @@ export async function getDashboardSummary(userId: string): Promise<DashboardSumm
         .reduce((sum, deposit) => sum + deposit.amount, 0),
     },
     admin:
-      viewer.role === "admin"
+      isAdminViewer(viewer)
         ? {
             upstreamBalance: upstreamBalanceResult.balance,
             upstreamBalanceError: upstreamBalanceResult.error,
@@ -439,7 +451,7 @@ export async function applyAdminWalletAdjustment(input: {
 }) {
   const actor = await getViewerById(input.actorUserId);
 
-  if (!actor || actor.role !== "admin") {
+  if (!actor || !isAdminViewer(actor)) {
     throw new Error("Akses admin ditolak.");
   }
 
@@ -479,4 +491,34 @@ export async function applyAdminWalletAdjustment(input: {
   }
 
   return nextViewer;
+}
+
+export async function applyAdminPasswordReset(input: {
+  actorUserId: string;
+  targetUserId: string;
+  newPassword: string;
+}) {
+  const actor = await getViewerById(input.actorUserId);
+
+  if (!actor || !isAdminViewer(actor)) {
+    throw new Error("Akses admin ditolak.");
+  }
+
+  const targetUser = await getViewerById(input.targetUserId);
+
+  if (!targetUser) {
+    throw new Error("User tujuan tidak ditemukan.");
+  }
+
+  const nextPassword = input.newPassword.trim();
+
+  if (nextPassword.length < 6) {
+    throw new Error("Password baru minimal 6 karakter.");
+  }
+
+  return await updateUserAccount(targetUser.id, {
+    name: targetUser.name,
+    email: targetUser.email,
+    passwordHash: hashPasswordForStorage(nextPassword),
+  });
 }

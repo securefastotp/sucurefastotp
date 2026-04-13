@@ -11,8 +11,6 @@ import {
   getSessionRecord,
   getUserByEmail,
   getViewerById,
-  registerFailedLoginAttempt,
-  resetFailedLoginAttempts,
   updateUserAccount,
 } from "@/lib/account-store";
 import { readSessionToken, signSessionToken } from "@/lib/session-token";
@@ -54,12 +52,20 @@ function verifyPasswordHash(password: string, storedValue: string) {
   return crypto.timingSafeEqual(storedBuffer, nextBuffer);
 }
 
+function normalizeEmail(value: string) {
+  return value.trim().toLowerCase();
+}
+
 function getAdminEmail() {
   return (
-    process.env.ADMIN_EMAIL?.trim().toLowerCase() ||
-    process.env.ADMIN_LOGIN_EMAIL?.trim().toLowerCase() ||
-    DEFAULT_ADMIN_EMAIL
+    normalizeEmail(process.env.ADMIN_EMAIL ?? "") ||
+    normalizeEmail(process.env.ADMIN_LOGIN_EMAIL ?? "") ||
+    normalizeEmail(DEFAULT_ADMIN_EMAIL)
   );
+}
+
+export function hashPasswordForStorage(password: string) {
+  return createPasswordHash(password);
 }
 
 async function writeAuthCookie(payload: AuthTokenPayload) {
@@ -142,9 +148,19 @@ export async function requireCurrentViewer() {
 
 export async function requireAdminViewer() {
   const viewer = await requireCurrentViewer();
+  const adminEmail = getAdminEmail();
+
+  if (
+    viewer.role !== "admin" &&
+    normalizeEmail(viewer.email) !== normalizeEmail(adminEmail)
+  ) {
+    throw new Error("Menu admin hanya untuk akun admin.");
+  }
 
   if (viewer.role !== "admin") {
-    throw new Error("Menu admin hanya untuk akun admin.");
+    await ensureAdminRoleForUser(viewer.id, viewer.email).catch(() => false);
+    const refreshed = await getViewerById(viewer.id);
+    return refreshed ?? viewer;
   }
 
   return viewer;
@@ -190,24 +206,7 @@ export async function loginAccount(input: {
   const password = input.password.trim();
   const user = await getUserByEmail(email);
 
-  if (
-    user &&
-    user.role === "admin" &&
-    user.locked_until &&
-    new Date(user.locked_until).getTime() > Date.now()
-  ) {
-    throw new Error("Login admin dikunci sementara setelah 3 percobaan salah.");
-  }
-
   if (!user || !verifyPasswordHash(password, user.password_hash)) {
-    if (user && (user.role === "admin" || user.email === getAdminEmail())) {
-      const state = await registerFailedLoginAttempt(user.user_id);
-
-      if (state?.locked_until && new Date(state.locked_until).getTime() > Date.now()) {
-        throw new Error("Password admin salah 3 kali. Login dikunci 15 menit.");
-      }
-    }
-
     throw new Error("Email atau password tidak cocok.");
   }
 
@@ -218,7 +217,6 @@ export async function loginAccount(input: {
     throw new Error("Akun ditemukan, tetapi datanya gagal dimuat.");
   }
 
-  await resetFailedLoginAttempts(user.user_id).catch(() => false);
   await startSession(viewer.id);
 
   return viewer;

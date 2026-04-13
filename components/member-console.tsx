@@ -72,7 +72,7 @@ const SUPPORT_LINKS = [
     id: "group",
     title: "Grup Store",
     subtitle: "Putri Gmoyy Store",
-    href: "https://wa.me/12894466453?text=Halo%20admin%2C%20saya%20ingin%20join%20grup%20Putri%20Gmoyy%20Store",
+    href: "https://chat.whatsapp.com/Gpl3XMxuiVTGHbyEkaEoz6?mode=ems_copy_t",
   },
   {
     id: "developer",
@@ -83,6 +83,8 @@ const SUPPORT_LINKS = [
 ] as const;
 
 const PRIMARY_ADMIN_EMAIL = "senjarqy@gmail.com";
+const ADMIN_SUPPORT_LINK =
+  SUPPORT_LINKS.find((link) => link.id === "admin") ?? SUPPORT_LINKS[0];
 
 function toFlagEmoji(code?: string) {
   if (!code || !/^[a-z]{2}$/i.test(code)) {
@@ -565,6 +567,32 @@ async function requestAdminWalletAdjustment(input: {
   return payload;
 }
 
+async function requestAdminPasswordReset(input: {
+  userId: string;
+  newPassword: string;
+}) {
+  const response = await fetch(`/api/admin/users/${input.userId}/password`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      newPassword: input.newPassword,
+    }),
+  });
+  const payload = (await response.json()) as
+    | { viewer: AuthViewer; message: string }
+    | ErrorResponse;
+
+  if (!response.ok || !("viewer" in payload)) {
+    throw new Error(
+      hasError(payload) ? payload.error : "Gagal mengganti password user.",
+    );
+  }
+
+  return payload;
+}
+
 export function MemberConsole({
   initialViewer,
   initialSummary,
@@ -621,9 +649,12 @@ export function MemberConsole({
   const [isDepositLoading, setIsDepositLoading] = useState(false);
   const [isOrderLoading, setIsOrderLoading] = useState(false);
   const [isOrderCancelling, setIsOrderCancelling] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [isSettingsLoading, setIsSettingsLoading] = useState(false);
   const [isAdminUsersLoading, setIsAdminUsersLoading] = useState(false);
   const [isAdminSaving, setIsAdminSaving] = useState(false);
+  const [isAdminPasswordSaving, setIsAdminPasswordSaving] = useState(false);
+  const [adminNewPassword, setAdminNewPassword] = useState("");
 
   const deferredSearch = useDeferredValue(serviceSearch);
   const deferredAdminSearch = useDeferredValue(adminSearch);
@@ -1160,6 +1191,51 @@ export function MemberConsole({
     }
   }
 
+  async function handleAdminPasswordReset(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedAdminUser) {
+      setAdminError("Pilih user tujuan terlebih dulu.");
+      return;
+    }
+
+    if (!adminNewPassword.trim()) {
+      setAdminError("Password baru wajib diisi.");
+      return;
+    }
+
+    setIsAdminPasswordSaving(true);
+    setAdminError(null);
+
+    try {
+      const payload = await requestAdminPasswordReset({
+        userId: selectedAdminUser.id,
+        newPassword: adminNewPassword,
+      });
+
+      if (viewer?.id === payload.viewer.id) {
+        setViewer(payload.viewer);
+        await refreshSummary();
+      }
+
+      setAdminNewPassword("");
+      setToast({
+        type: "success",
+        message: payload.message,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Gagal mengganti password user.";
+      setAdminError(message);
+      setToast({
+        type: "error",
+        message,
+      });
+    } finally {
+      setIsAdminPasswordSaving(false);
+    }
+  }
+
   if (!viewer || !summary) {
     return (
       <div className="flex min-h-[100dvh] items-center justify-center px-4 py-8">
@@ -1238,6 +1314,36 @@ export function MemberConsole({
               type="password"
               value={authPassword}
             />
+            {authMode === "login" ? (
+              <div className="flex items-center justify-between text-[12px] text-sky-100/70">
+                <button
+                  className="text-sky-100/80 underline-offset-4 hover:underline"
+                  onClick={() => setShowForgotPassword((current) => !current)}
+                  type="button"
+                >
+                  Lupa sandi?
+                </button>
+                <span>{showForgotPassword ? "Hubungi admin di bawah" : ""}</span>
+              </div>
+            ) : null}
+            {authMode === "login" && showForgotPassword ? (
+              <a
+                className="flex items-center justify-between gap-3 rounded-[18px] border border-white/10 bg-white/5 px-4 py-3 text-[12px] text-sky-100/80 transition hover:border-emerald-300/30 hover:bg-emerald-500/10"
+                href={ADMIN_SUPPORT_LINK.href}
+                rel="noreferrer"
+                target="_blank"
+              >
+                <span className="flex items-center gap-3">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-[12px] bg-white">
+                    <WhatsAppIcon className="h-5 w-5" />
+                  </span>
+                  Hubungi admin untuk password sementara
+                </span>
+                <span className="text-[11px] font-medium text-emerald-200">
+                  Chat Admin
+                </span>
+              </a>
+            ) : null}
             {authError ? (
               <div className="rounded-[16px] border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-[12px] text-rose-100">
                 {authError}
@@ -1824,10 +1930,6 @@ export function MemberConsole({
                 icon={<ShieldIcon className="h-4.5 w-4.5" />}
                 title="Keamanan"
               />
-              <p>
-                Jika akun Anda adalah admin, login admin akan dikunci sementara setelah
-                3 kali password salah.
-              </p>
               <button
                 className="w-full rounded-[18px] border border-white/10 bg-white/4 px-4 py-3 text-[13px] font-medium text-sky-100/80"
                 onClick={() => {
@@ -2013,6 +2115,51 @@ export function MemberConsole({
                     <Spinner className="text-[#08101c]" label="Menyimpan..." />
                   ) : (
                     "Simpan Saldo Manual"
+                  )}
+                </button>
+              </form>
+            </div>
+
+            <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
+              <SectionTitle
+                icon={<ShieldIcon className="h-4.5 w-4.5" />}
+                title="Reset Password User"
+              />
+              {selectedAdminUser ? (
+                <div className="mt-4 rounded-[18px] border border-white/10 bg-white/4 px-4 py-3">
+                  <p className="text-[13px] font-semibold text-white">
+                    {selectedAdminUser.name}
+                  </p>
+                  <p className="mt-1 text-[11px] text-sky-100/60">
+                    {selectedAdminUser.email}
+                  </p>
+                </div>
+              ) : null}
+              <form className="mt-4 space-y-3" onSubmit={handleAdminPasswordReset}>
+                <input
+                  className="w-full rounded-[16px] border border-white/10 bg-[#07111f] px-4 py-3 text-[14px] text-white outline-none transition focus:border-sky-300/60"
+                  onChange={(event) => setAdminNewPassword(event.target.value)}
+                  placeholder="Password baru untuk user"
+                  type="password"
+                  value={adminNewPassword}
+                />
+                <p className="text-[11px] text-sky-100/58">
+                  Password minimal 6 karakter. Informasikan ke user setelah diganti.
+                </p>
+                {adminError ? (
+                  <div className="rounded-[16px] border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-[12px] text-rose-100">
+                    {adminError}
+                  </div>
+                ) : null}
+                <button
+                  className="flex w-full items-center justify-center rounded-[18px] bg-[linear-gradient(135deg,#7af1ff,#358cff)] px-4 py-3 text-[14px] font-semibold text-[#08101c]"
+                  disabled={isAdminPasswordSaving || !selectedAdminUser}
+                  type="submit"
+                >
+                  {isAdminPasswordSaving ? (
+                    <Spinner className="text-[#08101c]" label="Menyimpan..." />
+                  ) : (
+                    "Simpan Password Baru"
                   )}
                 </button>
               </form>
