@@ -319,8 +319,10 @@ export async function createUser(input: CreateUserInput) {
   `) as Array<{ total: number }>;
   const role: UserRole =
     input.role ||
-    (configuredAdminEmail && configuredAdminEmail === email
-      ? "admin"
+    (configuredAdminEmail
+      ? configuredAdminEmail === email
+        ? "admin"
+        : "member"
       : (adminRows[0]?.total ?? 0) === 0
         ? "admin"
         : "member");
@@ -504,14 +506,25 @@ export async function ensureAdminRoleForUser(userId: string, email: string) {
   const normalizedEmail = normalizeEmail(email);
   const configuredAdminEmail = getConfiguredAdminEmail();
 
-  if (configuredAdminEmail && configuredAdminEmail === normalizedEmail) {
+  if (configuredAdminEmail) {
+    if (configuredAdminEmail === normalizedEmail) {
+      await sql`
+        UPDATE app_users
+        SET role = 'admin', updated_at = NOW()
+        WHERE user_id = ${userId}
+      `;
+
+      return true;
+    }
+
     await sql`
       UPDATE app_users
-      SET role = 'admin', updated_at = NOW()
+      SET role = 'member', updated_at = NOW()
       WHERE user_id = ${userId}
+        AND role <> 'member'
     `;
 
-    return true;
+    return false;
   }
 
   const rows = (await sql`

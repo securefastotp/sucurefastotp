@@ -61,6 +61,23 @@ const serverOptions = [
   },
 ];
 
+function toFlagEmoji(code?: string) {
+  if (!code || !/^[a-z]{2}$/i.test(code)) {
+    return null;
+  }
+
+  return code
+    .toUpperCase()
+    .split("")
+    .map((char) => String.fromCodePoint(127397 + char.charCodeAt(0)))
+    .join("");
+}
+
+function getCountryLabel(country: CountryOption) {
+  const flag = country.flagEmoji ?? toFlagEmoji(country.code);
+  return `${flag ? `${flag} ` : ""}${country.name}`;
+}
+
 function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
@@ -1364,7 +1381,7 @@ export function MemberConsole({
                 </option>
                 {countries.map((country) => (
                   <option key={`${country.serverId}-${country.id}`} value={country.id}>
-                    {country.flagEmoji ? `${country.flagEmoji} ` : ""}{country.name}
+                    {getCountryLabel(country)}
                   </option>
                 ))}
               </select>

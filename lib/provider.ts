@@ -136,6 +136,18 @@ const countryCacheStore =
   countryCacheGlobal.__upstreamCountryCache ?? new Map<string, { countries: CountryOption[]; expiresAt: number }>();
 countryCacheGlobal.__upstreamCountryCache = countryCacheStore;
 
+function countryCodeToFlagEmoji(code?: string) {
+  if (!code || !/^[a-z]{2}$/i.test(code)) {
+    return undefined;
+  }
+
+  return code
+    .toUpperCase()
+    .split("")
+    .map((char) => String.fromCodePoint(127397 + char.charCodeAt(0)))
+    .join("");
+}
+
 function getProviderConfig() {
   const apiKey = process.env.UPSTREAM_API_KEY;
   const requestedMode = process.env.UPSTREAM_PROVIDER_MODE;
@@ -270,7 +282,7 @@ function getCountryMeta(countryId?: number | string) {
       id: resolvedId,
       name: knownMeta.name,
       code: knownMeta.code,
-      flagEmoji: undefined,
+      flagEmoji: knownMeta.flagEmoji ?? countryCodeToFlagEmoji(knownMeta.code),
     };
   }
 
@@ -309,7 +321,7 @@ function getCachedCountries(serverId: string): CountryOption[] {
           ? country.name
           : meta.name,
       code: country.code && /^[a-z]{2}$/i.test(country.code) ? country.code : meta.code,
-      flagEmoji: meta.flagEmoji,
+      flagEmoji: meta.flagEmoji ?? countryCodeToFlagEmoji(meta.code),
     };
   });
 }
@@ -995,7 +1007,7 @@ export async function getCountries(serverId?: string): Promise<CountryOption[]> 
           id: countryId,
           name: meta.name,
           code: meta.code,
-          flagEmoji: meta.flagEmoji,
+          flagEmoji: meta.flagEmoji ?? countryCodeToFlagEmoji(meta.code),
           availableServices: items.length,
           serverId: resolvedServerId,
         } satisfies CountryOption;
