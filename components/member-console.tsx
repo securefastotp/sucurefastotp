@@ -82,6 +82,8 @@ const SUPPORT_LINKS = [
   },
 ] as const;
 
+const PRIMARY_ADMIN_EMAIL = "senjarqy@gmail.com";
+
 function toFlagEmoji(code?: string) {
   if (!code || !/^[a-z]{2}$/i.test(code)) {
     return null;
@@ -625,7 +627,9 @@ export function MemberConsole({
 
   const deferredSearch = useDeferredValue(serviceSearch);
   const deferredAdminSearch = useDeferredValue(adminSearch);
-  const canAccessAdmin = viewer?.role === "admin";
+  const canAccessAdmin =
+    viewer?.role === "admin" ||
+    viewer?.email?.trim().toLowerCase() === PRIMARY_ADMIN_EMAIL;
   const selectedService = useMemo(
     () => catalog?.services.find((service) => service.id === selectedServiceId) ?? null,
     [catalog, selectedServiceId],
@@ -1285,7 +1289,7 @@ export function MemberConsole({
               <p className="text-[15px] font-semibold text-white">Rahmat OTP</p>
               <p className="text-[11px] text-sky-100/65">
                 {viewer.name}
-                {viewer.role === "admin" ? " · admin" : ""}
+                {canAccessAdmin ? " - admin" : ""}
               </p>
             </div>
           </div>
@@ -1298,6 +1302,12 @@ export function MemberConsole({
           </div>
         </div>
 
+        {canAccessAdmin ? (
+          <div className="rounded-[18px] border border-cyan-300/18 bg-[linear-gradient(135deg,rgba(95,216,255,0.12),rgba(56,110,255,0.14))] px-4 py-3 text-[12px] text-cyan-50">
+            Menu admin aktif untuk akun <span className="font-semibold text-white">{viewer.email}</span>
+          </div>
+        ) : null}
+
         <div
           className={cn(
             "grid gap-2 rounded-[20px] border border-white/10 bg-white/5 p-1",
@@ -1306,10 +1316,10 @@ export function MemberConsole({
         >
           {[
             { id: "dashboard", label: "Dashboard" },
+            ...(canAccessAdmin ? [{ id: "admin", label: "Admin" }] : []),
             { id: "buy", label: "Buy Number" },
             { id: "history", label: "Riwayat" },
             { id: "settings", label: "Pengaturan" },
-            ...(canAccessAdmin ? [{ id: "admin", label: "Admin" }] : []),
           ].map((item) => (
             <button
               key={item.id}
