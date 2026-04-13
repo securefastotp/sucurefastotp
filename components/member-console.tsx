@@ -56,9 +56,15 @@ type AdminStatusPayload = {
   upstreamKeyPresent: boolean;
   upstreamKeySuffix: string | null;
   upstreamKeyFingerprint: string | null;
-  upstreamAccountName: string | null;
   upstreamBaseUrl: string | null;
   upstreamHeader: string | null;
+};
+
+type BalanceDebugPayload = {
+  status: number;
+  url: string;
+  headerUsed: string;
+  response: string;
 };
 
 type ToastState =
@@ -643,6 +649,21 @@ async function requestAdminStatus() {
   return payload;
 }
 
+async function requestBalanceDebug() {
+  const response = await fetch("/api/admin/balance-debug", {
+    cache: "no-store",
+  });
+  const payload = (await response.json()) as BalanceDebugPayload | ErrorResponse;
+
+  if (!response.ok || !("status" in payload)) {
+    throw new Error(
+      hasError(payload) ? payload.error : "Gagal membaca balance debug.",
+    );
+  }
+
+  return payload;
+}
+
 export function MemberConsole({
   initialViewer,
   initialSummary,
@@ -713,6 +734,8 @@ export function MemberConsole({
   const [adminBalanceError, setAdminBalanceError] = useState<string | null>(null);
   const [adminStatus, setAdminStatus] = useState<AdminStatusPayload | null>(null);
   const [adminStatusError, setAdminStatusError] = useState<string | null>(null);
+  const [balanceDebug, setBalanceDebug] = useState<BalanceDebugPayload | null>(null);
+  const [balanceDebugError, setBalanceDebugError] = useState<string | null>(null);
 
   const deferredSearch = useDeferredValue(serviceSearch);
   const deferredAdminSearch = useDeferredValue(adminSearch);
@@ -1317,6 +1340,19 @@ export function MemberConsole({
     } catch (error) {
       setAdminStatusError(
         error instanceof Error ? error.message : "Gagal membaca status admin.",
+      );
+    }
+  }
+
+  async function handleBalanceDebug() {
+    setBalanceDebugError(null);
+
+    try {
+      const payload = await requestBalanceDebug();
+      setBalanceDebug(payload);
+    } catch (error) {
+      setBalanceDebugError(
+        error instanceof Error ? error.message : "Gagal membaca balance debug.",
       );
     }
   }
@@ -2112,6 +2148,33 @@ export function MemberConsole({
             <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
               <SectionTitle
                 icon={<ShieldIcon className="h-4.5 w-4.5" />}
+                title="Balance Debug"
+                action={
+                  <button
+                    className="rounded-[12px] border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-sky-100/70 transition hover:border-sky-300/40"
+                    onClick={() => void handleBalanceDebug()}
+                    type="button"
+                  >
+                    Cek
+                  </button>
+                }
+              />
+              <div className="mt-4 rounded-[18px] border border-white/10 bg-white/4 px-4 py-3 text-[12px] text-sky-100/70">
+                <p>Status: {balanceDebug?.status ?? "-"}</p>
+                <p>URL: {balanceDebug?.url ?? "-"}</p>
+                <p>Header: {balanceDebug?.headerUsed ?? "-"}</p>
+                <p className="mt-2 break-words">
+                  Response: {balanceDebug?.response ?? "-"}
+                </p>
+                {balanceDebugError ? (
+                  <p className="mt-2 text-rose-200">{balanceDebugError}</p>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
+              <SectionTitle
+                icon={<ShieldIcon className="h-4.5 w-4.5" />}
                 title="Status Admin"
                 action={
                   <button
@@ -2126,7 +2189,6 @@ export function MemberConsole({
               <div className="mt-4 rounded-[18px] border border-white/10 bg-white/4 px-4 py-3 text-[12px] text-sky-100/70">
                 <p>Database: {adminStatus?.databaseConfigured ? "Tersambung" : "Tidak tersedia"}</p>
                 <p>Upstream Key: {adminStatus?.upstreamKeyPresent ? "Terpasang" : "Belum ada"}</p>
-                <p>Account Name: {adminStatus?.upstreamAccountName ?? "-"}</p>
                 <p>Key Suffix: {adminStatus?.upstreamKeySuffix ?? "-"}</p>
                 <p>Key Fingerprint: {adminStatus?.upstreamKeyFingerprint ?? "-"}</p>
                 <p>Base URL: {adminStatus?.upstreamBaseUrl ?? "-"}</p>
