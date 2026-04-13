@@ -505,6 +505,186 @@ function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
+const ACTIVE_PAYMENT_STORAGE_KEY = "rahmat-otp-active-payment";
+const TRANSACTIONS_STORAGE_KEY = "rahmat-otp-transactions";
+
+type StoredActivePayment = {
+  id: string;
+  token?: string;
+};
+
+function mergeOrders(left?: Order, right?: Order) {
+  if (!left) {
+    return right;
+  }
+
+  if (!right) {
+    return left;
+  }
+
+  return {
+    ...left,
+    ...right,
+    otpCode: right.otpCode ?? left.otpCode,
+    contextToken: right.contextToken ?? left.contextToken,
+  };
+}
+
+function mergePaymentRecord(left: PaymentRecord, right: PaymentRecord) {
+  const leftUpdatedAt = new Date(left.updatedAt || left.createdAt).getTime();
+  const rightUpdatedAt = new Date(right.updatedAt || right.createdAt).getTime();
+  const newest = rightUpdatedAt >= leftUpdatedAt ? right : left;
+  const oldest = newest === right ? left : right;
+
+  return {
+    ...oldest,
+    ...newest,
+    order: mergeOrders(oldest.order, newest.order),
+    qrCodeUrl: newest.qrCodeUrl ?? oldest.qrCodeUrl,
+    qrString: newest.qrString ?? oldest.qrString,
+    sessionToken: newest.sessionToken ?? oldest.sessionToken,
+    paidAt: newest.paidAt ?? oldest.paidAt,
+    statusMessage: newest.statusMessage ?? oldest.statusMessage,
+  } satisfies PaymentRecord;
+}
+
+function mergePaymentCollections(...collections: PaymentRecord[][]) {
+  const merged = new Map<string, PaymentRecord>();
+
+  for (const collection of collections) {
+    for (const payment of collection) {
+      if (!payment?.id) {
+        continue;
+      }
+
+      const current = merged.get(payment.id);
+      merged.set(payment.id, current ? mergePaymentRecord(current, payment) : payment);
+    }
+  }
+
+  return [...merged.values()]
+    .sort(
+      (left, right) =>
+        new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+    )
+    .slice(0, 20);
+}
+
+function readStoredTransactions() {
+  if (typeof window === "undefined") {
+    return [] as PaymentRecord[];
+  }
+
+  try {
+    const raw = window.localStorage.getItem(TRANSACTIONS_STORAGE_KEY);
+
+    if (!raw) {
+      return [];
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+
+    return parsed.filter(
+      (item): item is PaymentRecord =>
+        Boolean(item && typeof item === "object" && "id" in item),
+    );
+  } catch {
+    return [];
+  }
+}
+
+function writeStoredTransactions(payments: PaymentRecord[]) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(
+    TRANSACTIONS_STORAGE_KEY,
+    JSON.stringify(mergePaymentCollections(payments)),
+  );
+}
+
+function upsertStoredTransaction(payment: PaymentRecord) {
+  const merged = mergePaymentCollections([payment], readStoredTransactions());
+  writeStoredTransactions(merged);
+
+  return merged;
+}
+
+function readStoredActivePayment() {
+  if (typeof window === "undefined") {
+    return null as StoredActivePayment | null;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(ACTIVE_PAYMENT_STORAGE_KEY);
+
+    if (!raw) {
+      return null;
+    }
+
+    const parsed = JSON.parse(raw) as unknown;
+
+    if (
+      !parsed ||
+      typeof parsed !== "object" ||
+      !("id" in parsed) ||
+      typeof parsed.id !== "string"
+    ) {
+      return null;
+    }
+
+    return {
+      id: parsed.id,
+      token:
+        "token" in parsed && typeof parsed.token === "string"
+          ? parsed.token
+          : undefined,
+    } satisfies StoredActivePayment;
+  } catch {
+    return null;
+  }
+}
+
+function shouldRememberActivePayment(payment: PaymentRecord | null) {
+  if (!payment) {
+    return false;
+  }
+
+  if (payment.status === "pending") {
+    return true;
+  }
+
+  if (payment.status === "paid" && !payment.order) {
+    return true;
+  }
+
+  return payment.order?.status === "pending";
+}
+
+function writeStoredActivePayment(payment: PaymentRecord | null) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  if (!payment || !shouldRememberActivePayment(payment)) {
+    window.localStorage.removeItem(ACTIVE_PAYMENT_STORAGE_KEY);
+    return;
+  }
+
+  window.localStorage.setItem(
+    ACTIVE_PAYMENT_STORAGE_KEY,
+    JSON.stringify({
+      id: payment.id,
+      token: payment.sessionToken,
+    } satisfies StoredActivePayment),
+  );
+}
+
 function toServerId(serverId?: string): ServerId {
   return serverId === "mars" ? "mars" : "bimasakti";
 }
@@ -664,9 +844,14 @@ async function requestCreatePayment(service: Service, serverId: ServerId) {
   return payload.payment;
 }
 
-async function requestPaymentStatus(paymentId: string) {
+async function requestPaymentStatus(paymentId: string, sessionToken?: string) {
   const response = await fetch(`/api/payments/${paymentId}`, {
     cache: "no-store",
+    headers: sessionToken
+      ? {
+          "x-payment-token": sessionToken,
+        }
+      : undefined,
   });
   const payload = (await response.json()) as
     | { payment: PaymentRecord }
@@ -681,9 +866,14 @@ async function requestPaymentStatus(paymentId: string) {
   return payload.payment;
 }
 
-async function requestActivatePayment(paymentId: string) {
+async function requestActivatePayment(paymentId: string, sessionToken?: string) {
   const response = await fetch(`/api/payments/${paymentId}/activate`, {
     method: "POST",
+    headers: sessionToken
+      ? {
+          "x-payment-token": sessionToken,
+        }
+      : undefined,
   });
   const payload = (await response.json()) as
     | { order: Order | null; payment: PaymentRecord }
@@ -715,9 +905,14 @@ async function requestTransactions() {
   return payload.transactions;
 }
 
-async function requestOrderStatus(orderId: string) {
+async function requestOrderStatus(orderId: string, contextToken?: string) {
   const response = await fetch(`/api/orders/${orderId}`, {
     cache: "no-store",
+    headers: contextToken
+      ? {
+          "x-order-token": contextToken,
+        }
+      : undefined,
   });
   const payload = (await response.json()) as
     | { order: Order }
@@ -732,9 +927,14 @@ async function requestOrderStatus(orderId: string) {
   return payload.order;
 }
 
-async function requestCancelOrder(orderId: string) {
+async function requestCancelOrder(orderId: string, contextToken?: string) {
   const response = await fetch(`/api/orders/${orderId}`, {
     method: "DELETE",
+    headers: contextToken
+      ? {
+          "x-order-token": contextToken,
+        }
+      : undefined,
   });
   const payload = (await response.json()) as
     | { order: Order }
@@ -903,15 +1103,28 @@ export function CatalogConsole({
   async function loadTransactions() {
     setIsLoadingTransactions(true);
     setTransactionsError(null);
+    const cachedTransactions = readStoredTransactions();
+
+    if (cachedTransactions.length > 0) {
+      setTransactions(cachedTransactions);
+    }
 
     try {
-      setTransactions(await requestTransactions());
-    } catch (error) {
-      setTransactionsError(
-        error instanceof Error
-          ? error.message
-          : "Gagal membaca riwayat transaksi.",
+      const remoteTransactions = await requestTransactions();
+      const mergedTransactions = mergePaymentCollections(
+        remoteTransactions,
+        cachedTransactions,
       );
+      setTransactions(mergedTransactions);
+      writeStoredTransactions(mergedTransactions);
+    } catch (error) {
+      if (cachedTransactions.length === 0) {
+        setTransactionsError(
+          error instanceof Error
+            ? error.message
+            : "Gagal membaca riwayat transaksi.",
+        );
+      }
     } finally {
       setIsLoadingTransactions(false);
     }
@@ -939,17 +1152,12 @@ export function CatalogConsole({
     closeMenu();
   }
 
-  function rememberPaymentId(paymentId: string | null) {
-    if (typeof window === "undefined") {
-      return;
-    }
+  function rememberActivePayment(paymentRecord: PaymentRecord | null) {
+    writeStoredActivePayment(paymentRecord);
+  }
 
-    if (!paymentId) {
-      window.localStorage.removeItem("otp-payment-id");
-      return;
-    }
-
-    window.localStorage.setItem("otp-payment-id", paymentId);
+  function persistTransaction(paymentRecord: PaymentRecord) {
+    setTransactions(upsertStoredTransaction(paymentRecord));
   }
 
   function scrollToPaymentZone() {
@@ -965,36 +1173,38 @@ export function CatalogConsole({
     }, 80);
   }
 
-  async function syncPayment(paymentId: string) {
+  async function syncPayment(paymentId: string, sessionToken?: string | null) {
     setIsRefreshingPayment(true);
     setPaymentError(null);
 
     try {
-      const nextPayment = await requestPaymentStatus(paymentId);
+      const nextPayment = await requestPaymentStatus(
+        paymentId,
+        sessionToken ?? payment?.sessionToken,
+      );
 
       if (nextPayment.status === "paid" && !nextPayment.order) {
-        const activated = await requestActivatePayment(paymentId);
+        const activated = await requestActivatePayment(
+          paymentId,
+          nextPayment.sessionToken ?? sessionToken ?? undefined,
+        );
         setPayment(activated.payment);
+        persistTransaction(activated.payment);
+        rememberActivePayment(activated.payment);
 
         if (activated.order) {
           setOrder(activated.order);
-          rememberPaymentId(null);
-          void loadTransactions();
-        } else {
-          rememberPaymentId(activated.payment.id);
         }
 
         return;
       }
 
       setPayment(nextPayment);
+      persistTransaction(nextPayment);
+      rememberActivePayment(nextPayment);
 
       if (nextPayment.order) {
         setOrder(nextPayment.order);
-        rememberPaymentId(null);
-        void loadTransactions();
-      } else {
-        rememberPaymentId(nextPayment.id);
       }
     } catch (error) {
       setPaymentError(
@@ -1021,9 +1231,9 @@ export function CatalogConsole({
         toServerId(selectedProviderService.serverId),
       );
       setPayment(createdPayment);
-      rememberPaymentId(createdPayment.id);
+      persistTransaction(createdPayment);
+      rememberActivePayment(createdPayment);
       scrollToPaymentZone();
-      void loadTransactions();
     } catch (error) {
       setPaymentError(
         error instanceof Error ? error.message : "Gagal membuat checkout.",
@@ -1043,8 +1253,18 @@ export function CatalogConsole({
     setOrderError(null);
 
     try {
-      setOrder(await requestOrderStatus(order.id));
-      void loadTransactions();
+      const nextOrder = await requestOrderStatus(order.id, order.contextToken);
+      setOrder(nextOrder);
+
+      if (payment) {
+        const nextPayment = {
+          ...payment,
+          order: nextOrder,
+        } satisfies PaymentRecord;
+        setPayment(nextPayment);
+        persistTransaction(nextPayment);
+        rememberActivePayment(nextPayment);
+      }
     } catch (error) {
       setOrderError(
         error instanceof Error ? error.message : "Gagal membaca status order.",
@@ -1063,8 +1283,18 @@ export function CatalogConsole({
     setOrderError(null);
 
     try {
-      setOrder(await requestCancelOrder(order.id));
-      void loadTransactions();
+      const nextOrder = await requestCancelOrder(order.id, order.contextToken);
+      setOrder(nextOrder);
+
+      if (payment) {
+        const nextPayment = {
+          ...payment,
+          order: nextOrder,
+        } satisfies PaymentRecord;
+        setPayment(nextPayment);
+        persistTransaction(nextPayment);
+        rememberActivePayment(nextPayment);
+      }
     } catch (error) {
       setOrderError(
         error instanceof Error ? error.message : "Gagal membatalkan order.",
@@ -1161,9 +1391,11 @@ export function CatalogConsole({
     }
   }, [providerEntries, selectedProviderServer]);
 
-  const syncPaymentEvent = useEffectEvent((paymentId: string) => {
-    void syncPayment(paymentId);
-  });
+  const syncPaymentEvent = useEffectEvent(
+    (paymentId: string, sessionToken?: string | null) => {
+      void syncPayment(paymentId, sessionToken);
+    },
+  );
   const refreshOrderEvent = useEffectEvent(() => {
     void handleRefreshOrder();
   });
@@ -1171,11 +1403,14 @@ export function CatalogConsole({
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const paymentFromQuery = params.get("payment");
-    const paymentFromStorage = window.localStorage.getItem("otp-payment-id");
-    const targetPayment = paymentFromQuery || paymentFromStorage;
+    const paymentTokenFromQuery = params.get("paymentToken");
+    const paymentFromStorage = readStoredActivePayment();
+    const targetPayment = paymentFromQuery || paymentFromStorage?.id;
+    const targetPaymentToken =
+      paymentFromQuery ? paymentTokenFromQuery : paymentFromStorage?.token;
 
     if (targetPayment) {
-      syncPaymentEvent(targetPayment);
+      syncPaymentEvent(targetPayment, targetPaymentToken);
     }
   }, []);
 
@@ -1760,7 +1995,7 @@ export function CatalogConsole({
                 disabled={isRefreshingPayment}
                 onClick={() => {
                   playUiFeedback("select");
-                  void syncPayment(payment.id);
+                  void syncPayment(payment.id, payment.sessionToken);
                 }}
                 type="button"
               >

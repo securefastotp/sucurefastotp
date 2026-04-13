@@ -26,6 +26,7 @@ Salin `.env.example` menjadi `.env.local`, lalu isi credential provider Anda.
 NEXT_PUBLIC_SITE_NAME=Rahmat OTP
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 NEXT_PUBLIC_MIDTRANS_CLIENT_KEY=isi_client_key_midtrans
+PAYMENT_SESSION_SECRET=isi_secret_session_stabil
 
 UPSTREAM_PROVIDER_MODE=rest
 UPSTREAM_BASE_URL=https://api.kirimkode.com/v1
@@ -44,7 +45,7 @@ UPSTREAM_MIN_MARGIN=0
 UPSTREAM_CURRENCY=IDR
 UPSTREAM_TIMEOUT_MS=15000
 
-MIDTRANS_ENVIRONMENT=sandbox
+MIDTRANS_ENVIRONMENT=production
 MIDTRANS_SERVER_KEY=isi_server_key_midtrans
 MIDTRANS_QRIS_FEE_PERCENT=0.7
 MIDTRANS_QRIS_FEE_FLAT=0
@@ -63,8 +64,8 @@ MIDTRANS_QRIS_EXPIRY_MINUTES=15
 
 - Jika format API provider berbeda, cukup ubah env path atau sesuaikan normalizer di `lib/provider.ts`.
 - Saat `UPSTREAM_PROVIDER_MODE=mock`, aplikasi memakai data demo dan order in-memory.
-- Flow Midtrans di template ini sekarang memakai QRIS Core API + in-memory payment store. Untuk production serius, simpan payment session dan aktivasi order ke database.
-- Untuk production volume tinggi, simpan context order ke database atau Redis agar status order tetap stabil antar serverless instance.
+- Flow Midtrans sekarang memakai QRIS Core API + signed recovery token, jadi status payment dan order tidak langsung hilang saat serverless Vercel berpindah instance.
+- Untuk production volume tinggi dan multi-device history, sambungkan riwayat transaksi ke Vercel DB/Postgres agar data tetap persisten lintas browser.
 - Dari pengujian live 12 April 2026, KirimKode API menerima auth via header `x-api-key`, memakai `GET /balance`, `GET /orders`, `POST /order`, `GET /order/{id}/status`, dan `POST /order/{id}/cancel`.
 - Mode live sekarang hanya memakai katalog real dari endpoint `GET /services` KirimKode. Jika upstream kosong atau error, website akan menampilkan status asli upstream tanpa katalog buatan.
 - Harga jual sekarang mengikuti harga asli upstream tanpa markup tambahan.

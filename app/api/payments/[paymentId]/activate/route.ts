@@ -11,9 +11,13 @@ export const dynamic = "force-dynamic";
 
 export async function POST(_request: Request, context: RouteContext) {
   const { paymentId } = await context.params;
+  const requestUrl = new URL(_request.url);
+  const sessionToken =
+    _request.headers.get("x-payment-token") ??
+    requestUrl.searchParams.get("token");
 
   try {
-    const payment = await activatePaymentOrder(paymentId);
+    const payment = await activatePaymentOrder(paymentId, sessionToken);
 
     if (!payment) {
       return NextResponse.json(

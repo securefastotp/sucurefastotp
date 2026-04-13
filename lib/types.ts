@@ -56,6 +56,7 @@ export type Order = {
   createdAt: string;
   expiresAt: string;
   providerRef?: string;
+  contextToken?: string;
 };
 
 export type RuntimeStatus = {
@@ -120,4 +121,5 @@ export type PaymentRecord = {
   createdAt: string;
   updatedAt: string;
   order?: Order;
+  sessionToken?: string;
 };

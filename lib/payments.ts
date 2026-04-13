@@ -9,6 +9,7 @@ import {
   verifyMidtransSignature,
 } from "@/lib/midtrans";
 import { createOrder } from "@/lib/provider";
+import { attachOrderContextToken, readSessionToken, signSessionToken } from "@/lib/session-token";
 import { siteConfig } from "@/lib/site-config";
 import type { PaymentRecord, RuntimeStatus } from "@/lib/types";
 
@@ -34,6 +35,10 @@ const paymentsGlobal = globalThis as typeof globalThis & {
 const paymentStore =
   paymentsGlobal.__otpPaymentStore ?? new Map<string, PaymentRecord>();
 paymentsGlobal.__otpPaymentStore = paymentStore;
+
+type SerializablePaymentRecord = Omit<PaymentRecord, "sessionToken" | "order"> & {
+  order?: Omit<NonNullable<PaymentRecord["order"]>, "contextToken">;
+};
 
 function createPaymentId() {
   const random = crypto.randomBytes(3).toString("hex");
@@ -106,8 +111,53 @@ function updatePaymentRecord(
       "Menunggu pembayaran QRIS. Scan kode lalu cek status beberapa detik lagi.";
   }
 
-  paymentStore.set(payment.id, payment);
-  return payment;
+  return savePaymentRecord(payment);
+}
+
+function serializePaymentRecord(payment: PaymentRecord): SerializablePaymentRecord {
+  const { order, ...snapshot } = payment;
+
+  return {
+    ...snapshot,
+    order: order
+      ? (({ contextToken, ...orderSnapshot }) => {
+          void contextToken;
+          return orderSnapshot;
+        })(order)
+      : undefined,
+  };
+}
+
+function withPaymentSessionToken(payment: PaymentRecord) {
+  const nextPayment = {
+    ...payment,
+    order: payment.order ? attachOrderContextToken(payment.order) : undefined,
+  } satisfies PaymentRecord;
+
+  nextPayment.sessionToken = signSessionToken(
+    "payment",
+    serializePaymentRecord(nextPayment),
+  );
+
+  return nextPayment;
+}
+
+function restorePaymentFromToken(paymentId: string, sessionToken?: string | null) {
+  const payload =
+    readSessionToken<SerializablePaymentRecord>("payment", sessionToken);
+
+  if (!payload || payload.id !== paymentId) {
+    return null;
+  }
+
+  return withPaymentSessionToken(payload);
+}
+
+function savePaymentRecord(payment: PaymentRecord) {
+  const nextPayment = withPaymentSessionToken(payment);
+  paymentStore.set(nextPayment.id, nextPayment);
+
+  return nextPayment;
 }
 
 export async function createPaymentSession(input: CreatePaymentInput) {
@@ -173,13 +223,15 @@ export async function createPaymentSession(input: CreatePaymentInput) {
   payment.transactionId = transaction.transactionId;
   payment.qrCodeUrl = transaction.qrCodeUrl;
   payment.qrString = transaction.qrString;
-  paymentStore.set(payment.id, payment);
-
-  return payment;
+  return savePaymentRecord(payment);
 }
 
-export async function getPaymentSession(paymentId: string) {
-  const payment = paymentStore.get(paymentId);
+export async function getPaymentSession(
+  paymentId: string,
+  sessionToken?: string | null,
+) {
+  const payment =
+    paymentStore.get(paymentId) ?? restorePaymentFromToken(paymentId, sessionToken);
 
   if (!payment) {
     return null;
@@ -189,23 +241,26 @@ export async function getPaymentSession(paymentId: string) {
     const statusPayload = await getMidtransTransactionStatus(payment.midtransOrderId);
     return updatePaymentRecord(payment, statusPayload);
   } catch {
-    return payment;
+    return savePaymentRecord(payment);
   }
 }
 
-export async function activatePaymentOrder(paymentId: string) {
-  const payment = await getPaymentSession(paymentId);
+export async function activatePaymentOrder(
+  paymentId: string,
+  sessionToken?: string | null,
+) {
+  const payment = await getPaymentSession(paymentId, sessionToken);
 
   if (!payment) {
     return null;
   }
 
   if (payment.status !== "paid") {
-    return payment;
+    return savePaymentRecord(payment);
   }
 
   if (payment.order) {
-    return payment;
+    return savePaymentRecord(payment);
   }
 
   payment.order = await createOrder({
@@ -221,9 +276,7 @@ export async function activatePaymentOrder(paymentId: string) {
   });
   payment.updatedAt = new Date().toISOString();
   payment.statusMessage = "Pembayaran terverifikasi dan order sudah dibuat.";
-  paymentStore.set(payment.id, payment);
-
-  return payment;
+  return savePaymentRecord(payment);
 }
 
 export async function handleMidtransNotification(payload: Record<string, unknown>) {
@@ -262,5 +315,6 @@ export function listPaymentSessions(limit = 20) {
       (left, right) =>
         new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
     )
-    .slice(0, limit);
+    .slice(0, limit)
+    .map((payment) => withPaymentSessionToken(payment));
 }

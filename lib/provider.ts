@@ -11,6 +11,7 @@ import {
 } from "@/lib/mock-data";
 import { getPaymentGatewayStatus } from "@/lib/payments";
 import { computeRetailPrice, getPricingConfig } from "@/lib/pricing";
+import { attachOrderContextToken, restoreOrderFromContextToken } from "@/lib/session-token";
 import type {
   Balance,
   CatalogResponse,
@@ -1038,11 +1039,13 @@ export async function createOrder(input: CreateOrderInput) {
   const config = getProviderConfig();
 
   if (config.mode === "mock") {
-    return createMockOrder({
-      serviceId: input.serviceId,
-      serverId: input.serverId,
-      countryId: input.countryId,
-    });
+    return attachOrderContextToken(
+      createMockOrder({
+        serviceId: input.serviceId,
+        serverId: input.serverId,
+        countryId: input.countryId,
+      }),
+    );
   }
 
   const fallbackCurrency = input.currency ?? getPricingConfig().currency;
@@ -1070,17 +1073,30 @@ export async function createOrder(input: CreateOrderInput) {
   });
 
   orderContextStore.set(order.id, toOrderContext(order));
-  return order;
+  return attachOrderContextToken(order);
 }
 
-export async function getOrder(orderId: string) {
+export async function getOrder(orderId: string, contextToken?: string | null) {
   const config = getProviderConfig();
 
   if (config.mode === "mock") {
-    return getMockOrder(orderId);
+    const order = getMockOrder(orderId);
+    return order ? attachOrderContextToken(order) : order;
   }
 
-  const fallback = orderContextStore.get(orderId);
+  const fallback =
+    orderContextStore.get(orderId) ??
+    (() => {
+      const restoredOrder = restoreOrderFromContextToken(orderId, contextToken);
+
+      if (!restoredOrder) {
+        return null;
+      }
+
+      const restoredContext = toOrderContext(restoredOrder);
+      orderContextStore.set(orderId, restoredContext);
+      return restoredContext;
+    })();
 
   if (!fallback) {
     throw new Error(
@@ -1089,20 +1105,35 @@ export async function getOrder(orderId: string) {
   }
 
   const payload = await fetchUpstream(replaceOrderId(config.orderStatusPath, orderId));
-  const order = normalizeStatusOrder(payload, fallback, orderId);
+  const order = attachOrderContextToken(
+    normalizeStatusOrder(payload, fallback, orderId),
+  );
   orderContextStore.set(orderId, toOrderContext(order));
 
   return order;
 }
 
-export async function cancelOrder(orderId: string) {
+export async function cancelOrder(orderId: string, contextToken?: string | null) {
   const config = getProviderConfig();
 
   if (config.mode === "mock") {
-    return cancelMockOrder(orderId);
+    const order = cancelMockOrder(orderId);
+    return order ? attachOrderContextToken(order) : order;
   }
 
-  const fallback = orderContextStore.get(orderId);
+  const fallback =
+    orderContextStore.get(orderId) ??
+    (() => {
+      const restoredOrder = restoreOrderFromContextToken(orderId, contextToken);
+
+      if (!restoredOrder) {
+        return null;
+      }
+
+      const restoredContext = toOrderContext(restoredOrder);
+      orderContextStore.set(orderId, restoredContext);
+      return restoredContext;
+    })();
 
   if (!fallback) {
     return null;
@@ -1112,7 +1143,7 @@ export async function cancelOrder(orderId: string) {
     method: config.cancelMethod,
   });
 
-  const order = {
+  const order = attachOrderContextToken({
     id: orderId,
     serviceId: fallback.serviceId,
     serviceCode: fallback.serviceCode,
@@ -1128,7 +1159,7 @@ export async function cancelOrder(orderId: string) {
     createdAt: fallback.createdAt,
     expiresAt: fallback.expiresAt,
     providerRef: fallback.providerRef,
-  } satisfies Order;
+  } satisfies Order);
 
   orderContextStore.set(orderId, toOrderContext(order));
   return order;

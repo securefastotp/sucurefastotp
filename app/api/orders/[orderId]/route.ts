@@ -12,9 +12,13 @@ export const preferredRegion = "sin1";
 
 export async function GET(_request: Request, context: RouteContext) {
   const { orderId } = await context.params;
+  const requestUrl = new URL(_request.url);
+  const contextToken =
+    _request.headers.get("x-order-token") ??
+    requestUrl.searchParams.get("token");
 
   try {
-    const order = await getOrder(orderId);
+    const order = await getOrder(orderId, contextToken);
 
     if (!order) {
       return NextResponse.json({ error: "Order tidak ditemukan." }, { status: 404 });
@@ -31,9 +35,13 @@ export async function GET(_request: Request, context: RouteContext) {
 
 export async function DELETE(_request: Request, context: RouteContext) {
   const { orderId } = await context.params;
+  const requestUrl = new URL(_request.url);
+  const contextToken =
+    _request.headers.get("x-order-token") ??
+    requestUrl.searchParams.get("token");
 
   try {
-    const order = await cancelOrder(orderId);
+    const order = await cancelOrder(orderId, contextToken);
 
     if (!order) {
       return NextResponse.json({ error: "Order tidak ditemukan." }, { status: 404 });
