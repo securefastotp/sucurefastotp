@@ -8,7 +8,12 @@ import {
   useMemo,
   useState,
 } from "react";
-import { formatCurrency, formatDateTime } from "@/lib/format";
+import {
+  formatCompactDateTime,
+  formatCurrency,
+  formatDateTime,
+  formatElapsedTimer,
+} from "@/lib/format";
 import type {
   AdminUserSummary,
   AuthViewer,
@@ -17,6 +22,8 @@ import type {
   DashboardSummary,
   DepositRecord,
   Order,
+  PricingSettings,
+  ServicePriceOverride,
   WalletLedgerEntry,
 } from "@/lib/types";
 
@@ -51,6 +58,12 @@ type BalancePayload = {
   };
 };
 
+type AdminPricingStatePayload = {
+  config: PricingSettings;
+  overrides: ServicePriceOverride[];
+};
+
+const CANCEL_COOLDOWN_SECONDS = 180;
 
 type ToastState =
   | {
@@ -166,6 +179,19 @@ function normalizeOrderErrorMessage(message: string) {
   }
 
   return message;
+}
+
+function formatCountdown(totalSeconds: number) {
+  const safeSeconds = Math.max(0, Math.floor(totalSeconds));
+  const hours = Math.floor(safeSeconds / 3600);
+  const minutes = Math.floor((safeSeconds % 3600) / 60);
+  const seconds = safeSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
 function Spinner({
@@ -714,6 +740,90 @@ async function requestUpstreamBalance() {
   return payload.balance;
 }
 
+async function requestAdminPricingState() {
+  const response = await fetch("/api/admin/pricing", {
+    cache: "no-store",
+  });
+  const payload = (await response.json()) as AdminPricingStatePayload | ErrorResponse;
+
+  if (!response.ok || hasError(payload) || !("config" in payload)) {
+    throw new Error(
+      hasError(payload) ? payload.error : "Gagal membaca pengaturan harga admin.",
+    );
+  }
+
+  return payload;
+}
+
+async function requestAdminProfitPercentUpdate(profitPercent: number) {
+  const response = await fetch("/api/admin/pricing", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ profitPercent }),
+  });
+  const payload = (await response.json()) as
+    | { config: PricingSettings; message: string }
+    | ErrorResponse;
+
+  if (!response.ok || hasError(payload) || !("config" in payload)) {
+    throw new Error(
+      hasError(payload) ? payload.error : "Gagal memperbarui persentase keuntungan.",
+    );
+  }
+
+  return payload;
+}
+
+async function requestAdminServiceOverrideSave(input: {
+  serviceId: string;
+  serviceCode: string;
+  service: string;
+  serverId: ServerId;
+  countryId: number;
+  country: string;
+  customPrice: number;
+  upstreamPrice: number;
+}) {
+  const response = await fetch("/api/admin/pricing/service", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+  const payload = (await response.json()) as
+    | { override: ServicePriceOverride; message: string }
+    | ErrorResponse;
+
+  if (!response.ok || hasError(payload) || !("override" in payload)) {
+    throw new Error(
+      hasError(payload) ? payload.error : "Gagal menyimpan harga layanan.",
+    );
+  }
+
+  return payload;
+}
+
+async function requestAdminServiceOverrideDelete(serviceId: string) {
+  const response = await fetch(
+    `/api/admin/pricing/service?serviceId=${encodeURIComponent(serviceId)}`,
+    {
+      method: "DELETE",
+    },
+  );
+  const payload = (await response.json()) as { message: string } | ErrorResponse;
+
+  if (!response.ok || hasError(payload) || !("message" in payload)) {
+    throw new Error(
+      hasError(payload) ? payload.error : "Gagal menghapus override harga layanan.",
+    );
+  }
+
+  return payload;
+}
+
 
 export function MemberConsole({
   initialViewer,
@@ -747,6 +857,7 @@ export function MemberConsole({
   const [orderError, setOrderError] = useState<string | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [adminError, setAdminError] = useState<string | null>(null);
+  const [adminPricingError, setAdminPricingError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState>(null);
   const [depositAmount, setDepositAmount] = useState("10000");
   const [settingsName, setSettingsName] = useState(initialViewer?.name ?? "");
@@ -779,16 +890,45 @@ export function MemberConsole({
   const [isAdminPasswordSaving, setIsAdminPasswordSaving] = useState(false);
   const [isAdminBlockSaving, setIsAdminBlockSaving] = useState(false);
   const [isAdminDeleteSaving, setIsAdminDeleteSaving] = useState(false);
+  const [isAdminPricingLoading, setIsAdminPricingLoading] = useState(false);
+  const [isAdminPricingConfigSaving, setIsAdminPricingConfigSaving] = useState(false);
+  const [isAdminPricingServiceSaving, setIsAdminPricingServiceSaving] = useState(false);
+  const [isAdminPricingCountriesLoading, setIsAdminPricingCountriesLoading] =
+    useState(false);
+  const [isAdminPricingCatalogLoading, setIsAdminPricingCatalogLoading] =
+    useState(false);
   const [adminNewPassword, setAdminNewPassword] = useState("");
+  const [adminPricingConfig, setAdminPricingConfig] =
+    useState<PricingSettings | null>(null);
+  const [adminPriceOverrides, setAdminPriceOverrides] = useState<ServicePriceOverride[]>(
+    [],
+  );
+  const [adminProfitPercent, setAdminProfitPercent] = useState("");
+  const [adminPricingServer, setAdminPricingServer] = useState<ServerId>("bimasakti");
+  const [adminPricingCountries, setAdminPricingCountries] = useState<CountryOption[]>(
+    [],
+  );
+  const [adminPricingCountryId, setAdminPricingCountryId] = useState<number | null>(
+    null,
+  );
+  const [adminPricingCatalog, setAdminPricingCatalog] = useState<CatalogResponse | null>(
+    null,
+  );
+  const [adminPricingSearch, setAdminPricingSearch] = useState("");
+  const [selectedAdminPricingServiceId, setSelectedAdminPricingServiceId] =
+    useState("");
+  const [adminCustomPrice, setAdminCustomPrice] = useState("");
   const [adminBalanceOverride, setAdminBalanceOverride] = useState<{
     amount: number;
     currency: string;
     updatedAt: string;
   } | null>(null);
   const [adminBalanceError, setAdminBalanceError] = useState<string | null>(null);
+  const [nowTimestamp, setNowTimestamp] = useState(() => Date.now());
 
   const deferredSearch = useDeferredValue(serviceSearch);
   const deferredAdminSearch = useDeferredValue(adminSearch);
+  const deferredAdminPricingSearch = useDeferredValue(adminPricingSearch);
   const canAccessAdmin =
     viewer?.role === "admin" ||
     viewer?.email?.trim().toLowerCase() === PRIMARY_ADMIN_EMAIL;
@@ -831,6 +971,61 @@ export function MemberConsole({
       null,
     [adminUsers, selectedAdminUserId],
   );
+  const filteredAdminPricingServices = useMemo(() => {
+    const services = adminPricingCatalog?.services ?? [];
+    const query = deferredAdminPricingSearch.trim().toLowerCase();
+
+    if (!query) {
+      return services;
+    }
+
+    return services.filter((service) =>
+      `${service.service} ${service.serviceCode} ${service.country}`
+        .toLowerCase()
+        .includes(query),
+    );
+  }, [adminPricingCatalog, deferredAdminPricingSearch]);
+  const selectedAdminPricingService = useMemo(
+    () =>
+      adminPricingCatalog?.services.find(
+        (service) => service.id === selectedAdminPricingServiceId,
+      ) ??
+      adminPricingCatalog?.services[0] ??
+      null,
+    [adminPricingCatalog, selectedAdminPricingServiceId],
+  );
+  const selectedAdminServiceOverride = useMemo(
+    () =>
+      selectedAdminPricingService
+        ? adminPriceOverrides.find(
+            (override) => override.serviceId === selectedAdminPricingService.id,
+          ) ?? null
+        : null,
+    [adminPriceOverrides, selectedAdminPricingService],
+  );
+  const hasPendingOrderTimer = Boolean(
+    activeOrder?.status === "pending" ||
+      summary?.orders.some((order) => order.status === "pending"),
+  );
+  const activeOrderCancelRemainingSeconds = useMemo(() => {
+    if (!activeOrder || activeOrder.status !== "pending") {
+      return 0;
+    }
+
+    const createdAt = new Date(activeOrder.createdAt).getTime();
+
+    if (!Number.isFinite(createdAt)) {
+      return 0;
+    }
+
+    return Math.max(
+      0,
+      CANCEL_COOLDOWN_SECONDS - Math.floor((nowTimestamp - createdAt) / 1000),
+    );
+  }, [activeOrder, nowTimestamp]);
+  const canCancelActiveOrder = Boolean(
+    activeOrder?.status === "pending" && activeOrderCancelRemainingSeconds === 0,
+  );
 
   useEffect(() => {
     if (!toast) {
@@ -858,6 +1053,30 @@ export function MemberConsole({
   useEffect(() => {
     setHistoryPage(1);
   }, [summary?.orders.length]);
+
+  useEffect(() => {
+    if (!hasPendingOrderTimer) {
+      return;
+    }
+
+    setNowTimestamp(Date.now());
+    const timer = window.setInterval(() => {
+      setNowTimestamp(Date.now());
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [hasPendingOrderTimer]);
+
+  useEffect(() => {
+    if (!selectedAdminPricingService) {
+      setAdminCustomPrice("");
+      return;
+    }
+
+    setAdminCustomPrice(
+      String(selectedAdminServiceOverride?.customPrice ?? selectedAdminPricingService.price),
+    );
+  }, [selectedAdminPricingService, selectedAdminServiceOverride]);
 
   async function refreshSummary() {
     if (!viewer) {
@@ -887,6 +1106,111 @@ export function MemberConsole({
       setIsSummaryLoading(false);
     }
   }
+
+  function applyMemberCatalogResult(nextCatalog: CatalogResponse) {
+    setCatalog(nextCatalog);
+    setSelectedServiceId((current) => {
+      if (current && nextCatalog.services.some((service) => service.id === current)) {
+        return current;
+      }
+
+      return nextCatalog.services[0]?.id ?? "";
+    });
+  }
+
+  function applyAdminCatalogResult(nextCatalog: CatalogResponse) {
+    setAdminPricingCatalog(nextCatalog);
+    setSelectedAdminPricingServiceId((current) => {
+      if (current && nextCatalog.services.some((service) => service.id === current)) {
+        return current;
+      }
+
+      return nextCatalog.services[0]?.id ?? "";
+    });
+  }
+
+  const loadAdminPricingState = useCallback(async () => {
+    if (!canAccessAdmin) {
+      return;
+    }
+
+    setIsAdminPricingLoading(true);
+    setAdminPricingError(null);
+
+    try {
+      const pricing = await requestAdminPricingState();
+      setAdminPricingConfig(pricing.config);
+      setAdminPriceOverrides(pricing.overrides);
+      setAdminProfitPercent(String(pricing.config.profitPercent));
+    } catch (error) {
+      setAdminPricingError(
+        error instanceof Error ? error.message : "Gagal membaca pengaturan harga admin.",
+      );
+    } finally {
+      setIsAdminPricingLoading(false);
+    }
+  }, [canAccessAdmin]);
+
+  const loadAdminPricingCountries = useCallback(
+    async (serverId: ServerId) => {
+      if (!canAccessAdmin) {
+        return;
+      }
+
+      setIsAdminPricingCountriesLoading(true);
+      setAdminPricingError(null);
+
+      try {
+        const nextCountries = await requestCountries(serverId);
+        setAdminPricingCountries(nextCountries);
+        setAdminPricingCountryId((current) => {
+          if (current && nextCountries.some((country) => country.id === current)) {
+            return current;
+          }
+
+          return (
+            nextCountries.find((country) => country.id === 6)?.id ??
+            nextCountries[0]?.id ??
+            null
+          );
+        });
+      } catch (error) {
+        setAdminPricingCountries([]);
+        setAdminPricingCountryId(null);
+        setAdminPricingError(
+          error instanceof Error ? error.message : "Gagal memuat negara admin.",
+        );
+      } finally {
+        setIsAdminPricingCountriesLoading(false);
+      }
+    },
+    [canAccessAdmin],
+  );
+
+  const loadAdminPricingCatalog = useCallback(
+    async (serverId: ServerId, countryId: number) => {
+      if (!canAccessAdmin) {
+        return;
+      }
+
+      setIsAdminPricingCatalogLoading(true);
+      setAdminPricingError(null);
+
+      try {
+        const nextCatalog = await requestCatalog(serverId, countryId);
+        applyAdminCatalogResult(nextCatalog);
+      } catch (error) {
+        setAdminPricingCatalog(null);
+        setSelectedAdminPricingServiceId("");
+        setAdminPricingError(
+          error instanceof Error ? error.message : "Gagal memuat katalog harga admin.",
+        );
+      } finally {
+        setIsAdminPricingCatalogLoading(false);
+      }
+    },
+    [canAccessAdmin],
+  );
 
   const syncDeposit = useEffectEvent(async (depositId: string) => {
     try {
@@ -982,14 +1306,7 @@ export function MemberConsole({
     setIsCatalogLoading(true);
     void requestCatalog(selectedServer, selectedCountryId)
       .then((result) => {
-        setCatalog(result);
-        setSelectedServiceId((current) => {
-          if (current && result.services.some((service) => service.id === current)) {
-            return current;
-          }
-
-          return result.services[0]?.id ?? "";
-        });
+        applyMemberCatalogResult(result);
       })
       .catch((error) => {
         setOrderError(
@@ -1008,6 +1325,36 @@ export function MemberConsole({
 
     void loadAdminUsers(deferredAdminSearch);
   }, [activeTab, canAccessAdmin, deferredAdminSearch, loadAdminUsers]);
+
+  useEffect(() => {
+    if (!canAccessAdmin || activeTab !== "admin") {
+      return;
+    }
+
+    void loadAdminPricingState();
+  }, [activeTab, canAccessAdmin, loadAdminPricingState]);
+
+  useEffect(() => {
+    if (!canAccessAdmin || activeTab !== "admin") {
+      return;
+    }
+
+    void loadAdminPricingCountries(adminPricingServer);
+  }, [activeTab, adminPricingServer, canAccessAdmin, loadAdminPricingCountries]);
+
+  useEffect(() => {
+    if (!canAccessAdmin || activeTab !== "admin" || !adminPricingCountryId) {
+      return;
+    }
+
+    void loadAdminPricingCatalog(adminPricingServer, adminPricingCountryId);
+  }, [
+    activeTab,
+    adminPricingCountryId,
+    adminPricingServer,
+    canAccessAdmin,
+    loadAdminPricingCatalog,
+  ]);
 
   useEffect(() => {
     if (!activeDeposit?.id || activeDeposit.status !== "pending") {
@@ -1503,6 +1850,163 @@ export function MemberConsole({
     }
   }
 
+  async function handleAdminProfitSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    const profitPercent = Number(adminProfitPercent);
+
+    if (!Number.isFinite(profitPercent) || profitPercent < 0) {
+      setAdminPricingError("Persentase keuntungan wajib diisi angka 0 atau lebih.");
+      return;
+    }
+
+    setIsAdminPricingConfigSaving(true);
+    setAdminPricingError(null);
+
+    try {
+      const payload = await requestAdminProfitPercentUpdate(profitPercent);
+      setAdminPricingConfig(payload.config);
+      setAdminProfitPercent(String(payload.config.profitPercent));
+      const refreshTasks: Promise<unknown>[] = [loadAdminPricingState()];
+
+      if (adminPricingCountryId) {
+        refreshTasks.push(loadAdminPricingCatalog(adminPricingServer, adminPricingCountryId));
+      }
+
+      if (selectedCountryId) {
+        refreshTasks.push(
+          requestCatalog(selectedServer, selectedCountryId).then((nextCatalog) => {
+            applyMemberCatalogResult(nextCatalog);
+          }),
+        );
+      }
+
+      await Promise.allSettled(refreshTasks);
+
+      setToast({
+        type: "success",
+        message: payload.message,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Gagal menyimpan keuntungan global.";
+      setAdminPricingError(message);
+      setToast({
+        type: "error",
+        message,
+      });
+    } finally {
+      setIsAdminPricingConfigSaving(false);
+    }
+  }
+
+  async function handleAdminServicePriceSubmit(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (!selectedAdminPricingService || !adminPricingCountryId) {
+      setAdminPricingError("Pilih layanan yang ingin diatur terlebih dahulu.");
+      return;
+    }
+
+    const customPrice = Number(adminCustomPrice);
+
+    if (!Number.isFinite(customPrice) || customPrice <= 0) {
+      setAdminPricingError("Harga website wajib diisi angka lebih dari 0.");
+      return;
+    }
+
+    setIsAdminPricingServiceSaving(true);
+    setAdminPricingError(null);
+
+    try {
+      const payload = await requestAdminServiceOverrideSave({
+        serviceId: selectedAdminPricingService.id,
+        serviceCode: selectedAdminPricingService.serviceCode,
+        service: selectedAdminPricingService.service,
+        serverId: adminPricingServer,
+        countryId: adminPricingCountryId,
+        country: selectedAdminPricingService.country,
+        customPrice,
+        upstreamPrice: selectedAdminPricingService.upstreamPrice,
+      });
+      const refreshTasks: Promise<unknown>[] = [
+        loadAdminPricingState(),
+        loadAdminPricingCatalog(adminPricingServer, adminPricingCountryId),
+      ];
+
+      if (selectedCountryId) {
+        refreshTasks.push(
+          requestCatalog(selectedServer, selectedCountryId).then((nextCatalog) => {
+            applyMemberCatalogResult(nextCatalog);
+          }),
+        );
+      }
+
+      await Promise.allSettled(refreshTasks);
+
+      setToast({
+        type: "success",
+        message: payload.message,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Gagal menyimpan harga layanan.";
+      setAdminPricingError(message);
+      setToast({
+        type: "error",
+        message,
+      });
+    } finally {
+      setIsAdminPricingServiceSaving(false);
+    }
+  }
+
+  async function handleAdminServicePriceReset() {
+    if (!selectedAdminPricingService) {
+      setAdminPricingError("Pilih layanan yang ingin dikembalikan ke harga otomatis.");
+      return;
+    }
+
+    setIsAdminPricingServiceSaving(true);
+    setAdminPricingError(null);
+
+    try {
+      const payload = await requestAdminServiceOverrideDelete(selectedAdminPricingService.id);
+      const refreshTasks: Promise<unknown>[] = [loadAdminPricingState()];
+
+      if (adminPricingCountryId) {
+        refreshTasks.push(loadAdminPricingCatalog(adminPricingServer, adminPricingCountryId));
+      }
+
+      if (selectedCountryId) {
+        refreshTasks.push(
+          requestCatalog(selectedServer, selectedCountryId).then((nextCatalog) => {
+            applyMemberCatalogResult(nextCatalog);
+          }),
+        );
+      }
+
+      await Promise.allSettled(refreshTasks);
+
+      setToast({
+        type: "success",
+        message: payload.message,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Gagal menghapus harga custom layanan.";
+      setAdminPricingError(message);
+      setToast({
+        type: "error",
+        message,
+      });
+    } finally {
+      setIsAdminPricingServiceSaving(false);
+    }
+  }
+
 
   if (!viewer || !summary) {
     return (
@@ -1814,7 +2318,7 @@ export function MemberConsole({
                       <span className="text-white">{formatCurrency(activeDeposit.amount, activeDeposit.currency)}</span>
                     </div>
                     <div className="flex items-center justify-between gap-3">
-                      <span>Fee Midtrans</span>
+                      <span>Fee</span>
                       <span className="text-white">{formatCurrency(activeDeposit.feeAmount, activeDeposit.currency)}</span>
                     </div>
                     <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-2">
@@ -1983,15 +2487,37 @@ export function MemberConsole({
                 <div className="mt-4 space-y-2 text-[12px] text-sky-100/72">
                   <div className="flex items-center justify-between gap-3">
                     <span>Status</span>
-                    <span className="text-white">{activeOrder.status}</span>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={cn(
+                          "inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold",
+                          resolveOrderStatusTone(activeOrder.status),
+                        )}
+                      >
+                        {resolveOrderStatusLabel(activeOrder.status)}
+                      </span>
+                      {activeOrder.status === "pending" ? (
+                        <span className="text-[11px] tabular-nums text-amber-100/82">
+                          {formatElapsedTimer(activeOrder.createdAt, nowTimestamp)}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Dibuat</span>
+                    <span className="text-white">
+                      {formatCompactDateTime(activeOrder.createdAt)}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <span>Nomor</span>
-                    <span className="text-white">{activeOrder.phoneNumber}</span>
+                    <span className="max-w-[55%] break-all text-right text-white">
+                      {activeOrder.phoneNumber}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
                     <span>OTP</span>
-                    <span className="text-[16px] font-semibold text-cyan-100">
+                    <span className="max-w-[55%] break-all text-right text-[16px] font-semibold text-cyan-100">
                       {activeOrder.otpCode ?? "Menunggu OTP..."}
                     </span>
                   </div>
@@ -2009,15 +2535,30 @@ export function MemberConsole({
                   </button>
                   <button
                     className="flex items-center justify-center rounded-[16px] border border-amber-300/20 bg-amber-500/10 px-4 py-3 text-[13px] font-medium text-amber-100 disabled:opacity-60"
-                    disabled={isOrderCancelling || activeOrder.status !== "pending"}
+                    disabled={
+                      isOrderCancelling ||
+                      activeOrder.status !== "pending" ||
+                      !canCancelActiveOrder
+                    }
                     onClick={() => {
                       void handleCancelOrder();
                     }}
                     type="button"
                   >
-                    {isOrderCancelling ? "Membatalkan..." : "Batalkan Pesanan"}
+                    {isOrderCancelling
+                      ? "Membatalkan..."
+                      : activeOrder.status !== "pending"
+                        ? "Pesanan Selesai"
+                        : !canCancelActiveOrder
+                          ? `Batalkan ${formatCountdown(activeOrderCancelRemainingSeconds)}`
+                          : "Batalkan Pesanan"}
                   </button>
                 </div>
+                {activeOrder.status === "pending" ? (
+                  <p className="mt-3 text-[11px] text-sky-100/58">
+                    Saldo otomatis kembali jika pesanan berhasil dibatalkan.
+                  </p>
+                ) : null}
               </div>
             ) : null}
           </div>
@@ -2034,22 +2575,22 @@ export function MemberConsole({
                 {summary.deposits.map((deposit) => (
                   <div
                     key={deposit.id}
-                    className="rounded-[18px] border border-white/8 bg-white/4 px-4 py-3"
+                    className="rounded-[18px] border border-white/8 bg-white/4 px-3.5 py-3"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-[13px] font-medium text-white">
+                        <p className="text-[12px] font-medium text-white">
                           Deposit saldo
                         </p>
-                        <p className="mt-1 text-[11px] text-sky-100/56">
-                          {formatDateTime(deposit.createdAt)}
+                        <p className="mt-1 text-[10px] text-sky-100/56">
+                          {formatCompactDateTime(deposit.createdAt)}
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-[13px] font-semibold text-cyan-100">
+                        <p className="text-[12px] font-semibold text-cyan-100">
                           {formatCurrency(deposit.amount, deposit.currency)}
                         </p>
-                        <p className="mt-1 text-[11px] capitalize text-sky-100/56">
+                        <p className="mt-1 text-[10px] capitalize text-sky-100/56">
                           {deposit.status}
                         </p>
                       </div>
@@ -2068,20 +2609,33 @@ export function MemberConsole({
               <SectionTitle
                 icon={<WalletIcon className="h-4.5 w-4.5" />}
                 title="Mutasi Saldo"
+                action={<span className="text-[10px] text-sky-100/56">5 terbaru</span>}
               />
               <div className="mt-4 space-y-2">
                 {summary.ledger.map((entry: WalletLedgerEntry) => (
-                  <div key={entry.id} className="rounded-[18px] border border-white/8 bg-white/4 px-4 py-3">
+                  <div
+                    key={entry.id}
+                    className="rounded-[18px] border border-white/8 bg-white/4 px-3.5 py-3"
+                  >
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <p className="text-[13px] font-medium text-white">{entry.description}</p>
-                        <p className="mt-1 text-[11px] text-sky-100/56">{formatDateTime(entry.createdAt)}</p>
+                        <p className="text-[12px] font-medium text-white">
+                          {entry.description}
+                        </p>
+                        <p className="mt-1 text-[10px] text-sky-100/56">
+                          {formatCompactDateTime(entry.createdAt)}
+                        </p>
                       </div>
                       <div className="text-right">
-                        <p className={cn("text-[13px] font-semibold", entry.amount >= 0 ? "text-emerald-200" : "text-amber-100")}>
+                        <p
+                          className={cn(
+                            "text-[12px] font-semibold",
+                            entry.amount >= 0 ? "text-emerald-200" : "text-amber-100",
+                          )}
+                        >
                           {entry.amount >= 0 ? "+" : "-"}{formatCurrency(Math.abs(entry.amount), "IDR")}
                         </p>
-                        <p className="mt-1 text-[11px] text-sky-100/56">
+                        <p className="mt-1 text-[10px] text-sky-100/56">
                           Saldo {formatCurrency(entry.balanceAfter, "IDR")}
                         </p>
                       </div>
@@ -2102,7 +2656,7 @@ export function MemberConsole({
                 title="Riwayat Order OTP"
               />
               <div className="mt-4 overflow-hidden rounded-[18px] border border-white/10">
-                <div className="grid grid-cols-[1.6fr_1fr_0.9fr] gap-2 border-b border-white/10 bg-white/4 px-4 py-2 text-[11px] uppercase tracking-[0.14em] text-sky-100/60">
+                <div className="grid grid-cols-[1.32fr_0.8fr_1fr] gap-2 border-b border-white/10 bg-white/4 px-3 py-2 text-[10px] uppercase tracking-[0.14em] text-sky-100/60">
                   <span>Nomor</span>
                   <span>OTP</span>
                   <span>Status</span>
@@ -2111,43 +2665,60 @@ export function MemberConsole({
                   {pagedOrders.map((order) => (
                     <div
                       key={order.id}
-                      className="grid grid-cols-[1.6fr_1fr_0.9fr] items-center gap-2 px-4 py-3 text-[12px] text-sky-100/80"
+                      className="grid grid-cols-[1.32fr_0.8fr_1fr] items-center gap-2 px-3 py-3 text-[11px] text-sky-100/80"
                     >
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-white">
-                          {order.phoneNumber}
-                        </span>
-                        <button
-                          className="rounded-full border border-white/10 bg-white/5 p-1 text-sky-100/70"
-                          onClick={() => void handleCopy(order.phoneNumber, "Nomor")}
-                          type="button"
-                        >
-                          <CopyIcon className="h-3.5 w-3.5" />
-                        </button>
-                      </div>
-                      <div className="flex items-center gap-2 text-emerald-100">
-                        <span className="font-semibold">
-                          {order.otpCode ?? "-"}
-                        </span>
-                        {order.otpCode ? (
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate font-medium text-white">
+                            {order.phoneNumber}
+                          </span>
                           <button
-                            className="rounded-full border border-white/10 bg-white/5 p-1 text-sky-100/70"
-                            onClick={() => void handleCopy(order.otpCode ?? "", "OTP")}
+                            className="shrink-0 rounded-full border border-white/10 bg-white/5 p-1 text-sky-100/70"
+                            onClick={() => void handleCopy(order.phoneNumber, "Nomor")}
                             type="button"
                           >
                             <CopyIcon className="h-3.5 w-3.5" />
                           </button>
-                        ) : null}
+                        </div>
+                        <p className="mt-1 text-[10px] text-sky-100/52">
+                          {formatCompactDateTime(order.createdAt)}
+                        </p>
                       </div>
-                      <div>
-                        <span
-                          className={cn(
-                            "inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold",
-                            resolveOrderStatusTone(order.status),
-                          )}
-                        >
-                          {resolveOrderStatusLabel(order.status)}
-                        </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 text-emerald-100">
+                          <span className="truncate font-semibold tabular-nums">
+                            {order.otpCode ?? "-"}
+                          </span>
+                          {order.otpCode ? (
+                            <button
+                              className="shrink-0 rounded-full border border-white/10 bg-white/5 p-1 text-sky-100/70"
+                              onClick={() => void handleCopy(order.otpCode ?? "", "OTP")}
+                              type="button"
+                            >
+                              <CopyIcon className="h-3.5 w-3.5" />
+                            </button>
+                          ) : null}
+                        </div>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span
+                            className={cn(
+                              "inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold",
+                              resolveOrderStatusTone(order.status),
+                            )}
+                          >
+                            {resolveOrderStatusLabel(order.status)}
+                          </span>
+                          {order.status === "pending" ? (
+                            <span className="text-[10px] tabular-nums text-amber-100/84">
+                              {formatElapsedTimer(order.createdAt, nowTimestamp)}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 text-[10px] text-sky-100/52">
+                          {formatCompactDateTime(order.updatedAt ?? order.createdAt)}
+                        </p>
                       </div>
                     </div>
                   ))}
@@ -2334,6 +2905,266 @@ export function MemberConsole({
                         summary.admin?.upstreamBalanceError ??
                       "Saldo akun KirimKode belum bisa dibaca."}
                 </p>
+              </div>
+            </div>
+
+            <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
+              <SectionTitle
+                icon={<CartIcon className="h-4.5 w-4.5" />}
+                title="Pengaturan Harga"
+                action={
+                  isAdminPricingLoading ? (
+                    <span className="text-[11px] text-sky-100/60">Loading...</span>
+                  ) : null
+                }
+              />
+              <form className="mt-4 space-y-3" onSubmit={handleAdminProfitSubmit}>
+                <div className="rounded-[18px] border border-white/10 bg-white/4 px-4 py-3">
+                  <p className="text-[12px] font-medium text-white">
+                    Persentase keuntungan global
+                  </p>
+                  <p className="mt-1 text-[11px] text-sky-100/58">
+                    Harga website mengikuti harga asli KirimKode lalu ditambah profit
+                    persen ini.
+                  </p>
+                  <div className="mt-3 flex items-center gap-3">
+                    <input
+                      className="w-full rounded-[14px] border border-white/10 bg-[#07111f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-sky-300/60"
+                      inputMode="decimal"
+                      onChange={(event) =>
+                        setAdminProfitPercent(event.target.value.replace(/[^\d.]/g, ""))
+                      }
+                      placeholder="Contoh 100"
+                      value={adminProfitPercent}
+                    />
+                    <button
+                      className="shrink-0 rounded-[14px] bg-[linear-gradient(135deg,#7af1ff,#358cff)] px-4 py-3 text-[12px] font-semibold text-[#08101c]"
+                      disabled={isAdminPricingConfigSaving}
+                      type="submit"
+                    >
+                      {isAdminPricingConfigSaving ? "Simpan..." : "Simpan"}
+                    </button>
+                  </div>
+                  {adminPricingConfig ? (
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-sky-100/68">
+                      <div className="rounded-[14px] border border-white/8 bg-[#0a1525] px-3 py-2">
+                        Profit aktif {adminPricingConfig.profitPercent}%
+                      </div>
+                      <div className="rounded-[14px] border border-white/8 bg-[#0a1525] px-3 py-2">
+                        Override aktif {adminPriceOverrides.length}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </form>
+
+              <div className="mt-4 rounded-[18px] border border-white/10 bg-white/4 p-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <select
+                    className="w-full rounded-[14px] border border-white/10 bg-[#07111f] px-3 py-3 text-[12px] text-white outline-none transition focus:border-sky-300/60"
+                    onChange={(event) => {
+                      setAdminPricingServer(event.target.value as ServerId);
+                      setAdminPricingCountries([]);
+                      setAdminPricingCountryId(null);
+                      setAdminPricingCatalog(null);
+                      setSelectedAdminPricingServiceId("");
+                    }}
+                    value={adminPricingServer}
+                  >
+                    {serverOptions.map((server) => (
+                      <option key={server.id} value={server.id}>
+                        {server.name}
+                      </option>
+                    ))}
+                  </select>
+                  <select
+                    className="w-full rounded-[14px] border border-white/10 bg-[#07111f] px-3 py-3 text-[12px] text-white outline-none transition focus:border-sky-300/60"
+                    disabled={isAdminPricingCountriesLoading}
+                    onChange={(event) => setAdminPricingCountryId(Number(event.target.value))}
+                    value={adminPricingCountryId ?? ""}
+                  >
+                    <option value="" disabled>
+                      {isAdminPricingCountriesLoading ? "Memuat negara..." : "Pilih negara"}
+                    </option>
+                    {adminPricingCountries.map((country) => (
+                      <option key={`${country.serverId}-${country.id}`} value={country.id}>
+                        {getCountryLabel(country)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <input
+                  className="mt-3 w-full rounded-[14px] border border-white/10 bg-[#07111f] px-4 py-3 text-[12px] text-white outline-none transition focus:border-sky-300/60"
+                  onChange={(event) => setAdminPricingSearch(event.target.value)}
+                  placeholder="Cari layanan untuk harga custom..."
+                  value={adminPricingSearch}
+                />
+
+                <div className="mt-3 max-h-[220px] space-y-2 overflow-y-auto rounded-[16px] border border-white/10 bg-[#0a1525] p-2">
+                  {filteredAdminPricingServices.map((service) => (
+                    <button
+                      key={service.id}
+                      className={cn(
+                        "w-full rounded-[14px] border px-3 py-3 text-left transition",
+                        selectedAdminPricingServiceId === service.id
+                          ? "border-sky-300/55 bg-sky-300/12"
+                          : "border-white/10 bg-white/4",
+                      )}
+                      onClick={() => setSelectedAdminPricingServiceId(service.id)}
+                      type="button"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-[12px] font-semibold text-white">
+                            {service.service}
+                          </p>
+                          <p className="mt-1 text-[10px] text-sky-100/56">
+                            {service.serviceCode.toUpperCase()} | stok {service.stock}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[12px] font-semibold text-cyan-100">
+                            {formatCurrency(service.price, service.currency)}
+                          </p>
+                          <p className="mt-1 text-[10px] text-sky-100/56">
+                            Asli {formatCurrency(service.upstreamPrice, service.currency)}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                  {!filteredAdminPricingServices.length && !isAdminPricingCatalogLoading ? (
+                    <div className="rounded-[14px] border border-white/8 bg-white/4 px-4 py-5 text-center text-[12px] text-sky-100/56">
+                      Layanan belum tersedia untuk negara ini.
+                    </div>
+                  ) : null}
+                  {isAdminPricingCatalogLoading ? (
+                    <div className="rounded-[14px] border border-white/8 bg-white/4 px-4 py-5 text-center text-[12px] text-sky-100/56">
+                      <Spinner label="Memuat katalog harga..." />
+                    </div>
+                  ) : null}
+                </div>
+
+                {selectedAdminPricingService ? (
+                  <form
+                    className="mt-3 rounded-[16px] border border-white/10 bg-[#0a1525] px-4 py-3"
+                    onSubmit={handleAdminServicePriceSubmit}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[13px] font-semibold text-white">
+                          {selectedAdminPricingService.service}
+                        </p>
+                        <p className="mt-1 text-[10px] text-sky-100/58">
+                          {selectedAdminPricingService.country} -{" "}
+                          {selectedAdminPricingService.serviceCode.toUpperCase()}
+                        </p>
+                      </div>
+                      {selectedAdminServiceOverride ? (
+                        <span className="rounded-full border border-emerald-300/20 bg-emerald-500/10 px-3 py-1 text-[10px] font-medium text-emerald-100">
+                          Custom aktif
+                        </span>
+                      ) : (
+                        <span className="rounded-full border border-white/10 bg-white/6 px-3 py-1 text-[10px] font-medium text-sky-100/68">
+                          Auto
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-[11px] text-sky-100/68">
+                      <div className="rounded-[14px] border border-white/8 bg-white/4 px-3 py-2">
+                        Harga asli{" "}
+                        <span className="font-semibold text-white">
+                          {formatCurrency(
+                            selectedAdminPricingService.upstreamPrice,
+                            selectedAdminPricingService.currency,
+                          )}
+                        </span>
+                      </div>
+                      <div className="rounded-[14px] border border-white/8 bg-white/4 px-3 py-2">
+                        Harga website{" "}
+                        <span className="font-semibold text-cyan-100">
+                          {formatCurrency(
+                            selectedAdminPricingService.price,
+                            selectedAdminPricingService.currency,
+                          )}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="mt-3 flex items-center gap-3">
+                      <input
+                        className="w-full rounded-[14px] border border-white/10 bg-[#07111f] px-4 py-3 text-[13px] text-white outline-none transition focus:border-sky-300/60"
+                        inputMode="numeric"
+                        onChange={(event) =>
+                          setAdminCustomPrice(event.target.value.replace(/[^\d]/g, ""))
+                        }
+                        placeholder="Harga custom website"
+                        value={adminCustomPrice}
+                      />
+                      <button
+                        className="shrink-0 rounded-[14px] bg-[linear-gradient(135deg,#7af1ff,#358cff)] px-4 py-3 text-[12px] font-semibold text-[#08101c]"
+                        disabled={isAdminPricingServiceSaving}
+                        type="submit"
+                      >
+                        {isAdminPricingServiceSaving ? "Simpan..." : "Simpan"}
+                      </button>
+                    </div>
+                    <div className="mt-3 flex items-center gap-2">
+                      <button
+                        className="rounded-[14px] border border-white/10 bg-white/6 px-3 py-2 text-[11px] text-sky-100/78 disabled:opacity-50"
+                        disabled={isAdminPricingServiceSaving || !selectedAdminServiceOverride}
+                        onClick={() => {
+                          void handleAdminServicePriceReset();
+                        }}
+                        type="button"
+                      >
+                        Hapus custom
+                      </button>
+                      <span className="text-[10px] text-sky-100/52">
+                        Jika dihapus, harga kembali mengikuti profit global.
+                      </span>
+                    </div>
+                  </form>
+                ) : null}
+              </div>
+
+              {adminPricingError ? (
+                <div className="mt-3 rounded-[16px] border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-[12px] text-rose-100">
+                  {adminPricingError}
+                </div>
+              ) : null}
+
+              <div className="mt-4 rounded-[18px] border border-white/10 bg-white/4 p-3">
+                <p className="text-[12px] font-medium text-white">Override Harga Aktif</p>
+                <div className="mt-3 space-y-2">
+                  {adminPriceOverrides.slice(0, 8).map((override) => (
+                    <div
+                      key={override.serviceId}
+                      className="flex items-center justify-between gap-3 rounded-[14px] border border-white/8 bg-[#0a1525] px-3 py-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-[12px] font-semibold text-white">
+                          {override.service}
+                        </p>
+                        <p className="mt-1 text-[10px] text-sky-100/56">
+                          {override.country} - {override.serviceCode.toUpperCase()}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[12px] font-semibold text-cyan-100">
+                          {formatCurrency(override.customPrice, "IDR")}
+                        </p>
+                        <p className="mt-1 text-[10px] text-sky-100/56">
+                          Asli {formatCurrency(override.upstreamPrice, "IDR")}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                  {!adminPriceOverrides.length ? (
+                    <div className="rounded-[14px] border border-white/8 bg-[#0a1525] px-4 py-5 text-center text-[12px] text-sky-100/56">
+                      Belum ada override harga custom.
+                    </div>
+                  ) : null}
+                </div>
               </div>
             </div>
 

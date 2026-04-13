@@ -60,6 +60,25 @@ export type Order = {
   updatedAt?: string;
 };
 
+export type PricingSettings = {
+  profitPercent: number;
+  minMargin: number;
+  currency: string;
+  updatedAt?: string | null;
+};
+
+export type ServicePriceOverride = {
+  serviceId: string;
+  serviceCode: string;
+  service: string;
+  serverId: string;
+  countryId: number;
+  country: string;
+  customPrice: number;
+  upstreamPrice: number;
+  updatedAt: string;
+};
+
 export type RuntimeStatus = {
   providerMode: ProviderMode;
   upstreamConfigured: boolean;

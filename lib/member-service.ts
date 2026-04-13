@@ -98,7 +98,7 @@ export async function getDashboardSummary(userId: string): Promise<DashboardSumm
   const [deposits, orders, ledger, upstreamBalanceResult] = await Promise.all([
     listDepositsByUser(userId, 10),
     listUserOrders(userId, 20),
-    listWalletLedger(userId, 20),
+    listWalletLedger(userId, 5),
     isAdminViewer(viewer)
       ? getBalance()
           .then((balance) => ({ balance, error: null }))

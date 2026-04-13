@@ -15,7 +15,13 @@ import {
   isOrderDatabaseConfigured,
   saveOrderToDatabase,
 } from "@/lib/order-store";
-import { computeRetailPrice, getPricingConfig } from "@/lib/pricing";
+import {
+  applyPricingToService,
+  computeRetailPrice,
+  getPricingConfig,
+  getPricingRulesForCatalog,
+  getPricingRuntimeStatus,
+} from "@/lib/pricing";
 import { attachOrderContextToken, restoreOrderFromContextToken } from "@/lib/session-token";
 import type {
   Balance,
@@ -724,7 +730,6 @@ function normalizeCreatedOrder(
   );
   const phoneNumber = pickString(record, ["number", "phoneNumber", "phone"], "-");
   const orderId = pickString(record, ["order_id", "id", "orderId"], "");
-  const price = pickNumber(record, ["price"], fallback.price);
   const localOrderId = orderId || pickString(record, ["id"], "") || fallback.localOrderId;
   const providerRef =
     pickString(record, ["id"], "") && pickString(record, ["id"], "") !== localOrderId
@@ -740,7 +745,7 @@ function normalizeCreatedOrder(
     country: fallback.country,
     countryId: fallback.countryId,
     phoneNumber,
-    price,
+    price: fallback.price,
     currency: fallback.currency,
     status: "pending" as const,
     createdAt,
@@ -968,7 +973,7 @@ async function persistOrder(order: Order) {
 
 export async function getRuntimeStatus(): Promise<RuntimeStatus> {
   const config = getProviderConfig();
-  const pricing = getPricingConfig();
+  const pricing = await getPricingRuntimeStatus();
   const paymentGateway = getPaymentGatewayStatus();
 
   return {
@@ -1004,14 +1009,18 @@ export async function getCatalog(filters: CatalogFilters = {}) {
   try {
     const serverId = resolveServerId(filters.serverId);
     const countryId = resolveCountryId(filters.countryId);
+    const pricingRules = await getPricingRulesForCatalog(serverId, countryId);
     const cachedServices = applyFilters(
-      getCachedCatalog(serverId, countryId),
+      getCachedCatalog(serverId, countryId).map((service) =>
+        applyPricingToService(service, pricingRules),
+      ),
       filters,
     );
     const payload = await fetchServicesPayload(serverId, countryId);
     const services = extractArray(payload)
       .map((item) => normalizeService(item, { serverId, countryId }))
-      .filter((service): service is Service => Boolean(service));
+      .filter((service): service is Service => Boolean(service))
+      .map((service) => applyPricingToService(service, pricingRules));
     const filteredServices = applyFilters(services, filters);
 
     if (filteredServices.length === 0 && cachedServices.length > 0) {
