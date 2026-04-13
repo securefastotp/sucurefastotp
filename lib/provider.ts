@@ -862,6 +862,7 @@ export async function getRuntimeStatus(): Promise<RuntimeStatus> {
     midtransConfigured: paymentGateway.midtransConfigured,
     midtransEnvironment: paymentGateway.midtransEnvironment,
     midtransClientKeyAvailable: paymentGateway.midtransClientKeyAvailable,
+    paymentDatabaseConfigured: paymentGateway.paymentDatabaseConfigured,
   };
 }
 

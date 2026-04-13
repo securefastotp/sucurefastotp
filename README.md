@@ -27,6 +27,7 @@ NEXT_PUBLIC_SITE_NAME=Rahmat OTP
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 NEXT_PUBLIC_MIDTRANS_CLIENT_KEY=isi_client_key_midtrans
 PAYMENT_SESSION_SECRET=isi_secret_session_stabil
+# POSTGRES_URL akan otomatis tersedia saat Neon Postgres terhubung di Vercel
 
 UPSTREAM_PROVIDER_MODE=rest
 UPSTREAM_BASE_URL=https://api.kirimkode.com/v1

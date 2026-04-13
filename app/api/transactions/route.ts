@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const transactions = listPaymentSessions();
+    const transactions = await listPaymentSessions();
 
     return NextResponse.json({
       updatedAt: new Date().toISOString(),

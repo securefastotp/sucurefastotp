@@ -8,6 +8,12 @@ import {
   normalizeMidtransPaymentStatus,
   verifyMidtransSignature,
 } from "@/lib/midtrans";
+import {
+  getPaymentFromDatabase,
+  isPaymentDatabaseConfigured,
+  listPaymentsFromDatabase,
+  savePaymentToDatabase,
+} from "@/lib/payment-store";
 import { createOrder } from "@/lib/provider";
 import { attachOrderContextToken, readSessionToken, signSessionToken } from "@/lib/session-token";
 import { siteConfig } from "@/lib/site-config";
@@ -74,13 +80,17 @@ export function getPaymentGatewayStatus() {
     midtransConfigured: Boolean(config.serverKey),
     midtransEnvironment: config.environment,
     midtransClientKeyAvailable: Boolean(config.clientKey),
+    paymentDatabaseConfigured: isPaymentDatabaseConfigured(),
   } satisfies Pick<
     RuntimeStatus,
-    "midtransConfigured" | "midtransEnvironment" | "midtransClientKeyAvailable"
+    | "midtransConfigured"
+    | "midtransEnvironment"
+    | "midtransClientKeyAvailable"
+    | "paymentDatabaseConfigured"
   >;
 }
 
-function updatePaymentRecord(
+async function updatePaymentRecord(
   payment: PaymentRecord,
   statusPayload: Record<string, unknown>,
 ) {
@@ -153,9 +163,15 @@ function restorePaymentFromToken(paymentId: string, sessionToken?: string | null
   return withPaymentSessionToken(payload);
 }
 
-function savePaymentRecord(payment: PaymentRecord) {
+async function savePaymentRecord(payment: PaymentRecord) {
   const nextPayment = withPaymentSessionToken(payment);
   paymentStore.set(nextPayment.id, nextPayment);
+
+  try {
+    await savePaymentToDatabase(nextPayment);
+  } catch (error) {
+    console.error("Gagal menyimpan payment ke database:", error);
+  }
 
   return nextPayment;
 }
@@ -223,7 +239,7 @@ export async function createPaymentSession(input: CreatePaymentInput) {
   payment.transactionId = transaction.transactionId;
   payment.qrCodeUrl = transaction.qrCodeUrl;
   payment.qrString = transaction.qrString;
-  return savePaymentRecord(payment);
+  return await savePaymentRecord(payment);
 }
 
 export async function getPaymentSession(
@@ -231,7 +247,12 @@ export async function getPaymentSession(
   sessionToken?: string | null,
 ) {
   const payment =
-    paymentStore.get(paymentId) ?? restorePaymentFromToken(paymentId, sessionToken);
+    paymentStore.get(paymentId) ??
+    (await getPaymentFromDatabase(paymentId).catch((error) => {
+      console.error("Gagal membaca payment dari database:", error);
+      return null;
+    })) ??
+    restorePaymentFromToken(paymentId, sessionToken);
 
   if (!payment) {
     return null;
@@ -239,9 +260,9 @@ export async function getPaymentSession(
 
   try {
     const statusPayload = await getMidtransTransactionStatus(payment.midtransOrderId);
-    return updatePaymentRecord(payment, statusPayload);
+    return await updatePaymentRecord(payment, statusPayload);
   } catch {
-    return savePaymentRecord(payment);
+    return await savePaymentRecord(payment);
   }
 }
 
@@ -256,11 +277,11 @@ export async function activatePaymentOrder(
   }
 
   if (payment.status !== "paid") {
-    return savePaymentRecord(payment);
+    return await savePaymentRecord(payment);
   }
 
   if (payment.order) {
-    return savePaymentRecord(payment);
+    return await savePaymentRecord(payment);
   }
 
   payment.order = await createOrder({
@@ -276,7 +297,7 @@ export async function activatePaymentOrder(
   });
   payment.updatedAt = new Date().toISOString();
   payment.statusMessage = "Pembayaran terverifikasi dan order sudah dibuat.";
-  return savePaymentRecord(payment);
+  return await savePaymentRecord(payment);
 }
 
 export async function handleMidtransNotification(payload: Record<string, unknown>) {
@@ -300,21 +321,53 @@ export async function handleMidtransNotification(payload: Record<string, unknown
     throw new Error("Payload Midtrans tidak punya order_id.");
   }
 
-  const payment = paymentStore.get(paymentId);
+  const payment =
+    paymentStore.get(paymentId) ??
+    (await getPaymentFromDatabase(paymentId).catch((error) => {
+      console.error("Gagal membaca payment notifikasi dari database:", error);
+      return null;
+    }));
 
   if (!payment) {
     return null;
   }
 
-  return updatePaymentRecord(payment, typedPayload);
+  return await updatePaymentRecord(payment, typedPayload);
 }
 
-export function listPaymentSessions(limit = 20) {
-  return [...paymentStore.values()]
+function mergePaymentRecords(current: PaymentRecord, incoming: PaymentRecord) {
+  const currentUpdatedAt = new Date(current.updatedAt || current.createdAt).getTime();
+  const incomingUpdatedAt = new Date(incoming.updatedAt || incoming.createdAt).getTime();
+
+  return incomingUpdatedAt >= currentUpdatedAt ? incoming : current;
+}
+
+export async function listPaymentSessions(limit = 20) {
+  const merged = new Map<string, PaymentRecord>();
+
+  try {
+    const storedPayments = await listPaymentsFromDatabase(limit);
+
+    for (const payment of storedPayments) {
+      merged.set(payment.id, withPaymentSessionToken(payment));
+    }
+  } catch (error) {
+    console.error("Gagal membaca daftar payment dari database:", error);
+  }
+
+  for (const payment of paymentStore.values()) {
+    const normalizedPayment = withPaymentSessionToken(payment);
+    const current = merged.get(normalizedPayment.id);
+    merged.set(
+      normalizedPayment.id,
+      current ? mergePaymentRecords(current, normalizedPayment) : normalizedPayment,
+    );
+  }
+
+  return [...merged.values()]
     .sort(
       (left, right) =>
         new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
     )
-    .slice(0, limit)
-    .map((payment) => withPaymentSessionToken(payment));
+    .slice(0, limit);
 }
