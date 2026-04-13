@@ -26,6 +26,7 @@ export async function GET() {
       upstreamKeyPresent: Boolean(upstreamKey),
       upstreamKeySuffix: upstreamKey ? lastChars(upstreamKey) : null,
       upstreamKeyFingerprint: upstreamKey ? fingerprintKey(upstreamKey) : null,
+      upstreamAccountName: config.accountName ?? null,
       upstreamBaseUrl: config.baseUrl,
       upstreamHeader: config.apiKeyHeader,
     });

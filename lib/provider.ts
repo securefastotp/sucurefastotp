@@ -159,6 +159,7 @@ export function getProviderConfig() {
     mode: mode === "rest" && baseUrl && apiKey ? "rest" : "mock",
     baseUrl,
     apiKey,
+    accountName: process.env.UPSTREAM_ACCOUNT_NAME?.trim() || null,
     apiKeyHeader: process.env.UPSTREAM_API_KEY_HEADER ?? "x-api-key",
     balancePath: process.env.UPSTREAM_BALANCE_PATH ?? "/balance",
     servicesPath: process.env.UPSTREAM_SERVICES_PATH ?? "/services",

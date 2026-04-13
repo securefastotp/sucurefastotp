@@ -56,6 +56,7 @@ type AdminStatusPayload = {
   upstreamKeyPresent: boolean;
   upstreamKeySuffix: string | null;
   upstreamKeyFingerprint: string | null;
+  upstreamAccountName: string | null;
   upstreamBaseUrl: string | null;
   upstreamHeader: string | null;
 };
@@ -2125,6 +2126,7 @@ export function MemberConsole({
               <div className="mt-4 rounded-[18px] border border-white/10 bg-white/4 px-4 py-3 text-[12px] text-sky-100/70">
                 <p>Database: {adminStatus?.databaseConfigured ? "Tersambung" : "Tidak tersedia"}</p>
                 <p>Upstream Key: {adminStatus?.upstreamKeyPresent ? "Terpasang" : "Belum ada"}</p>
+                <p>Account Name: {adminStatus?.upstreamAccountName ?? "-"}</p>
                 <p>Key Suffix: {adminStatus?.upstreamKeySuffix ?? "-"}</p>
                 <p>Key Fingerprint: {adminStatus?.upstreamKeyFingerprint ?? "-"}</p>
                 <p>Base URL: {adminStatus?.upstreamBaseUrl ?? "-"}</p>
