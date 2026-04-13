@@ -47,6 +47,8 @@ type CreateOrderInput = {
 };
 
 type OrderContext = {
+  localOrderId: string;
+  upstreamOrderId: string;
   serviceId: string;
   serviceCode: string;
   serverId: string;
@@ -723,13 +725,14 @@ function normalizeCreatedOrder(
   const phoneNumber = pickString(record, ["number", "phoneNumber", "phone"], "-");
   const orderId = pickString(record, ["order_id", "id", "orderId"], "");
   const price = pickNumber(record, ["price"], fallback.price);
+  const localOrderId = orderId || pickString(record, ["id"], "") || fallback.localOrderId;
   const providerRef =
-    pickString(record, ["id"], "") && pickString(record, ["id"], "") !== orderId
+    pickString(record, ["id"], "") && pickString(record, ["id"], "") !== localOrderId
       ? pickString(record, ["id"], "")
       : undefined;
 
   return {
-    id: orderId,
+    id: localOrderId,
     serviceId: fallback.serviceId,
     serviceCode: fallback.serviceCode,
     serverId: fallback.serverId,
@@ -749,13 +752,17 @@ function normalizeCreatedOrder(
 function normalizeStatusOrder(
   payload: unknown,
   context: OrderContext,
-  orderId: string,
 ) {
   const record = extractRecord(payload);
   const otpCode = pickString(record, ["code"], "") || undefined;
   let status = normalizeStatus(
     pickString(record, ["status"], context.status),
     Boolean(otpCode),
+  );
+  const payloadId = pickString(record, ["id"], "");
+  const payloadOrderId = pickString(record, ["order_id", "orderId"], "");
+  const detectedProviderRef = [payloadId, payloadOrderId].find(
+    (candidate) => candidate && candidate !== context.localOrderId,
   );
 
   if (
@@ -766,11 +773,7 @@ function normalizeStatusOrder(
   }
 
   return {
-    id:
-      pickString(record, ["order_id", "id", "orderId"], "") ||
-      orderId ||
-      context.providerRef ||
-      "",
+    id: context.localOrderId,
     serviceId: context.serviceId,
     serviceCode: context.serviceCode,
     serverId: context.serverId,
@@ -786,7 +789,7 @@ function normalizeStatusOrder(
     otpCode,
     createdAt: context.createdAt,
     expiresAt: context.expiresAt,
-    providerRef: context.providerRef,
+    providerRef: context.providerRef ?? detectedProviderRef,
   } satisfies Order;
 }
 
@@ -861,6 +864,8 @@ function normalizeHistory(payload: unknown): OrderHistoryResponse {
 
 function toOrderContext(order: Order): OrderContext {
   return {
+    localOrderId: order.id,
+    upstreamOrderId: order.providerRef ?? order.id,
     serviceId: order.serviceId,
     serviceCode: order.serviceCode,
     serverId: order.serverId ?? resolveServerId(order.serverId),
@@ -880,7 +885,12 @@ function toOrderContext(order: Order): OrderContext {
 
 async function persistOrder(order: Order) {
   const nextOrder = attachOrderContextToken(order);
-  orderContextStore.set(nextOrder.id, toOrderContext(nextOrder));
+  const context = toOrderContext(nextOrder);
+  orderContextStore.set(nextOrder.id, context);
+
+  if (nextOrder.providerRef && nextOrder.providerRef !== nextOrder.id) {
+    orderContextStore.set(nextOrder.providerRef, context);
+  }
 
   try {
     await saveOrderToDatabase(nextOrder);
@@ -1106,6 +1116,8 @@ export async function createOrder(input: CreateOrderInput) {
   });
 
   const order = normalizeCreatedOrder(payload, {
+    localOrderId: "",
+    upstreamOrderId: "",
     serviceId: input.serviceId,
     serviceCode: input.serviceCode,
     serverId: resolveServerId(input.serverId),
@@ -1143,7 +1155,10 @@ export async function getOrder(orderId: string, contextToken?: string | null) {
 
     if (databaseOrder) {
       const restoredContext = toOrderContext(databaseOrder);
-      orderContextStore.set(orderId, restoredContext);
+      orderContextStore.set(databaseOrder.id, restoredContext);
+      if (databaseOrder.providerRef && databaseOrder.providerRef !== databaseOrder.id) {
+        orderContextStore.set(databaseOrder.providerRef, restoredContext);
+      }
       return restoredContext;
     }
 
@@ -1154,7 +1169,10 @@ export async function getOrder(orderId: string, contextToken?: string | null) {
     }
 
     const restoredContext = toOrderContext(restoredOrder);
-    orderContextStore.set(orderId, restoredContext);
+    orderContextStore.set(restoredOrder.id, restoredContext);
+    if (restoredOrder.providerRef && restoredOrder.providerRef !== restoredOrder.id) {
+      orderContextStore.set(restoredOrder.providerRef, restoredContext);
+    }
     return restoredContext;
   })();
 
@@ -1164,8 +1182,34 @@ export async function getOrder(orderId: string, contextToken?: string | null) {
     );
   }
 
-  const payload = await fetchUpstream(replaceOrderId(config.orderStatusPath, orderId));
-  const order = normalizeStatusOrder(payload, resolvedFallback, orderId);
+  const orderRequestCandidates = [
+    resolvedFallback.upstreamOrderId,
+    resolvedFallback.localOrderId,
+    orderId,
+  ].filter((candidate, index, values) => Boolean(candidate) && values.indexOf(candidate) === index);
+  let lastError: unknown = null;
+  let payload: unknown = null;
+
+  for (const candidate of orderRequestCandidates) {
+    try {
+      payload = await fetchUpstream(replaceOrderId(config.orderStatusPath, candidate));
+      break;
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : "";
+      const canRetry = /not found|tidak ditemukan|order/i.test(message);
+
+      if (!canRetry) {
+        throw error;
+      }
+    }
+  }
+
+  if (!payload) {
+    throw (lastError instanceof Error ? lastError : new Error("Gagal membaca status order."));
+  }
+
+  const order = normalizeStatusOrder(payload, resolvedFallback);
 
   return await persistOrder(order);
 }
@@ -1192,7 +1236,10 @@ export async function cancelOrder(orderId: string, contextToken?: string | null)
 
     if (databaseOrder) {
       const restoredContext = toOrderContext(databaseOrder);
-      orderContextStore.set(orderId, restoredContext);
+      orderContextStore.set(databaseOrder.id, restoredContext);
+      if (databaseOrder.providerRef && databaseOrder.providerRef !== databaseOrder.id) {
+        orderContextStore.set(databaseOrder.providerRef, restoredContext);
+      }
       return restoredContext;
     }
 
@@ -1203,7 +1250,10 @@ export async function cancelOrder(orderId: string, contextToken?: string | null)
     }
 
     const restoredContext = toOrderContext(restoredOrder);
-    orderContextStore.set(orderId, restoredContext);
+    orderContextStore.set(restoredOrder.id, restoredContext);
+    if (restoredOrder.providerRef && restoredOrder.providerRef !== restoredOrder.id) {
+      orderContextStore.set(restoredOrder.providerRef, restoredContext);
+    }
     return restoredContext;
   })();
 
@@ -1211,12 +1261,38 @@ export async function cancelOrder(orderId: string, contextToken?: string | null)
     return null;
   }
 
-  await fetchUpstream(replaceOrderId(config.cancelPath, orderId), {
-    method: config.cancelMethod,
-  });
+  const cancelRequestCandidates = [
+    fallback.upstreamOrderId,
+    fallback.localOrderId,
+    orderId,
+  ].filter((candidate, index, values) => Boolean(candidate) && values.indexOf(candidate) === index);
+  let cancelSucceeded = false;
+  let lastCancelError: unknown = null;
+
+  for (const candidate of cancelRequestCandidates) {
+    try {
+      await fetchUpstream(replaceOrderId(config.cancelPath, candidate), {
+        method: config.cancelMethod,
+      });
+      cancelSucceeded = true;
+      break;
+    } catch (error) {
+      lastCancelError = error;
+      const message = error instanceof Error ? error.message : "";
+      const canRetry = /not found|tidak ditemukan|order/i.test(message);
+
+      if (!canRetry) {
+        throw error;
+      }
+    }
+  }
+
+  if (!cancelSucceeded) {
+    throw (lastCancelError instanceof Error ? lastCancelError : new Error("Gagal membatalkan order."));
+  }
 
   const order = {
-    id: orderId,
+    id: fallback.localOrderId,
     serviceId: fallback.serviceId,
     serviceCode: fallback.serviceCode,
     serverId: fallback.serverId,

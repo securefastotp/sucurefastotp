@@ -306,6 +306,26 @@ function getOrderCancelRefundReference(orderId: string) {
   return `cancel:${orderId}`;
 }
 
+function normalizeUpstreamOrderErrorMessage(error: unknown) {
+  const rawMessage =
+    error instanceof Error
+      ? error.message
+      : typeof error === "string"
+        ? error
+        : "Gagal membuat order OTP.";
+  const normalized = rawMessage.toLowerCase();
+
+  if (
+    /(out of stock|sold out|no stock|insufficient stock|stok\s*(habis|kosong))/i.test(
+      normalized,
+    )
+  ) {
+    return "Stok layanan habis. Silakan pilih layanan lain.";
+  }
+
+  return rawMessage;
+}
+
 export async function purchaseOtpWithWallet(input: PurchaseOrderInput) {
   const catalog = await getCatalog({
     serverId: input.serverId,
@@ -319,6 +339,10 @@ export async function purchaseOtpWithWallet(input: PurchaseOrderInput) {
 
   if (!service) {
     throw new Error("Layanan OTP tidak ditemukan atau sudah berubah.");
+  }
+
+  if (!Number.isFinite(service.stock) || service.stock <= 0) {
+    throw new Error("Stok layanan habis. Silakan pilih layanan lain.");
   }
 
   const purchaseReferenceId = createId("ordpay");
@@ -360,6 +384,7 @@ export async function purchaseOtpWithWallet(input: PurchaseOrderInput) {
 
     return nextOrder;
   } catch (error) {
+    const normalizedMessage = normalizeUpstreamOrderErrorMessage(error);
     await createWalletEntry({
       userId: input.userId,
       kind: "order_refund",
@@ -368,11 +393,11 @@ export async function purchaseOtpWithWallet(input: PurchaseOrderInput) {
       referenceId: purchaseReferenceId,
       data: {
         serviceId: service.id,
-        reason: error instanceof Error ? error.message : "upstream_failed",
+        reason: normalizedMessage,
       },
     }).catch(() => false);
 
-    throw error;
+    throw new Error(normalizedMessage);
   }
 }
 

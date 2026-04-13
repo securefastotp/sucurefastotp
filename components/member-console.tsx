@@ -154,6 +154,20 @@ function hasError(payload: unknown): payload is { error?: string } {
   return Boolean(payload && typeof payload === "object" && "error" in payload);
 }
 
+function normalizeOrderErrorMessage(message: string) {
+  const normalized = message.toLowerCase();
+
+  if (
+    /(out of stock|sold out|no stock|insufficient stock|stok\s*(habis|kosong))/i.test(
+      normalized,
+    )
+  ) {
+    return "Stok layanan habis. Silakan pilih layanan lain.";
+  }
+
+  return message;
+}
+
 function Spinner({
   className,
   label,
@@ -782,6 +796,9 @@ export function MemberConsole({
     () => catalog?.services.find((service) => service.id === selectedServiceId) ?? null,
     [catalog, selectedServiceId],
   );
+  const isSelectedOutOfStock = Boolean(
+    selectedService && Number.isFinite(selectedService.stock) && selectedService.stock <= 0,
+  );
   const filteredServices = useMemo(() => {
     const services = catalog?.services ?? [];
     const query = deferredSearch.trim().toLowerCase();
@@ -1140,6 +1157,16 @@ export function MemberConsole({
       return;
     }
 
+    if (isSelectedOutOfStock) {
+      const message = "Stok layanan habis. Silakan pilih layanan lain.";
+      setOrderError(message);
+      setToast({
+        type: "error",
+        message,
+      });
+      return;
+    }
+
     setIsOrderLoading(true);
     setOrderError(null);
 
@@ -1157,8 +1184,9 @@ export function MemberConsole({
         message: "Order OTP berhasil dibuat. Menunggu kode OTP masuk.",
       });
     } catch (error) {
-      const message =
+      const rawMessage =
         error instanceof Error ? error.message : "Gagal membuat order OTP.";
+      const message = normalizeOrderErrorMessage(rawMessage);
       setOrderError(message);
       setToast({
         type: "error",
@@ -1873,9 +1901,11 @@ export function MemberConsole({
                 {filteredServices.map((service) => (
                   <button
                     key={service.id}
+                    disabled={service.stock <= 0}
                     className={cn(
                       "flex w-full items-center justify-between gap-3 border-b border-white/6 px-4 py-3 text-left last:border-b-0",
                       selectedServiceId === service.id ? "bg-sky-300/10" : "",
+                      service.stock <= 0 ? "cursor-not-allowed opacity-60" : "",
                     )}
                     onClick={() => setSelectedServiceId(service.id)}
                     type="button"
@@ -1883,7 +1913,7 @@ export function MemberConsole({
                     <div className="min-w-0">
                       <p className="truncate text-[14px] font-medium text-white">{service.service}</p>
                       <p className="mt-1 text-[11px] text-sky-100/60">
-                        {service.serviceCode.toUpperCase()} | stok {service.stock}
+                        {service.serviceCode.toUpperCase()} | {service.stock <= 0 ? "stok habis" : `stok ${service.stock}`}
                       </p>
                     </div>
                     <span className="shrink-0 text-[14px] font-semibold text-cyan-100">
@@ -1924,11 +1954,11 @@ export function MemberConsole({
                 <button
                   className={cn(
                     "mt-4 flex w-full items-center justify-center rounded-[18px] px-4 py-3 text-[14px] font-semibold transition",
-                    summary.viewer.walletBalance >= selectedService.price
+                    summary.viewer.walletBalance >= selectedService.price && !isSelectedOutOfStock
                       ? "bg-[linear-gradient(135deg,#7af1ff,#358cff)] text-[#08101c]"
                       : "bg-white/8 text-sky-100/55",
                   )}
-                  disabled={isOrderLoading || summary.viewer.walletBalance < selectedService.price}
+                  disabled={isOrderLoading || summary.viewer.walletBalance < selectedService.price || isSelectedOutOfStock}
                   onClick={() => {
                     void handleOrderSubmit();
                   }}
@@ -1938,6 +1968,8 @@ export function MemberConsole({
                     <Spinner className="text-[#08101c]" label="Memproses order..." />
                   ) : summary.viewer.walletBalance < selectedService.price ? (
                     "Saldo tidak cukup"
+                  ) : isSelectedOutOfStock ? (
+                    "Stok habis"
                   ) : (
                     "Beli Nomor"
                   )}
