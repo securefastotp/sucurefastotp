@@ -70,6 +70,7 @@ export type RuntimeStatus = {
   midtransEnvironment: "sandbox" | "production";
   midtransClientKeyAvailable: boolean;
   paymentDatabaseConfigured: boolean;
+  orderDatabaseConfigured: boolean;
 };
 
 export type Balance = {

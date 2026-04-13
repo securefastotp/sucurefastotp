@@ -10,7 +10,11 @@ import {
   listMockServices,
 } from "@/lib/mock-data";
 import { getPaymentGatewayStatus } from "@/lib/payments";
-import { getOrderFromDatabase, saveOrderToDatabase } from "@/lib/order-store";
+import {
+  getOrderFromDatabase,
+  isOrderDatabaseConfigured,
+  saveOrderToDatabase,
+} from "@/lib/order-store";
 import { computeRetailPrice, getPricingConfig } from "@/lib/pricing";
 import { attachOrderContextToken, restoreOrderFromContextToken } from "@/lib/session-token";
 import type {
@@ -877,6 +881,7 @@ export async function getRuntimeStatus(): Promise<RuntimeStatus> {
     midtransEnvironment: paymentGateway.midtransEnvironment,
     midtransClientKeyAvailable: paymentGateway.midtransClientKeyAvailable,
     paymentDatabaseConfigured: paymentGateway.paymentDatabaseConfigured,
+    orderDatabaseConfigured: isOrderDatabaseConfigured(),
   };
 }
 

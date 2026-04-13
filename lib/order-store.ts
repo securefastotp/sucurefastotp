@@ -35,6 +35,10 @@ function getSql() {
   return databaseGlobal.__rahmatOtpOrderSql;
 }
 
+export function isOrderDatabaseConfigured() {
+  return Boolean(getDatabaseUrl());
+}
+
 function parseOrder(value: unknown) {
   if (!value) {
     return null;
