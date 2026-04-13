@@ -267,8 +267,10 @@ async function ensureAccountTables() {
       if (configuredAdminEmail) {
         await sql`
           UPDATE app_users
-          SET role = 'admin'
-          WHERE email = ${configuredAdminEmail}
+          SET role = CASE
+            WHEN email = ${configuredAdminEmail} THEN 'admin'
+            ELSE 'member'
+          END
         `;
       }
 
