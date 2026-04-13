@@ -81,6 +81,7 @@ export type AuthViewer = {
   name: string;
   email: string;
   role: UserRole;
+  isBlocked: boolean;
   createdAt: string;
   walletBalance: number;
 };
@@ -90,6 +91,7 @@ export type AdminUserSummary = {
   name: string;
   email: string;
   role: UserRole;
+  isBlocked: boolean;
   createdAt: string;
   walletBalance: number;
 };

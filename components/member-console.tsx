@@ -51,21 +51,6 @@ type BalancePayload = {
   };
 };
 
-type AdminStatusPayload = {
-  databaseConfigured: boolean;
-  upstreamKeyPresent: boolean;
-  upstreamKeySuffix: string | null;
-  upstreamKeyFingerprint: string | null;
-  upstreamBaseUrl: string | null;
-  upstreamHeader: string | null;
-};
-
-type BalanceDebugPayload = {
-  status: number;
-  url: string;
-  headerUsed: string;
-  response: string;
-};
 
 type ToastState =
   | {
@@ -619,6 +604,46 @@ async function requestAdminPasswordReset(input: {
   return payload;
 }
 
+async function requestAdminBlockUser(input: { userId: string; blocked: boolean }) {
+  const response = await fetch(`/api/admin/users/${input.userId}/block`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      blocked: input.blocked,
+    }),
+  });
+  const payload = (await response.json()) as
+    | { viewer: AuthViewer; message: string }
+    | ErrorResponse;
+
+  if (!response.ok || !("viewer" in payload)) {
+    throw new Error(
+      hasError(payload) ? payload.error : "Gagal memperbarui status user.",
+    );
+  }
+
+  return payload;
+}
+
+async function requestAdminDeleteUser(input: { userId: string }) {
+  const response = await fetch(`/api/admin/users/${input.userId}`, {
+    method: "DELETE",
+  });
+  const payload = (await response.json()) as
+    | { message: string }
+    | ErrorResponse;
+
+  if (!response.ok || !("message" in payload)) {
+    throw new Error(
+      hasError(payload) ? payload.error : "Gagal menghapus user.",
+    );
+  }
+
+  return payload;
+}
+
 async function requestUpstreamBalance() {
   const response = await fetch("/api/balance", {
     cache: "no-store",
@@ -634,35 +659,6 @@ async function requestUpstreamBalance() {
   return payload.balance;
 }
 
-async function requestAdminStatus() {
-  const response = await fetch("/api/admin/status", {
-    cache: "no-store",
-  });
-  const payload = (await response.json()) as AdminStatusPayload | ErrorResponse;
-
-  if (!response.ok || !("databaseConfigured" in payload)) {
-    throw new Error(
-      hasError(payload) ? payload.error : "Gagal membaca status admin.",
-    );
-  }
-
-  return payload;
-}
-
-async function requestBalanceDebug() {
-  const response = await fetch("/api/admin/balance-debug", {
-    cache: "no-store",
-  });
-  const payload = (await response.json()) as BalanceDebugPayload | ErrorResponse;
-
-  if (!response.ok || !("status" in payload)) {
-    throw new Error(
-      hasError(payload) ? payload.error : "Gagal membaca balance debug.",
-    );
-  }
-
-  return payload;
-}
 
 export function MemberConsole({
   initialViewer,
@@ -725,6 +721,8 @@ export function MemberConsole({
   const [isAdminUsersLoading, setIsAdminUsersLoading] = useState(false);
   const [isAdminSaving, setIsAdminSaving] = useState(false);
   const [isAdminPasswordSaving, setIsAdminPasswordSaving] = useState(false);
+  const [isAdminBlockSaving, setIsAdminBlockSaving] = useState(false);
+  const [isAdminDeleteSaving, setIsAdminDeleteSaving] = useState(false);
   const [adminNewPassword, setAdminNewPassword] = useState("");
   const [adminBalanceOverride, setAdminBalanceOverride] = useState<{
     amount: number;
@@ -732,10 +730,6 @@ export function MemberConsole({
     updatedAt: string;
   } | null>(null);
   const [adminBalanceError, setAdminBalanceError] = useState<string | null>(null);
-  const [adminStatus, setAdminStatus] = useState<AdminStatusPayload | null>(null);
-  const [adminStatusError, setAdminStatusError] = useState<string | null>(null);
-  const [balanceDebug, setBalanceDebug] = useState<BalanceDebugPayload | null>(null);
-  const [balanceDebugError, setBalanceDebugError] = useState<string | null>(null);
 
   const deferredSearch = useDeferredValue(serviceSearch);
   const deferredAdminSearch = useDeferredValue(adminSearch);
@@ -937,7 +931,6 @@ export function MemberConsole({
     }
 
     void loadAdminUsers(deferredAdminSearch);
-    void handleRefreshAdminStatus();
   }, [activeTab, canAccessAdmin, deferredAdminSearch, loadAdminUsers]);
 
   useEffect(() => {
@@ -1318,6 +1311,83 @@ export function MemberConsole({
     }
   }
 
+  async function handleAdminBlockToggle() {
+    if (!selectedAdminUser) {
+      setAdminError("Pilih user tujuan terlebih dulu.");
+      return;
+    }
+
+    setIsAdminBlockSaving(true);
+    setAdminError(null);
+
+    try {
+      const payload = await requestAdminBlockUser({
+        userId: selectedAdminUser.id,
+        blocked: !selectedAdminUser.isBlocked,
+      });
+
+      const users = await requestAdminUsers(deferredAdminSearch);
+      setAdminUsers(users);
+      setSelectedAdminUserId(payload.viewer.id);
+      setToast({
+        type: "success",
+        message: payload.message,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Gagal mengubah status user.";
+      setAdminError(message);
+      setToast({
+        type: "error",
+        message,
+      });
+    } finally {
+      setIsAdminBlockSaving(false);
+    }
+  }
+
+  async function handleAdminDeleteUser() {
+    if (!selectedAdminUser) {
+      setAdminError("Pilih user tujuan terlebih dulu.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Hapus akun ${selectedAdminUser.email}? Data transaksi akan ikut terhapus.`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setIsAdminDeleteSaving(true);
+    setAdminError(null);
+
+    try {
+      const payload = await requestAdminDeleteUser({
+        userId: selectedAdminUser.id,
+      });
+
+      const users = await requestAdminUsers(deferredAdminSearch);
+      setAdminUsers(users);
+      setSelectedAdminUserId(users[0]?.id ?? "");
+      setToast({
+        type: "success",
+        message: payload.message,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Gagal menghapus user.";
+      setAdminError(message);
+      setToast({
+        type: "error",
+        message,
+      });
+    } finally {
+      setIsAdminDeleteSaving(false);
+    }
+  }
+
   async function handleRefreshAdminBalance() {
     setAdminBalanceError(null);
 
@@ -1331,31 +1401,6 @@ export function MemberConsole({
     }
   }
 
-  async function handleRefreshAdminStatus() {
-    setAdminStatusError(null);
-
-    try {
-      const status = await requestAdminStatus();
-      setAdminStatus(status);
-    } catch (error) {
-      setAdminStatusError(
-        error instanceof Error ? error.message : "Gagal membaca status admin.",
-      );
-    }
-  }
-
-  async function handleBalanceDebug() {
-    setBalanceDebugError(null);
-
-    try {
-      const payload = await requestBalanceDebug();
-      setBalanceDebug(payload);
-    } catch (error) {
-      setBalanceDebugError(
-        error instanceof Error ? error.message : "Gagal membaca balance debug.",
-      );
-    }
-  }
 
   if (!viewer || !summary) {
     return (
@@ -1582,17 +1627,14 @@ export function MemberConsole({
                 anda harus cukup. Jika anda kurang paham menggunakan panel ini silahkan
                 hubungi admin di menu pengaturan.
               </p>
-              <p className="mt-2 text-[13px] leading-6 text-sky-50/72">
-                Deposit user masuk ke saldo akun website Anda. Saat user order OTP, saldo internal user berkurang dan backend tetap memakai supply akun KirimKode Anda.
-              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               {[
-                ["Saldo Aktif", formatCurrency(summary.viewer.walletBalance, "IDR")],
+                ["Saldo", formatCurrency(summary.viewer.walletBalance, "IDR")],
                 ["Total Order", String(summary.metrics.totalOrders)],
                 ["OTP Sukses", String(summary.metrics.successfulOtps)],
-                ["Deposit Masuk", formatCurrency(summary.metrics.totalDeposits, "IDR")],
+                ["Total Deposit", formatCurrency(summary.metrics.totalDeposits, "IDR")],
               ].map(([label, value]) => (
                 <div key={label} className="rounded-[22px] border border-white/10 bg-white/5 p-4">
                   <p className="text-[11px] uppercase tracking-[0.18em] text-sky-100/55">{label}</p>
@@ -1602,7 +1644,7 @@ export function MemberConsole({
             </div>
 
             <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
-              <SectionTitle icon={<WalletIcon className="h-4.5 w-4.5" />} title="Deposit Saldo" />
+              <SectionTitle icon={<WalletIcon className="h-4.5 w-4.5" />} title="Deposit" />
               <form className="mt-4 space-y-3" onSubmit={handleDepositSubmit}>
                 <input
                   className="w-full rounded-[16px] border border-white/10 bg-[#07111f] px-4 py-3 text-[14px] text-white outline-none transition focus:border-sky-300/60"
@@ -1636,7 +1678,7 @@ export function MemberConsole({
                   {isDepositLoading ? (
                     <Spinner className="text-[#08101c]" label="Membuat QRIS..." />
                   ) : (
-                    "Buat QRIS Deposit"
+                    "Deposit"
                   )}
                 </button>
               </form>
@@ -2148,60 +2190,6 @@ export function MemberConsole({
             <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
               <SectionTitle
                 icon={<ShieldIcon className="h-4.5 w-4.5" />}
-                title="Balance Debug"
-                action={
-                  <button
-                    className="rounded-[12px] border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-sky-100/70 transition hover:border-sky-300/40"
-                    onClick={() => void handleBalanceDebug()}
-                    type="button"
-                  >
-                    Cek
-                  </button>
-                }
-              />
-              <div className="mt-4 rounded-[18px] border border-white/10 bg-white/4 px-4 py-3 text-[12px] text-sky-100/70">
-                <p>Status: {balanceDebug?.status ?? "-"}</p>
-                <p>URL: {balanceDebug?.url ?? "-"}</p>
-                <p>Header: {balanceDebug?.headerUsed ?? "-"}</p>
-                <p className="mt-2 break-words">
-                  Response: {balanceDebug?.response ?? "-"}
-                </p>
-                {balanceDebugError ? (
-                  <p className="mt-2 text-rose-200">{balanceDebugError}</p>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
-              <SectionTitle
-                icon={<ShieldIcon className="h-4.5 w-4.5" />}
-                title="Status Admin"
-                action={
-                  <button
-                    className="rounded-[12px] border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-sky-100/70 transition hover:border-sky-300/40"
-                    onClick={() => void handleRefreshAdminStatus()}
-                    type="button"
-                  >
-                    Refresh
-                  </button>
-                }
-              />
-              <div className="mt-4 rounded-[18px] border border-white/10 bg-white/4 px-4 py-3 text-[12px] text-sky-100/70">
-                <p>Database: {adminStatus?.databaseConfigured ? "Tersambung" : "Tidak tersedia"}</p>
-                <p>Upstream Key: {adminStatus?.upstreamKeyPresent ? "Terpasang" : "Belum ada"}</p>
-                <p>Key Suffix: {adminStatus?.upstreamKeySuffix ?? "-"}</p>
-                <p>Key Fingerprint: {adminStatus?.upstreamKeyFingerprint ?? "-"}</p>
-                <p>Base URL: {adminStatus?.upstreamBaseUrl ?? "-"}</p>
-                <p>Header: {adminStatus?.upstreamHeader ?? "-"}</p>
-                {adminStatusError ? (
-                  <p className="mt-2 text-rose-200">{adminStatusError}</p>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
-              <SectionTitle
-                icon={<ShieldIcon className="h-4.5 w-4.5" />}
                 title="Admin Panel"
                 action={
                   isAdminUsersLoading ? (
@@ -2250,7 +2238,7 @@ export function MemberConsole({
                           {formatCurrency(user.walletBalance, "IDR")}
                         </p>
                         <p className="mt-1 text-[10px] uppercase text-sky-100/55">
-                          {user.role}
+                          {user.isBlocked ? "blocked" : user.role}
                         </p>
                       </div>
                     </div>
@@ -2261,6 +2249,48 @@ export function MemberConsole({
                     Data user belum ada.
                   </div>
                 ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
+              <SectionTitle
+                icon={<UserIcon className="h-4.5 w-4.5" />}
+                title="Kelola User"
+              />
+              {selectedAdminUser ? (
+                <div className="mt-4 rounded-[18px] border border-white/10 bg-white/4 px-4 py-3">
+                  <p className="text-[13px] font-semibold text-white">
+                    {selectedAdminUser.name}
+                  </p>
+                  <p className="mt-1 text-[11px] text-sky-100/60">
+                    {selectedAdminUser.email}
+                  </p>
+                  <p className="mt-2 text-[12px] text-sky-100/70">
+                    Status: {selectedAdminUser.isBlocked ? "Diblokir" : "Aktif"}
+                  </p>
+                </div>
+              ) : null}
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <button
+                  className="flex items-center justify-center rounded-[16px] border border-white/10 bg-white/5 px-3 py-2 text-[12px] font-medium text-sky-100/80"
+                  disabled={!selectedAdminUser || isAdminBlockSaving}
+                  onClick={() => void handleAdminBlockToggle()}
+                  type="button"
+                >
+                  {isAdminBlockSaving
+                    ? "Menyimpan..."
+                    : selectedAdminUser?.isBlocked
+                      ? "Buka Blokir"
+                      : "Blokir"}
+                </button>
+                <button
+                  className="flex items-center justify-center rounded-[16px] border border-rose-300/30 bg-rose-500/10 px-3 py-2 text-[12px] font-semibold text-rose-100"
+                  disabled={!selectedAdminUser || isAdminDeleteSaving}
+                  onClick={() => void handleAdminDeleteUser()}
+                  type="button"
+                >
+                  {isAdminDeleteSaving ? "Menghapus..." : "Hapus Akun"}
+                </button>
               </div>
             </div>
 

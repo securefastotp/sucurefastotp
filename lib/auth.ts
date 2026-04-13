@@ -206,6 +206,10 @@ export async function loginAccount(input: {
   const password = input.password.trim();
   const user = await getUserByEmail(email);
 
+  if (user?.is_blocked) {
+    throw new Error("Akun ini diblokir oleh admin.");
+  }
+
   if (!user || !verifyPasswordHash(password, user.password_hash)) {
     throw new Error("Email atau password tidak cocok.");
   }

@@ -11,6 +11,8 @@ import {
   getUserOrder,
   hasWalletLedgerReference,
   getViewerById,
+  deleteUserAccount,
+  setUserBlocked,
   updateUserAccount,
   listAdminUsers,
   listDepositsByUser,
@@ -521,4 +523,57 @@ export async function applyAdminPasswordReset(input: {
     email: targetUser.email,
     passwordHash: hashPasswordForStorage(nextPassword),
   });
+}
+
+export async function applyAdminBlockUser(input: {
+  actorUserId: string;
+  targetUserId: string;
+  blocked: boolean;
+}) {
+  const actor = await getViewerById(input.actorUserId);
+
+  if (!actor || !isAdminViewer(actor)) {
+    throw new Error("Akses admin ditolak.");
+  }
+
+  if (actor.id === input.targetUserId) {
+    throw new Error("Admin tidak bisa memblokir akun sendiri.");
+  }
+
+  return await setUserBlocked(input.targetUserId, input.blocked);
+}
+
+export async function applyAdminDeleteUser(input: {
+  actorUserId: string;
+  targetUserId: string;
+}) {
+  const actor = await getViewerById(input.actorUserId);
+
+  if (!actor || !isAdminViewer(actor)) {
+    throw new Error("Akses admin ditolak.");
+  }
+
+  if (actor.id === input.targetUserId) {
+    throw new Error("Admin tidak bisa menghapus akun sendiri.");
+  }
+
+  const targetUser = await getViewerById(input.targetUserId);
+
+  if (!targetUser) {
+    throw new Error("User tujuan tidak ditemukan.");
+  }
+
+  const configuredAdminEmail = getConfiguredAdminEmail();
+
+  if (configuredAdminEmail && targetUser.email === configuredAdminEmail) {
+    throw new Error("Akun admin utama tidak boleh dihapus.");
+  }
+
+  const deleted = await deleteUserAccount(input.targetUserId);
+
+  if (!deleted) {
+    throw new Error("Gagal menghapus user.");
+  }
+
+  return true;
 }

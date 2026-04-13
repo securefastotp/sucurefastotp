@@ -20,6 +20,7 @@ type StoredUserRow = {
   email: string;
   password_hash: string;
   role: UserRole | string | null;
+  is_blocked?: boolean | null;
   failed_login_attempts: number | null;
   locked_until: string | null;
   created_at: string;
@@ -162,6 +163,10 @@ async function ensureAccountTables() {
       `;
       await sql`
         ALTER TABLE app_users
+        ADD COLUMN IF NOT EXISTS is_blocked BOOLEAN NOT NULL DEFAULT false
+      `;
+      await sql`
+        ALTER TABLE app_users
         ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER NOT NULL DEFAULT 0
       `;
       await sql`
@@ -297,6 +302,7 @@ function toViewer(row: StoredUserRow): AuthViewer {
     name: row.full_name,
     email: row.email,
     role: normalizeUserRole(row.role, row.email),
+    isBlocked: Boolean(row.is_blocked),
     createdAt: row.created_at,
     walletBalance: row.balance ?? 0,
   };
@@ -406,6 +412,7 @@ export async function getUserByEmail(email: string) {
       u.email,
       u.password_hash,
       u.role,
+      u.is_blocked,
       u.failed_login_attempts,
       u.locked_until,
       u.created_at,
@@ -436,6 +443,7 @@ export async function getViewerById(userId: string) {
       u.email,
       u.password_hash,
       u.role,
+      u.is_blocked,
       u.failed_login_attempts,
       u.locked_until,
       u.created_at,
@@ -611,6 +619,50 @@ export async function updateUserAccount(
   return viewer;
 }
 
+export async function setUserBlocked(userId: string, blocked: boolean) {
+  const sql = getSql();
+
+  if (!sql) {
+    throw new Error("Database akun belum tersedia.");
+  }
+
+  await ensureAccountTables();
+
+  await sql`
+    UPDATE app_users
+    SET
+      is_blocked = ${blocked},
+      updated_at = NOW()
+    WHERE user_id = ${userId}
+  `;
+
+  const viewer = await getViewerById(userId);
+
+  if (!viewer) {
+    throw new Error("User tidak ditemukan setelah update blokir.");
+  }
+
+  return viewer;
+}
+
+export async function deleteUserAccount(userId: string) {
+  const sql = getSql();
+
+  if (!sql) {
+    throw new Error("Database akun belum tersedia.");
+  }
+
+  await ensureAccountTables();
+
+  const rows = (await sql`
+    DELETE FROM app_users
+    WHERE user_id = ${userId}
+    RETURNING user_id
+  `) as Array<{ user_id: string }>;
+
+  return Boolean(rows[0]);
+}
+
 export async function listAdminUsers(
   search = "",
   limit = 30,
@@ -634,6 +686,7 @@ export async function listAdminUsers(
             u.email,
             u.password_hash,
             u.role,
+            u.is_blocked,
             u.failed_login_attempts,
             u.locked_until,
             u.created_at,
@@ -652,6 +705,7 @@ export async function listAdminUsers(
             u.email,
             u.password_hash,
             u.role,
+            u.is_blocked,
             u.failed_login_attempts,
             u.locked_until,
             u.created_at,
@@ -669,6 +723,7 @@ export async function listAdminUsers(
     name: row.full_name,
     email: row.email,
     role: normalizeUserRole(row.role, row.email),
+    isBlocked: Boolean(row.is_blocked),
     createdAt: row.created_at,
     walletBalance: row.balance ?? 0,
   }));
