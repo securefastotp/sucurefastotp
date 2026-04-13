@@ -51,6 +51,15 @@ type BalancePayload = {
   };
 };
 
+type AdminStatusPayload = {
+  databaseConfigured: boolean;
+  upstreamKeyPresent: boolean;
+  upstreamKeySuffix: string | null;
+  upstreamKeyFingerprint: string | null;
+  upstreamBaseUrl: string | null;
+  upstreamHeader: string | null;
+};
+
 type ToastState =
   | {
       type: "success" | "error" | "info";
@@ -618,6 +627,21 @@ async function requestUpstreamBalance() {
   return payload.balance;
 }
 
+async function requestAdminStatus() {
+  const response = await fetch("/api/admin/status", {
+    cache: "no-store",
+  });
+  const payload = (await response.json()) as AdminStatusPayload | ErrorResponse;
+
+  if (!response.ok || !("databaseConfigured" in payload)) {
+    throw new Error(
+      hasError(payload) ? payload.error : "Gagal membaca status admin.",
+    );
+  }
+
+  return payload;
+}
+
 export function MemberConsole({
   initialViewer,
   initialSummary,
@@ -686,6 +710,8 @@ export function MemberConsole({
     updatedAt: string;
   } | null>(null);
   const [adminBalanceError, setAdminBalanceError] = useState<string | null>(null);
+  const [adminStatus, setAdminStatus] = useState<AdminStatusPayload | null>(null);
+  const [adminStatusError, setAdminStatusError] = useState<string | null>(null);
 
   const deferredSearch = useDeferredValue(serviceSearch);
   const deferredAdminSearch = useDeferredValue(adminSearch);
@@ -887,6 +913,7 @@ export function MemberConsole({
     }
 
     void loadAdminUsers(deferredAdminSearch);
+    void handleRefreshAdminStatus();
   }, [activeTab, canAccessAdmin, deferredAdminSearch, loadAdminUsers]);
 
   useEffect(() => {
@@ -1276,6 +1303,19 @@ export function MemberConsole({
     } catch (error) {
       setAdminBalanceError(
         error instanceof Error ? error.message : "Gagal membaca saldo KirimKode.",
+      );
+    }
+  }
+
+  async function handleRefreshAdminStatus() {
+    setAdminStatusError(null);
+
+    try {
+      const status = await requestAdminStatus();
+      setAdminStatus(status);
+    } catch (error) {
+      setAdminStatusError(
+        error instanceof Error ? error.message : "Gagal membaca status admin.",
       );
     }
   }
@@ -2065,6 +2105,33 @@ export function MemberConsole({
                         summary.admin?.upstreamBalanceError ??
                       "Saldo akun KirimKode belum bisa dibaca."}
                 </p>
+              </div>
+            </div>
+
+            <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
+              <SectionTitle
+                icon={<ShieldIcon className="h-4.5 w-4.5" />}
+                title="Status Admin"
+                action={
+                  <button
+                    className="rounded-[12px] border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-sky-100/70 transition hover:border-sky-300/40"
+                    onClick={() => void handleRefreshAdminStatus()}
+                    type="button"
+                  >
+                    Refresh
+                  </button>
+                }
+              />
+              <div className="mt-4 rounded-[18px] border border-white/10 bg-white/4 px-4 py-3 text-[12px] text-sky-100/70">
+                <p>Database: {adminStatus?.databaseConfigured ? "Tersambung" : "Tidak tersedia"}</p>
+                <p>Upstream Key: {adminStatus?.upstreamKeyPresent ? "Terpasang" : "Belum ada"}</p>
+                <p>Key Suffix: {adminStatus?.upstreamKeySuffix ?? "-"}</p>
+                <p>Key Fingerprint: {adminStatus?.upstreamKeyFingerprint ?? "-"}</p>
+                <p>Base URL: {adminStatus?.upstreamBaseUrl ?? "-"}</p>
+                <p>Header: {adminStatus?.upstreamHeader ?? "-"}</p>
+                {adminStatusError ? (
+                  <p className="mt-2 text-rose-200">{adminStatusError}</p>
+                ) : null}
               </div>
             </div>
 

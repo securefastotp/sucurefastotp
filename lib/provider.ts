@@ -148,7 +148,7 @@ function countryCodeToFlagEmoji(code?: string) {
     .join("");
 }
 
-function getProviderConfig() {
+export function getProviderConfig() {
   const apiKey = process.env.UPSTREAM_API_KEY;
   const requestedMode = process.env.UPSTREAM_PROVIDER_MODE;
   const mode =
