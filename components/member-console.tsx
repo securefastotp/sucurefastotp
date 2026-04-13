@@ -61,6 +61,27 @@ const serverOptions = [
   },
 ];
 
+const SUPPORT_LINKS = [
+  {
+    id: "admin",
+    title: "Kontak Admin",
+    subtitle: "+1 (289) 446-6453",
+    href: "https://wa.me/12894466453?text=Halo%20admin%20Rahmat%20OTP",
+  },
+  {
+    id: "group",
+    title: "Grup Store",
+    subtitle: "Putri Gmoyy Store",
+    href: "https://wa.me/12894466453?text=Halo%20admin%2C%20saya%20ingin%20join%20grup%20Putri%20Gmoyy%20Store",
+  },
+  {
+    id: "developer",
+    title: "Developers Website",
+    subtitle: "+62 82322633452",
+    href: "https://wa.me/6282322633452?text=Halo%20developer%20website%20Rahmat%20OTP",
+  },
+] as const;
+
 function toFlagEmoji(code?: string) {
   if (!code || !/^[a-z]{2}$/i.test(code)) {
     return null;
@@ -206,6 +227,21 @@ function UserIcon({ className }: { className?: string }) {
         stroke="currentColor"
         strokeLinecap="round"
         strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
+function WhatsAppIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
+      <path
+        d="M12 4a8 8 0 0 0-6.9 12l-.7 3.5 3.6-.9A8 8 0 1 0 12 4Z"
+        fill="#25D366"
+      />
+      <path
+        d="M9.4 8.5c-.2-.4-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.4s-.8.8-.8 2 .9 2.3 1 2.5c.1.2 1.7 2.7 4.3 3.6 2.1.7 2.6.6 3 .5.5-.1 1.5-.6 1.7-1.2.2-.6.2-1.1.1-1.2-.1-.1-.3-.2-.7-.4-.4-.2-1.1-.5-1.3-.6-.2-.1-.4-.1-.5.1-.2.2-.6.7-.7.8-.1.2-.3.2-.6.1s-1.1-.4-2.1-1.3c-.7-.6-1.2-1.4-1.4-1.6-.1-.2 0-.4.1-.5.1-.1.2-.3.3-.4.1-.1.2-.2.2-.4.1-.1 0-.3 0-.4 0-.1-.5-1.2-.8-1.8Z"
+        fill="#fff"
       />
     </svg>
   );
@@ -438,6 +474,23 @@ async function requestOrderStatus(orderId: string) {
   return payload.order;
 }
 
+async function requestCancelOrder(orderId: string) {
+  const response = await fetch(`/api/account/orders/${orderId}`, {
+    method: "DELETE",
+  });
+  const payload = (await response.json()) as
+    | { order: Order; message: string }
+    | ErrorResponse;
+
+  if (!response.ok || !("order" in payload)) {
+    throw new Error(
+      hasError(payload) ? payload.error : "Gagal membatalkan order OTP.",
+    );
+  }
+
+  return payload;
+}
+
 async function requestUpdateSettings(input: {
   name: string;
   email: string;
@@ -565,6 +618,7 @@ export function MemberConsole({
   const [isCatalogLoading, setIsCatalogLoading] = useState(false);
   const [isDepositLoading, setIsDepositLoading] = useState(false);
   const [isOrderLoading, setIsOrderLoading] = useState(false);
+  const [isOrderCancelling, setIsOrderCancelling] = useState(false);
   const [isSettingsLoading, setIsSettingsLoading] = useState(false);
   const [isAdminUsersLoading, setIsAdminUsersLoading] = useState(false);
   const [isAdminSaving, setIsAdminSaving] = useState(false);
@@ -943,6 +997,64 @@ export function MemberConsole({
       });
     } finally {
       setIsOrderLoading(false);
+    }
+  }
+
+  async function handleCancelOrder() {
+    if (!activeOrder?.id) {
+      return;
+    }
+
+    setIsOrderCancelling(true);
+    setOrderError(null);
+
+    try {
+      const payload = await requestCancelOrder(activeOrder.id);
+      setActiveOrder(payload.order);
+      await refreshSummary();
+      setToast({
+        type: "success",
+        message: payload.message,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Gagal membatalkan order OTP.";
+      setOrderError(message);
+      setToast({
+        type: "error",
+        message,
+      });
+    } finally {
+      setIsOrderCancelling(false);
+    }
+  }
+
+  async function handleRefreshOrder() {
+    if (!activeOrder?.id) {
+      return;
+    }
+
+    try {
+      const order = await requestOrderStatus(activeOrder.id);
+      setActiveOrder(order);
+
+      if (order.status !== "pending") {
+        await refreshSummary();
+        if (order.status === "otp_received") {
+          setToast({
+            type: "success",
+            message: "OTP berhasil diterima dan siap dipakai.",
+          });
+        }
+      }
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Gagal refresh status order.";
+      setOrderError(message);
+      setToast({
+        type: "error",
+        message,
+      });
     }
   }
 
@@ -1494,6 +1606,28 @@ export function MemberConsole({
                     </span>
                   </div>
                 </div>
+                <div className="mt-4 grid grid-cols-2 gap-3">
+                  <button
+                    className="flex items-center justify-center rounded-[16px] border border-white/10 bg-white/4 px-4 py-3 text-[13px] font-medium text-sky-100/82"
+                    disabled={isOrderLoading}
+                    onClick={() => {
+                      void handleRefreshOrder();
+                    }}
+                    type="button"
+                  >
+                    Refresh OTP
+                  </button>
+                  <button
+                    className="flex items-center justify-center rounded-[16px] border border-amber-300/20 bg-amber-500/10 px-4 py-3 text-[13px] font-medium text-amber-100 disabled:opacity-60"
+                    disabled={isOrderCancelling || activeOrder.status !== "pending"}
+                    onClick={() => {
+                      void handleCancelOrder();
+                    }}
+                    type="button"
+                  >
+                    {isOrderCancelling ? "Membatalkan..." : "Batalkan Pesanan"}
+                  </button>
+                </div>
               </div>
             ) : null}
           </div>
@@ -1694,11 +1828,72 @@ export function MemberConsole({
                 Logout Akun
               </button>
             </div>
+
+            <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
+              <SectionTitle
+                icon={<WhatsAppIcon className="h-5 w-5" />}
+                title="Kontak WhatsApp"
+              />
+              <div className="mt-4 space-y-3">
+                {SUPPORT_LINKS.map((item) => (
+                  <a
+                    key={item.id}
+                    className="flex items-center justify-between gap-3 rounded-[18px] border border-white/10 bg-white/4 px-4 py-3 transition hover:border-emerald-300/30 hover:bg-emerald-500/10"
+                    href={item.href}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-white">
+                        <WhatsAppIcon className="h-6 w-6" />
+                      </span>
+                      <div>
+                        <p className="text-[13px] font-semibold text-white">
+                          {item.title}
+                        </p>
+                        <p className="text-[11px] text-sky-100/62">
+                          {item.subtitle}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[11px] font-medium text-emerald-200">
+                      Buka Chat
+                    </span>
+                  </a>
+                ))}
+              </div>
+            </div>
           </div>
         ) : null}
 
         {activeTab === "admin" && canAccessAdmin ? (
           <div className="space-y-4">
+            <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
+              <SectionTitle
+                icon={<WalletIcon className="h-4.5 w-4.5" />}
+                title="Saldo KirimKode"
+              />
+              <div className="mt-4 rounded-[18px] border border-white/10 bg-white/4 px-4 py-3">
+                <p className="text-[11px] uppercase tracking-[0.16em] text-sky-100/55">
+                  Upstream Balance
+                </p>
+                <p className="mt-3 text-[20px] font-semibold text-cyan-100">
+                  {summary.admin?.upstreamBalance
+                    ? formatCurrency(
+                        summary.admin.upstreamBalance.amount,
+                        summary.admin.upstreamBalance.currency,
+                      )
+                    : "Tidak tersedia"}
+                </p>
+                <p className="mt-2 text-[11px] text-sky-100/58">
+                  {summary.admin?.upstreamBalance
+                    ? `Update ${formatDateTime(summary.admin.upstreamBalance.updatedAt)}`
+                    : summary.admin?.upstreamBalanceError ??
+                      "Saldo akun KirimKode belum bisa dibaca."}
+                </p>
+              </div>
+            </div>
+
             <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
               <SectionTitle
                 icon={<ShieldIcon className="h-4.5 w-4.5" />}

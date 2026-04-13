@@ -65,6 +65,7 @@ const databaseGlobal = globalThis as typeof globalThis & {
   __rahmatOtpAccountSql?: NeonSql | null;
   __rahmatOtpAccountTablesReady?: Promise<boolean>;
 };
+const DEFAULT_ADMIN_EMAIL = "senjarqy@gmail.com";
 
 function getDatabaseUrl() {
   return (
@@ -97,17 +98,23 @@ function getConfiguredAdminEmail() {
   const value =
     process.env.ADMIN_EMAIL?.trim() ||
     process.env.ADMIN_LOGIN_EMAIL?.trim() ||
-    "";
+    DEFAULT_ADMIN_EMAIL;
 
   return value ? normalizeEmail(value) : "";
 }
 
 function normalizeUserRole(value: unknown, email: string): UserRole {
+  const configuredAdminEmail = getConfiguredAdminEmail();
+
+  if (configuredAdminEmail) {
+    return normalizeEmail(email) === configuredAdminEmail ? "admin" : "member";
+  }
+
   if (value === "admin" || value === "member") {
     return value;
   }
 
-  return normalizeEmail(email) === getConfiguredAdminEmail() ? "admin" : "member";
+  return "member";
 }
 
 function parseJsonRecord<T extends object>(value: unknown) {
@@ -1047,6 +1054,38 @@ export async function listWalletLedger(userId: string, limit = 20) {
     referenceId: row.reference_id ?? undefined,
     createdAt: row.created_at,
   }));
+}
+
+export async function hasWalletLedgerReference(
+  userId: string,
+  referenceId: string,
+  kind?: WalletLedgerKind,
+) {
+  const sql = getSql();
+
+  if (!sql) {
+    return false;
+  }
+
+  await ensureAccountTables();
+
+  const rows = (
+    kind
+      ? await sql`
+          SELECT entry_id
+          FROM app_wallet_ledger
+          WHERE user_id = ${userId} AND reference_id = ${referenceId} AND kind = ${kind}
+          LIMIT 1
+        `
+      : await sql`
+          SELECT entry_id
+          FROM app_wallet_ledger
+          WHERE user_id = ${userId} AND reference_id = ${referenceId}
+          LIMIT 1
+        `
+  ) as Array<{ entry_id: string }>;
+
+  return Boolean(rows[0]?.entry_id);
 }
 
 export async function upsertUserOrder(userId: string, order: Order) {

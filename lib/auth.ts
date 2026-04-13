@@ -21,6 +21,7 @@ import type { AuthViewer } from "@/lib/types";
 
 const AUTH_COOKIE_NAME = "rahmat_otp_auth";
 const SESSION_TTL_DAYS = 30;
+const DEFAULT_ADMIN_EMAIL = "senjarqy@gmail.com";
 
 type AuthTokenPayload = {
   sessionId: string;
@@ -57,7 +58,7 @@ function getAdminEmail() {
   return (
     process.env.ADMIN_EMAIL?.trim().toLowerCase() ||
     process.env.ADMIN_LOGIN_EMAIL?.trim().toLowerCase() ||
-    ""
+    DEFAULT_ADMIN_EMAIL
   );
 }
 

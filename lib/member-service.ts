@@ -8,6 +8,7 @@ import {
   getDepositById,
   getDepositByMidtransOrderId,
   getUserOrder,
+  hasWalletLedgerReference,
   getViewerById,
   listAdminUsers,
   listDepositsByUser,
@@ -21,7 +22,7 @@ import {
   normalizeMidtransPaymentStatus,
   verifyMidtransSignature,
 } from "@/lib/midtrans";
-import { getCatalog, createOrder, getOrder } from "@/lib/provider";
+import { cancelOrder, createOrder, getBalance, getCatalog, getOrder } from "@/lib/provider";
 import { siteConfig } from "@/lib/site-config";
 import type { DashboardSummary, DepositRecord, Order } from "@/lib/types";
 
@@ -80,10 +81,21 @@ export async function getDashboardSummary(userId: string): Promise<DashboardSumm
     throw new Error("Akun user tidak ditemukan.");
   }
 
-  const [deposits, orders, ledger] = await Promise.all([
+  const [deposits, orders, ledger, upstreamBalanceResult] = await Promise.all([
     listDepositsByUser(userId, 10),
     listUserOrders(userId, 20),
     listWalletLedger(userId, 20),
+    viewer.role === "admin"
+      ? getBalance()
+          .then((balance) => ({ balance, error: null }))
+          .catch((error) => ({
+            balance: null,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Gagal membaca saldo KirimKode.",
+          }))
+      : Promise.resolve({ balance: null, error: null }),
   ]);
 
   return {
@@ -96,6 +108,13 @@ export async function getDashboardSummary(userId: string): Promise<DashboardSumm
         .filter((deposit) => deposit.status === "paid")
         .reduce((sum, deposit) => sum + deposit.amount, 0),
     },
+    admin:
+      viewer.role === "admin"
+        ? {
+            upstreamBalance: upstreamBalanceResult.balance,
+            upstreamBalanceError: upstreamBalanceResult.error,
+          }
+        : null,
     deposits,
     orders,
     ledger,
@@ -269,6 +288,10 @@ function getOrderRefundDescription(order: {
   return `Refund order OTP ${order.service} ${order.country}`;
 }
 
+function getOrderCancelRefundReference(orderId: string) {
+  return `cancel:${orderId}`;
+}
+
 export async function purchaseOtpWithWallet(input: PurchaseOrderInput) {
   const catalog = await getCatalog({
     serverId: input.serverId,
@@ -356,6 +379,52 @@ export async function syncUserOrder(userId: string, orderId: string) {
     ...latestOrder,
     updatedAt: new Date().toISOString(),
   });
+}
+
+export async function cancelUserOrder(userId: string, orderId: string) {
+  const currentOrder = await getUserOrder(userId, orderId);
+
+  if (!currentOrder) {
+    return null;
+  }
+
+  if (currentOrder.status !== "pending") {
+    throw new Error("Order OTP ini sudah tidak bisa dibatalkan lagi.");
+  }
+
+  const cancelledOrder = await cancelOrder(orderId, currentOrder.contextToken);
+
+  if (!cancelledOrder) {
+    throw new Error("Order OTP tidak ditemukan di provider.");
+  }
+
+  const nextOrder = await upsertUserOrder(userId, {
+    ...cancelledOrder,
+    updatedAt: new Date().toISOString(),
+  });
+
+  const refundReferenceId = getOrderCancelRefundReference(orderId);
+  const refundExists = await hasWalletLedgerReference(
+    userId,
+    refundReferenceId,
+    "order_refund",
+  );
+
+  if (!refundExists) {
+    await createWalletEntry({
+      userId,
+      kind: "order_refund",
+      amount: currentOrder.price,
+      description: getOrderRefundDescription(currentOrder),
+      referenceId: refundReferenceId,
+      data: {
+        orderId,
+        reason: "cancelled_by_user",
+      },
+    });
+  }
+
+  return nextOrder;
 }
 
 export async function getAdminUserList(search = "") {

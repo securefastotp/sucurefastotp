@@ -147,6 +147,10 @@ export type DashboardSummary = {
     pendingOrders: number;
     totalDeposits: number;
   };
+  admin: {
+    upstreamBalance: Balance | null;
+    upstreamBalanceError?: string | null;
+  } | null;
   deposits: DepositRecord[];
   orders: Order[];
   ledger: WalletLedgerEntry[];
