@@ -106,7 +106,6 @@ const SUPPORT_LINKS = [
   },
 ] as const;
 
-const PRIMARY_ADMIN_EMAIL = "senjarqy@gmail.com";
 const ADMIN_SUPPORT_LINK =
   SUPPORT_LINKS.find((link) => link.id === "admin") ?? SUPPORT_LINKS[0];
 
@@ -929,9 +928,7 @@ export function MemberConsole({
   const deferredSearch = useDeferredValue(serviceSearch);
   const deferredAdminSearch = useDeferredValue(adminSearch);
   const deferredAdminPricingSearch = useDeferredValue(adminPricingSearch);
-  const canAccessAdmin =
-    viewer?.role === "admin" ||
-    viewer?.email?.trim().toLowerCase() === PRIMARY_ADMIN_EMAIL;
+  const canAccessAdmin = viewer?.role === "admin";
   const selectedService = useMemo(
     () => catalog?.services.find((service) => service.id === selectedServiceId) ?? null,
     [catalog, selectedServiceId],
