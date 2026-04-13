@@ -1,16 +1,15 @@
 "use client";
 
 import {
-  startTransition,
   useDeferredValue,
   useEffect,
   useEffectEvent,
   useMemo,
   useState,
 } from "react";
-import { useRouter } from "next/navigation";
 import { formatCurrency, formatDateTime } from "@/lib/format";
 import type {
+  AdminUserSummary,
   AuthViewer,
   CatalogResponse,
   CountryOption,
@@ -42,6 +41,13 @@ type ErrorResponse = {
   error?: string;
 };
 
+type ToastState =
+  | {
+      type: "success" | "error" | "info";
+      message: string;
+    }
+  | null;
+
 const serverOptions = [
   {
     id: "bimasakti" as const,
@@ -61,6 +67,21 @@ function cn(...values: Array<string | false | null | undefined>) {
 
 function hasError(payload: unknown): payload is { error?: string } {
   return Boolean(payload && typeof payload === "object" && "error" in payload);
+}
+
+function Spinner({
+  className,
+  label,
+}: {
+  className?: string;
+  label?: string;
+}) {
+  return (
+    <span className={cn("inline-flex items-center gap-2", className)}>
+      <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-r-transparent" />
+      {label ? <span>{label}</span> : null}
+    </span>
+  );
 }
 
 function WalletIcon({ className }: { className?: string }) {
@@ -117,6 +138,58 @@ function ClockIcon({ className }: { className?: string }) {
     <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
       <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.8" />
       <path d="M12 8v4l2.8 1.7" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function SettingsIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
+      <path
+        d="M12 9.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <path
+        d="m19 12-.9.5a1 1 0 0 0-.5.86v.98a1 1 0 0 1-.53.88l-1.04.57a1 1 0 0 1-1.01-.03l-.89-.56a1 1 0 0 0-.97-.04l-.85.43a1 1 0 0 0-.55.9V18a1 1 0 0 1-.73.96l-1.15.3a1 1 0 0 1-1.06-.38l-.63-.82a1 1 0 0 0-.9-.38l-1.01.12a1 1 0 0 1-.96-.42l-.68-.98a1 1 0 0 1 .06-1.09l.62-.77a1 1 0 0 0 .17-.96l-.32-.95a1 1 0 0 0-.75-.66L4.15 12a1 1 0 0 1-.79-.76l-.29-1.16a1 1 0 0 1 .32-1.03l.79-.68a1 1 0 0 0 .33-.91l-.12-1a1 1 0 0 1 .42-.97l.98-.67a1 1 0 0 1 1.09.05l.78.62a1 1 0 0 0 .95.18l.95-.32a1 1 0 0 0 .66-.75l.23-.97a1 1 0 0 1 .76-.79l1.16-.29a1 1 0 0 1 1.03.32l.68.79a1 1 0 0 0 .91.33l1-.12a1 1 0 0 1 .97.42l.67.98a1 1 0 0 1-.05 1.09l-.62.78a1 1 0 0 0-.18.95l.32.95a1 1 0 0 0 .75.66l.97.23a1 1 0 0 1 .79.76l.29 1.16a1 1 0 0 1-.32 1.03Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.3"
+      />
+    </svg>
+  );
+}
+
+function ShieldIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
+      <path
+        d="M12 3.5 18.5 6v5.8c0 4.1-2.5 7.9-6.5 9.7-4-1.8-6.5-5.6-6.5-9.7V6L12 3.5Z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      />
+      <path
+        d="M9.8 12.2 11.3 13.7 14.5 10.5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
+function UserIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
+      <circle cx="12" cy="8" r="3.2" stroke="currentColor" strokeWidth="1.8" />
+      <path
+        d="M5 18.2c1.6-2.6 4-3.9 7-3.9s5.4 1.3 7 3.9"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.8"
+      />
     </svg>
   );
 }
@@ -348,6 +421,78 @@ async function requestOrderStatus(orderId: string) {
   return payload.order;
 }
 
+async function requestUpdateSettings(input: {
+  name: string;
+  email: string;
+  currentPassword: string;
+  newPassword?: string;
+}) {
+  const response = await fetch("/api/account/settings", {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(input),
+  });
+  const payload = (await response.json()) as
+    | { viewer: AuthViewer; message: string }
+    | ErrorResponse;
+
+  if (!response.ok || !("viewer" in payload)) {
+    throw new Error(
+      hasError(payload) ? payload.error : "Gagal memperbarui pengaturan akun.",
+    );
+  }
+
+  return payload;
+}
+
+async function requestAdminUsers(search: string) {
+  const query = search.trim() ? `?search=${encodeURIComponent(search.trim())}` : "";
+  const response = await fetch(`/api/admin/users${query}`, {
+    cache: "no-store",
+  });
+  const payload = (await response.json()) as
+    | { users: AdminUserSummary[] }
+    | ErrorResponse;
+
+  if (!response.ok || !("users" in payload)) {
+    throw new Error(
+      hasError(payload) ? payload.error : "Gagal membaca daftar user admin.",
+    );
+  }
+
+  return payload.users;
+}
+
+async function requestAdminWalletAdjustment(input: {
+  userId: string;
+  amount: number;
+  description?: string;
+}) {
+  const response = await fetch(`/api/admin/users/${input.userId}/wallet`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      amount: input.amount,
+      description: input.description,
+    }),
+  });
+  const payload = (await response.json()) as
+    | { viewer: AuthViewer; message: string }
+    | ErrorResponse;
+
+  if (!response.ok || !("viewer" in payload)) {
+    throw new Error(
+      hasError(payload) ? payload.error : "Gagal memperbarui saldo user.",
+    );
+  }
+
+  return payload;
+}
+
 export function MemberConsole({
   initialViewer,
   initialSummary,
@@ -355,7 +500,6 @@ export function MemberConsole({
   initialCountries,
   initialCountryId,
 }: MemberConsoleProps) {
-  const router = useRouter();
   const [viewer, setViewer] = useState<AuthViewer | null>(initialViewer);
   const [summary, setSummary] = useState<DashboardSummary | null>(initialSummary);
   const [catalog, setCatalog] = useState<CatalogResponse | null>(initialCatalog);
@@ -368,9 +512,9 @@ export function MemberConsole({
     initialCatalog?.services[0]?.id ?? "",
   );
   const [serviceSearch, setServiceSearch] = useState("");
-  const [activeTab, setActiveTab] = useState<"dashboard" | "buy" | "history" | "about">(
-    "dashboard",
-  );
+  const [activeTab, setActiveTab] = useState<
+    "dashboard" | "buy" | "history" | "settings" | "admin"
+  >("dashboard");
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [authName, setAuthName] = useState("");
   const [authEmail, setAuthEmail] = useState("");
@@ -379,7 +523,19 @@ export function MemberConsole({
   const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [depositError, setDepositError] = useState<string | null>(null);
   const [orderError, setOrderError] = useState<string | null>(null);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [adminError, setAdminError] = useState<string | null>(null);
+  const [toast, setToast] = useState<ToastState>(null);
   const [depositAmount, setDepositAmount] = useState("10000");
+  const [settingsName, setSettingsName] = useState(initialViewer?.name ?? "");
+  const [settingsEmail, setSettingsEmail] = useState(initialViewer?.email ?? "");
+  const [settingsCurrentPassword, setSettingsCurrentPassword] = useState("");
+  const [settingsNewPassword, setSettingsNewPassword] = useState("");
+  const [adminUsers, setAdminUsers] = useState<AdminUserSummary[]>([]);
+  const [adminSearch, setAdminSearch] = useState("");
+  const [selectedAdminUserId, setSelectedAdminUserId] = useState("");
+  const [manualAmount, setManualAmount] = useState("");
+  const [manualDescription, setManualDescription] = useState("");
   const [activeDeposit, setActiveDeposit] = useState<DepositRecord | null>(
     initialSummary?.deposits.find((deposit) => deposit.status === "pending") ?? null,
   );
@@ -392,8 +548,13 @@ export function MemberConsole({
   const [isCatalogLoading, setIsCatalogLoading] = useState(false);
   const [isDepositLoading, setIsDepositLoading] = useState(false);
   const [isOrderLoading, setIsOrderLoading] = useState(false);
+  const [isSettingsLoading, setIsSettingsLoading] = useState(false);
+  const [isAdminUsersLoading, setIsAdminUsersLoading] = useState(false);
+  const [isAdminSaving, setIsAdminSaving] = useState(false);
 
   const deferredSearch = useDeferredValue(serviceSearch);
+  const deferredAdminSearch = useDeferredValue(adminSearch);
+  const canAccessAdmin = viewer?.role === "admin";
   const selectedService = useMemo(
     () => catalog?.services.find((service) => service.id === selectedServiceId) ?? null,
     [catalog, selectedServiceId],
@@ -410,10 +571,40 @@ export function MemberConsole({
       `${service.service} ${service.serviceCode}`.toLowerCase().includes(query),
     );
   }, [catalog, deferredSearch]);
+  const selectedAdminUser = useMemo(
+    () =>
+      adminUsers.find((item) => item.id === selectedAdminUserId) ??
+      adminUsers[0] ??
+      null,
+    [adminUsers, selectedAdminUserId],
+  );
+
+  useEffect(() => {
+    if (!toast) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      setToast(null);
+    }, 4200);
+
+    return () => window.clearTimeout(timer);
+  }, [toast]);
+
+  useEffect(() => {
+    if (!viewer) {
+      setSettingsName("");
+      setSettingsEmail("");
+      return;
+    }
+
+    setSettingsName(viewer.name);
+    setSettingsEmail(viewer.email);
+  }, [viewer]);
 
   async function refreshSummary() {
     if (!viewer) {
-      return;
+      return null;
     }
 
     setIsSummaryLoading(true);
@@ -427,12 +618,14 @@ export function MemberConsole({
         nextSummary.deposits.find((deposit) => deposit.status === "pending") ?? null,
       );
       setActiveOrder(
-        nextSummary.orders.find((order) => order.status === "pending") ?? activeOrder,
+        nextSummary.orders.find((order) => order.status === "pending") ?? null,
       );
+      return nextSummary;
     } catch (error) {
       setDashboardError(
         error instanceof Error ? error.message : "Gagal memuat dashboard akun.",
       );
+      return null;
     } finally {
       setIsSummaryLoading(false);
     }
@@ -445,6 +638,10 @@ export function MemberConsole({
 
       if (deposit.status === "paid" && deposit.creditedAt) {
         await refreshSummary();
+        setToast({
+          type: "success",
+          message: "Deposit berhasil masuk ke saldo akun.",
+        });
       }
     } catch (error) {
       setDepositError(
@@ -460,11 +657,44 @@ export function MemberConsole({
 
       if (order.status !== "pending") {
         await refreshSummary();
+        if (order.status === "otp_received") {
+          setToast({
+            type: "success",
+            message: "OTP berhasil diterima dan siap dipakai.",
+          });
+        }
       }
     } catch (error) {
       setOrderError(
         error instanceof Error ? error.message : "Gagal sinkron status order.",
       );
+    }
+  });
+
+  const loadAdminUsers = useEffectEvent(async (search: string) => {
+    if (!canAccessAdmin) {
+      return;
+    }
+
+    setIsAdminUsersLoading(true);
+    setAdminError(null);
+
+    try {
+      const users = await requestAdminUsers(search);
+      setAdminUsers(users);
+      setSelectedAdminUserId((current) => {
+        if (current && users.some((item) => item.id === current)) {
+          return current;
+        }
+
+        return users[0]?.id ?? "";
+      });
+    } catch (error) {
+      setAdminError(
+        error instanceof Error ? error.message : "Gagal memuat daftar user.",
+      );
+    } finally {
+      setIsAdminUsersLoading(false);
     }
   });
 
@@ -515,6 +745,14 @@ export function MemberConsole({
   }, [viewer, selectedServer, selectedCountryId]);
 
   useEffect(() => {
+    if (!canAccessAdmin || activeTab !== "admin") {
+      return;
+    }
+
+    void loadAdminUsers(deferredAdminSearch);
+  }, [activeTab, canAccessAdmin, deferredAdminSearch]);
+
+  useEffect(() => {
     if (!activeDeposit?.id || activeDeposit.status !== "pending") {
       return;
     }
@@ -544,24 +782,52 @@ export function MemberConsole({
     setAuthError(null);
 
     try {
-      if (authMode === "register") {
-        await requestRegister({
-          name: authName,
-          email: authEmail,
-          password: authPassword,
-        });
-      } else {
-        await requestLogin({
-          email: authEmail,
-          password: authPassword,
-        });
-      }
-
-      startTransition(() => {
-        router.refresh();
+      const nextViewer =
+        authMode === "register"
+          ? await requestRegister({
+              name: authName,
+              email: authEmail,
+              password: authPassword,
+            })
+          : await requestLogin({
+              email: authEmail,
+              password: authPassword,
+            });
+      const nextSummary = await requestSummary();
+      setViewer(nextViewer);
+      setSummary(nextSummary);
+      setCountries(initialCountries);
+      setSelectedCountryId(
+        nextSummary.orders[0]?.countryId ??
+          initialCountryId ??
+          initialCountries.find((country) => country.id === 6)?.id ??
+          initialCountries[0]?.id ??
+          null,
+      );
+      setActiveDeposit(
+        nextSummary.deposits.find((deposit) => deposit.status === "pending") ?? null,
+      );
+      setActiveOrder(
+        nextSummary.orders.find((order) => order.status === "pending") ?? null,
+      );
+      setAuthName("");
+      setAuthPassword("");
+      setAuthError(null);
+      setToast({
+        type: "success",
+        message:
+          authMode === "register"
+            ? "Akun berhasil dibuat dan langsung login."
+            : "Login berhasil. Dashboard siap dipakai.",
       });
     } catch (error) {
-      setAuthError(error instanceof Error ? error.message : "Gagal autentikasi akun.");
+      const message =
+        error instanceof Error ? error.message : "Gagal autentikasi akun.";
+      setAuthError(message);
+      setToast({
+        type: "error",
+        message,
+      });
     } finally {
       setIsAuthLoading(false);
     }
@@ -570,11 +836,30 @@ export function MemberConsole({
   async function handleLogout() {
     try {
       await requestLogout();
-      startTransition(() => {
-        router.refresh();
+      setViewer(null);
+      setSummary(null);
+      setCatalog(null);
+      setCountries([]);
+      setSelectedCountryId(null);
+      setSelectedServiceId("");
+      setActiveDeposit(null);
+      setActiveOrder(null);
+      setAdminUsers([]);
+      setSelectedAdminUserId("");
+      setAuthPassword("");
+      setActiveTab("dashboard");
+      setToast({
+        type: "success",
+        message: "Logout berhasil.",
       });
     } catch (error) {
-      setDashboardError(error instanceof Error ? error.message : "Gagal logout akun.");
+      const message =
+        error instanceof Error ? error.message : "Gagal logout akun.";
+      setDashboardError(message);
+      setToast({
+        type: "error",
+        message,
+      });
     }
   }
 
@@ -587,8 +872,18 @@ export function MemberConsole({
       const deposit = await requestCreateDeposit(Number(depositAmount));
       setActiveDeposit(deposit);
       await refreshSummary();
+      setToast({
+        type: "success",
+        message: "QRIS deposit berhasil dibuat.",
+      });
     } catch (error) {
-      setDepositError(error instanceof Error ? error.message : "Gagal membuat deposit.");
+      const message =
+        error instanceof Error ? error.message : "Gagal membuat deposit.";
+      setDepositError(message);
+      setToast({
+        type: "error",
+        message,
+      });
     } finally {
       setIsDepositLoading(false);
     }
@@ -596,7 +891,12 @@ export function MemberConsole({
 
   async function handleOrderSubmit() {
     if (!selectedService || !selectedCountryId) {
-      setOrderError("Pilih negara dan layanan dulu sebelum membeli nomor.");
+      const message = "Pilih negara dan layanan dulu sebelum membeli nomor.";
+      setOrderError(message);
+      setToast({
+        type: "error",
+        message,
+      });
       return;
     }
 
@@ -612,16 +912,138 @@ export function MemberConsole({
       });
       setActiveOrder(order);
       await refreshSummary();
+      setToast({
+        type: "success",
+        message: "Order OTP berhasil dibuat. Menunggu kode OTP masuk.",
+      });
     } catch (error) {
-      setOrderError(error instanceof Error ? error.message : "Gagal membuat order OTP.");
+      const message =
+        error instanceof Error ? error.message : "Gagal membuat order OTP.";
+      setOrderError(message);
+      setToast({
+        type: "error",
+        message,
+      });
     } finally {
       setIsOrderLoading(false);
+    }
+  }
+
+  async function handleSettingsSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setIsSettingsLoading(true);
+    setSettingsError(null);
+
+    try {
+      const payload = await requestUpdateSettings({
+        name: settingsName,
+        email: settingsEmail,
+        currentPassword: settingsCurrentPassword,
+        newPassword: settingsNewPassword,
+      });
+      setViewer(payload.viewer);
+      setSummary((current) =>
+        current
+          ? {
+              ...current,
+              viewer: payload.viewer,
+            }
+          : current,
+      );
+      setSettingsCurrentPassword("");
+      setSettingsNewPassword("");
+      setToast({
+        type: "success",
+        message: payload.message,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Gagal memperbarui akun.";
+      setSettingsError(message);
+      setToast({
+        type: "error",
+        message,
+      });
+    } finally {
+      setIsSettingsLoading(false);
+    }
+  }
+
+  async function handleAdminBalanceSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedAdminUser) {
+      setAdminError("Pilih user tujuan terlebih dulu.");
+      return;
+    }
+
+    const amount = Number(manualAmount);
+
+    if (!Number.isFinite(amount) || amount === 0) {
+      setAdminError("Nominal manual wajib diisi dan tidak boleh 0.");
+      return;
+    }
+
+    setIsAdminSaving(true);
+    setAdminError(null);
+
+    try {
+      const payload = await requestAdminWalletAdjustment({
+        userId: selectedAdminUser.id,
+        amount,
+        description: manualDescription,
+      });
+      const users = await requestAdminUsers(deferredAdminSearch);
+      setAdminUsers(users);
+      setSelectedAdminUserId((current) => {
+        if (current && users.some((item) => item.id === current)) {
+          return current;
+        }
+
+        return users[0]?.id ?? "";
+      });
+
+      if (viewer?.id === payload.viewer.id) {
+        setViewer(payload.viewer);
+        await refreshSummary();
+      }
+
+      setManualAmount("");
+      setManualDescription("");
+      setToast({
+        type: "success",
+        message: payload.message,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Gagal mengubah saldo user.";
+      setAdminError(message);
+      setToast({
+        type: "error",
+        message,
+      });
+    } finally {
+      setIsAdminSaving(false);
     }
   }
 
   if (!viewer || !summary) {
     return (
       <div className="flex min-h-[100dvh] items-center justify-center px-4 py-8">
+        {toast ? (
+          <div
+            className={cn(
+              "fixed left-1/2 top-5 z-50 w-[calc(100%-2rem)] max-w-[420px] -translate-x-1/2 rounded-[18px] border px-4 py-3 text-[13px] shadow-[0_20px_50px_-28px_rgba(0,0,0,0.75)] backdrop-blur-xl",
+              toast.type === "success"
+                ? "border-emerald-300/20 bg-emerald-500/12 text-emerald-50"
+                : toast.type === "error"
+                  ? "border-rose-300/20 bg-rose-500/12 text-rose-50"
+                  : "border-sky-300/20 bg-sky-500/12 text-sky-50",
+            )}
+          >
+            {toast.message}
+          </div>
+        ) : null}
         <div className="w-full max-w-[430px] rounded-[28px] border border-white/12 bg-[#0d1a2d]/88 p-5 shadow-[0_28px_90px_-46px_rgba(0,0,0,0.82)] backdrop-blur-xl">
           <div className="flex items-center gap-3">
             <BrandMark />
@@ -689,15 +1111,20 @@ export function MemberConsole({
               </div>
             ) : null}
             <button
-              className="w-full rounded-[18px] bg-[linear-gradient(135deg,#80f0ff,#348cff)] px-4 py-3 text-[14px] font-semibold text-[#06101d]"
+              className="flex w-full items-center justify-center rounded-[18px] bg-[linear-gradient(135deg,#80f0ff,#348cff)] px-4 py-3 text-[14px] font-semibold text-[#06101d]"
               disabled={isAuthLoading}
               type="submit"
             >
-              {isAuthLoading
-                ? "Memproses..."
-                : authMode === "register"
-                  ? "Buat Akun"
-                  : "Masuk ke Dashboard"}
+              {isAuthLoading ? (
+                <Spinner
+                  className="text-[#06101d]"
+                  label={authMode === "register" ? "Membuat akun..." : "Masuk..."}
+                />
+              ) : authMode === "register" ? (
+                "Buat Akun"
+              ) : (
+                "Masuk ke Dashboard"
+              )}
             </button>
           </form>
         </div>
@@ -707,13 +1134,30 @@ export function MemberConsole({
 
   return (
     <div className="min-h-[100dvh] px-4 py-4 text-white sm:px-6">
+      {toast ? (
+        <div
+          className={cn(
+            "fixed left-1/2 top-5 z-50 w-[calc(100%-2rem)] max-w-[420px] -translate-x-1/2 rounded-[18px] border px-4 py-3 text-[13px] shadow-[0_20px_50px_-28px_rgba(0,0,0,0.75)] backdrop-blur-xl",
+            toast.type === "success"
+              ? "border-emerald-300/20 bg-emerald-500/12 text-emerald-50"
+              : toast.type === "error"
+                ? "border-rose-300/20 bg-rose-500/12 text-rose-50"
+                : "border-sky-300/20 bg-sky-500/12 text-sky-50",
+          )}
+        >
+          {toast.message}
+        </div>
+      ) : null}
       <div className="mx-auto flex w-full max-w-[460px] flex-col gap-4 rounded-[32px] border border-white/12 bg-[#0d1a2d]/82 p-4 shadow-[0_32px_120px_-48px_rgba(3,8,20,0.92)] backdrop-blur-xl">
         <div className="flex items-center justify-between gap-3 rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] px-4 py-3">
           <div className="flex items-center gap-3">
             <BrandMark />
             <div>
               <p className="text-[15px] font-semibold text-white">Rahmat OTP</p>
-              <p className="text-[11px] text-sky-100/65">{viewer.name}</p>
+              <p className="text-[11px] text-sky-100/65">
+                {viewer.name}
+                {viewer.role === "admin" ? " · admin" : ""}
+              </p>
             </div>
           </div>
 
@@ -725,12 +1169,18 @@ export function MemberConsole({
           </div>
         </div>
 
-        <div className="grid grid-cols-4 gap-2 rounded-[20px] border border-white/10 bg-white/5 p-1">
+        <div
+          className={cn(
+            "grid gap-2 rounded-[20px] border border-white/10 bg-white/5 p-1",
+            canAccessAdmin ? "grid-cols-5" : "grid-cols-4",
+          )}
+        >
           {[
             { id: "dashboard", label: "Dashboard" },
             { id: "buy", label: "Buy Number" },
             { id: "history", label: "Riwayat" },
-            { id: "about", label: "Tentang" },
+            { id: "settings", label: "Pengaturan" },
+            ...(canAccessAdmin ? [{ id: "admin", label: "Admin" }] : []),
           ].map((item) => (
             <button
               key={item.id}
@@ -808,11 +1258,15 @@ export function MemberConsole({
                   </div>
                 ) : null}
                 <button
-                  className="w-full rounded-[18px] bg-[linear-gradient(135deg,#7af1ff,#358cff)] px-4 py-3 text-[14px] font-semibold text-[#08101c]"
+                  className="flex w-full items-center justify-center rounded-[18px] bg-[linear-gradient(135deg,#7af1ff,#358cff)] px-4 py-3 text-[14px] font-semibold text-[#08101c]"
                   disabled={isDepositLoading}
                   type="submit"
                 >
-                  {isDepositLoading ? "Membuat QRIS..." : "Buat QRIS Deposit"}
+                  {isDepositLoading ? (
+                    <Spinner className="text-[#08101c]" label="Membuat QRIS..." />
+                  ) : (
+                    "Buat QRIS Deposit"
+                  )}
                 </button>
               </form>
 
@@ -982,7 +1436,7 @@ export function MemberConsole({
                 ) : null}
                 <button
                   className={cn(
-                    "mt-4 w-full rounded-[18px] px-4 py-3 text-[14px] font-semibold transition",
+                    "mt-4 flex w-full items-center justify-center rounded-[18px] px-4 py-3 text-[14px] font-semibold transition",
                     summary.viewer.walletBalance >= selectedService.price
                       ? "bg-[linear-gradient(135deg,#7af1ff,#358cff)] text-[#08101c]"
                       : "bg-white/8 text-sky-100/55",
@@ -993,11 +1447,13 @@ export function MemberConsole({
                   }}
                   type="button"
                 >
-                  {isOrderLoading
-                    ? "Memproses order..."
-                    : summary.viewer.walletBalance < selectedService.price
-                      ? "Saldo tidak cukup"
-                      : "Beli Nomor"}
+                  {isOrderLoading ? (
+                    <Spinner className="text-[#08101c]" label="Memproses order..." />
+                  ) : summary.viewer.walletBalance < selectedService.price ? (
+                    "Saldo tidak cukup"
+                  ) : (
+                    "Beli Nomor"
+                  )}
                 </button>
               </div>
             ) : null}
@@ -1029,7 +1485,49 @@ export function MemberConsole({
         {activeTab === "history" ? (
           <div className="space-y-4">
             <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
-              <SectionTitle icon={<ClockIcon className="h-4.5 w-4.5" />} title="Riwayat Transaksi" />
+              <SectionTitle
+                icon={<ClockIcon className="h-4.5 w-4.5" />}
+                title="Riwayat Deposit"
+              />
+              <div className="mt-4 space-y-2">
+                {summary.deposits.map((deposit) => (
+                  <div
+                    key={deposit.id}
+                    className="rounded-[18px] border border-white/8 bg-white/4 px-4 py-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[13px] font-medium text-white">
+                          Deposit saldo
+                        </p>
+                        <p className="mt-1 text-[11px] text-sky-100/56">
+                          {formatDateTime(deposit.createdAt)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[13px] font-semibold text-cyan-100">
+                          {formatCurrency(deposit.amount, deposit.currency)}
+                        </p>
+                        <p className="mt-1 text-[11px] capitalize text-sky-100/56">
+                          {deposit.status}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {!summary.deposits.length ? (
+                  <div className="rounded-[18px] border border-white/8 bg-white/4 px-4 py-6 text-center text-[12px] text-sky-100/56">
+                    Belum ada riwayat deposit.
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
+              <SectionTitle
+                icon={<WalletIcon className="h-4.5 w-4.5" />}
+                title="Mutasi Saldo"
+              />
               <div className="mt-4 space-y-2">
                 {summary.ledger.map((entry: WalletLedgerEntry) => (
                   <div key={entry.id} className="rounded-[18px] border border-white/8 bg-white/4 px-4 py-3">
@@ -1056,33 +1554,253 @@ export function MemberConsole({
                 ) : null}
               </div>
             </div>
+
+            <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
+              <SectionTitle
+                icon={<CartIcon className="h-4.5 w-4.5" />}
+                title="Riwayat Order OTP"
+              />
+              <div className="mt-4 space-y-2">
+                {summary.orders.map((order) => (
+                  <div
+                    key={order.id}
+                    className="rounded-[18px] border border-white/8 bg-white/4 px-4 py-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-[13px] font-medium text-white">
+                          {order.service}
+                        </p>
+                        <p className="mt-1 text-[11px] text-sky-100/56">
+                          {order.phoneNumber}
+                        </p>
+                        <p className="mt-1 text-[11px] text-sky-100/56">
+                          {formatDateTime(order.createdAt)}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[13px] font-semibold text-cyan-100">
+                          {formatCurrency(order.price, order.currency)}
+                        </p>
+                        <p className="mt-1 text-[11px] capitalize text-sky-100/56">
+                          {order.status}
+                        </p>
+                        {order.otpCode ? (
+                          <p className="mt-1 text-[12px] font-semibold text-emerald-100">
+                            OTP {order.otpCode}
+                          </p>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {!summary.orders.length ? (
+                  <div className="rounded-[18px] border border-white/8 bg-white/4 px-4 py-6 text-center text-[12px] text-sky-100/56">
+                    Belum ada riwayat order OTP.
+                  </div>
+                ) : null}
+              </div>
+            </div>
           </div>
         ) : null}
 
-        {activeTab === "about" ? (
-          <div className="space-y-4 rounded-[24px] border border-white/10 bg-[#0a1525] p-4 text-[13px] leading-6 text-sky-100/72">
-            <SectionTitle icon={<BrandMark className="h-9 w-9" />} title="Tentang Rahmat OTP" />
-            <p>
-              Dashboard ini memakai model mirip KirimKode: user login, deposit saldo via Midtrans, lalu order OTP memotong saldo wallet internal.
-            </p>
-            <p>
-              Supply OTP tetap diambil dari akun KirimKode Anda lewat API key yang sudah terpasang di server.
-            </p>
-            <button
-              className="mt-2 w-full rounded-[18px] border border-white/10 bg-white/4 px-4 py-3 text-[13px] font-medium text-sky-100/80"
-              onClick={() => {
-                void handleLogout();
-              }}
-              type="button"
-            >
-              Logout Akun
-            </button>
+        {activeTab === "settings" ? (
+          <div className="space-y-4">
+            <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
+              <SectionTitle
+                icon={<SettingsIcon className="h-4.5 w-4.5" />}
+                title="Pengaturan Akun"
+              />
+              <form className="mt-4 space-y-3" onSubmit={handleSettingsSubmit}>
+                <input
+                  className="w-full rounded-[16px] border border-white/10 bg-[#07111f] px-4 py-3 text-[14px] text-white outline-none transition focus:border-sky-300/60"
+                  onChange={(event) => setSettingsName(event.target.value)}
+                  placeholder="Username"
+                  value={settingsName}
+                />
+                <input
+                  className="w-full rounded-[16px] border border-white/10 bg-[#07111f] px-4 py-3 text-[14px] text-white outline-none transition focus:border-sky-300/60"
+                  onChange={(event) => setSettingsEmail(event.target.value)}
+                  placeholder="Email"
+                  type="email"
+                  value={settingsEmail}
+                />
+                <input
+                  className="w-full rounded-[16px] border border-white/10 bg-[#07111f] px-4 py-3 text-[14px] text-white outline-none transition focus:border-sky-300/60"
+                  onChange={(event) => setSettingsCurrentPassword(event.target.value)}
+                  placeholder="Password saat ini"
+                  type="password"
+                  value={settingsCurrentPassword}
+                />
+                <input
+                  className="w-full rounded-[16px] border border-white/10 bg-[#07111f] px-4 py-3 text-[14px] text-white outline-none transition focus:border-sky-300/60"
+                  onChange={(event) => setSettingsNewPassword(event.target.value)}
+                  placeholder="Password baru (opsional)"
+                  type="password"
+                  value={settingsNewPassword}
+                />
+                {settingsError ? (
+                  <div className="rounded-[16px] border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-[12px] text-rose-100">
+                    {settingsError}
+                  </div>
+                ) : null}
+                <button
+                  className="flex w-full items-center justify-center rounded-[18px] bg-[linear-gradient(135deg,#7af1ff,#358cff)] px-4 py-3 text-[14px] font-semibold text-[#08101c]"
+                  disabled={isSettingsLoading}
+                  type="submit"
+                >
+                  {isSettingsLoading ? (
+                    <Spinner className="text-[#08101c]" label="Menyimpan..." />
+                  ) : (
+                    "Simpan Pengaturan"
+                  )}
+                </button>
+              </form>
+            </div>
+
+            <div className="space-y-3 rounded-[24px] border border-white/10 bg-[#0a1525] p-4 text-[13px] leading-6 text-sky-100/72">
+              <SectionTitle
+                icon={<ShieldIcon className="h-4.5 w-4.5" />}
+                title="Keamanan"
+              />
+              <p>
+                Jika akun Anda adalah admin, login admin akan dikunci sementara setelah
+                3 kali password salah.
+              </p>
+              <button
+                className="w-full rounded-[18px] border border-white/10 bg-white/4 px-4 py-3 text-[13px] font-medium text-sky-100/80"
+                onClick={() => {
+                  void handleLogout();
+                }}
+                type="button"
+              >
+                Logout Akun
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {activeTab === "admin" && canAccessAdmin ? (
+          <div className="space-y-4">
+            <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
+              <SectionTitle
+                icon={<ShieldIcon className="h-4.5 w-4.5" />}
+                title="Admin Panel"
+                action={
+                  isAdminUsersLoading ? (
+                    <span className="text-[11px] text-sky-100/60">Loading...</span>
+                  ) : null
+                }
+              />
+              <input
+                className="mt-4 w-full rounded-[16px] border border-white/10 bg-[#07111f] px-4 py-3 text-[14px] text-white outline-none transition focus:border-sky-300/60"
+                onChange={(event) => setAdminSearch(event.target.value)}
+                placeholder="Cari user berdasarkan nama atau email..."
+                value={adminSearch}
+              />
+              <div className="mt-3 max-h-[240px] space-y-2 overflow-y-auto rounded-[18px] border border-white/10 bg-white/4 p-2">
+                {adminUsers.map((user) => (
+                  <button
+                    key={user.id}
+                    className={cn(
+                      "w-full rounded-[16px] border px-3 py-3 text-left transition",
+                      selectedAdminUserId === user.id
+                        ? "border-sky-300/55 bg-sky-300/12"
+                        : "border-white/10 bg-[#0a1525]",
+                    )}
+                    onClick={() => setSelectedAdminUserId(user.id)}
+                    type="button"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] font-semibold text-white">
+                          {user.name}
+                        </p>
+                        <p className="mt-1 truncate text-[11px] text-sky-100/60">
+                          {user.email}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-[12px] font-semibold text-cyan-100">
+                          {formatCurrency(user.walletBalance, "IDR")}
+                        </p>
+                        <p className="mt-1 text-[10px] uppercase text-sky-100/55">
+                          {user.role}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+                {!adminUsers.length && !isAdminUsersLoading ? (
+                  <div className="rounded-[16px] border border-white/8 bg-[#0a1525] px-4 py-5 text-center text-[12px] text-sky-100/56">
+                    Data user belum ada.
+                  </div>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
+              <SectionTitle
+                icon={<UserIcon className="h-4.5 w-4.5" />}
+                title="Saldo Manual User"
+              />
+              {selectedAdminUser ? (
+                <div className="mt-4 rounded-[18px] border border-white/10 bg-white/4 px-4 py-3">
+                  <p className="text-[13px] font-semibold text-white">
+                    {selectedAdminUser.name}
+                  </p>
+                  <p className="mt-1 text-[11px] text-sky-100/60">
+                    {selectedAdminUser.email}
+                  </p>
+                  <p className="mt-2 text-[12px] text-cyan-100">
+                    Saldo sekarang{" "}
+                    {formatCurrency(selectedAdminUser.walletBalance, "IDR")}
+                  </p>
+                </div>
+              ) : null}
+              <form className="mt-4 space-y-3" onSubmit={handleAdminBalanceSubmit}>
+                <input
+                  className="w-full rounded-[16px] border border-white/10 bg-[#07111f] px-4 py-3 text-[14px] text-white outline-none transition focus:border-sky-300/60"
+                  inputMode="numeric"
+                  onChange={(event) =>
+                    setManualAmount(event.target.value.replace(/[^\d-]/g, ""))
+                  }
+                  placeholder="Nominal. Contoh 10000 atau -5000"
+                  value={manualAmount}
+                />
+                <input
+                  className="w-full rounded-[16px] border border-white/10 bg-[#07111f] px-4 py-3 text-[14px] text-white outline-none transition focus:border-sky-300/60"
+                  onChange={(event) => setManualDescription(event.target.value)}
+                  placeholder="Keterangan manual admin"
+                  value={manualDescription}
+                />
+                <p className="text-[11px] text-sky-100/58">
+                  Angka positif menambah saldo. Angka negatif memotong saldo.
+                </p>
+                {adminError ? (
+                  <div className="rounded-[16px] border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-[12px] text-rose-100">
+                    {adminError}
+                  </div>
+                ) : null}
+                <button
+                  className="flex w-full items-center justify-center rounded-[18px] bg-[linear-gradient(135deg,#7af1ff,#358cff)] px-4 py-3 text-[14px] font-semibold text-[#08101c]"
+                  disabled={isAdminSaving || !selectedAdminUser}
+                  type="submit"
+                >
+                  {isAdminSaving ? (
+                    <Spinner className="text-[#08101c]" label="Menyimpan..." />
+                  ) : (
+                    "Simpan Saldo Manual"
+                  )}
+                </button>
+              </form>
+            </div>
           </div>
         ) : null}
 
         {isSummaryLoading ? (
           <div className="rounded-[16px] border border-white/8 bg-white/4 px-4 py-3 text-center text-[12px] text-sky-100/56">
-            Memuat ulang dashboard...
+            <Spinner label="Memuat ulang dashboard..." />
           </div>
         ) : null}
       </div>

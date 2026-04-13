@@ -74,10 +74,22 @@ export type RuntimeStatus = {
   orderDatabaseConfigured: boolean;
 };
 
+export type UserRole = "member" | "admin";
+
 export type AuthViewer = {
   id: string;
   name: string;
   email: string;
+  role: UserRole;
+  createdAt: string;
+  walletBalance: number;
+};
+
+export type AdminUserSummary = {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
   createdAt: string;
   walletBalance: number;
 };

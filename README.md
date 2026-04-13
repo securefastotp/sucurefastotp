@@ -28,6 +28,7 @@ NEXT_PUBLIC_SITE_URL=http://localhost:3000
 NEXT_PUBLIC_MIDTRANS_CLIENT_KEY=isi_client_key_midtrans
 PAYMENT_SESSION_SECRET=isi_secret_session_stabil
 AUTH_SESSION_SECRET=opsional_secret_login_khusus
+ADMIN_EMAIL=opsional_email_admin_utama
 # POSTGRES_URL akan otomatis tersedia saat Neon Postgres terhubung di Vercel
 
 UPSTREAM_PROVIDER_MODE=rest
@@ -69,6 +70,7 @@ MIDTRANS_QRIS_EXPIRY_MINUTES=15
 - Flow Midtrans sekarang dipakai untuk deposit saldo user, bukan hanya checkout per order.
 - Saat Neon Postgres terhubung di Vercel, transaksi payment disimpan di tabel `otp_transactions` dan order/OTP disimpan di tabel `otp_orders`.
 - Data akun member, session login, wallet, deposit, dan riwayat order member sekarang juga tersimpan di Neon Postgres.
+- Akun admin bisa dikunci ke email tertentu lewat `ADMIN_EMAIL`. Jika env itu belum diisi, akun pertama akan otomatis jadi admin.
 - Riwayat transaksi sekarang bisa mengambil snapshot payment dan status OTP terbaru dari database, bukan hanya memory browser.
 - Dari pengujian live 12 April 2026, KirimKode API menerima auth via header `x-api-key`, memakai `GET /balance`, `GET /orders`, `POST /order`, `GET /order/{id}/status`, dan `POST /order/{id}/cancel`.
 - Mode live sekarang hanya memakai katalog real dari endpoint `GET /services` KirimKode. Jika upstream kosong atau error, website akan menampilkan status asli upstream tanpa katalog buatan.

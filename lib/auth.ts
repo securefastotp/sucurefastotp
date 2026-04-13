@@ -10,6 +10,9 @@ import {
   getSessionRecord,
   getUserByEmail,
   getViewerById,
+  registerFailedLoginAttempt,
+  resetFailedLoginAttempts,
+  updateUserAccount,
 } from "@/lib/account-store";
 import { readSessionToken, signSessionToken } from "@/lib/session-token";
 import { siteConfig } from "@/lib/site-config";
@@ -47,6 +50,14 @@ function verifyPasswordHash(password: string, storedValue: string) {
   }
 
   return crypto.timingSafeEqual(storedBuffer, nextBuffer);
+}
+
+function getAdminEmail() {
+  return (
+    process.env.ADMIN_EMAIL?.trim().toLowerCase() ||
+    process.env.ADMIN_LOGIN_EMAIL?.trim().toLowerCase() ||
+    ""
+  );
 }
 
 async function writeAuthCookie(payload: AuthTokenPayload) {
@@ -127,6 +138,16 @@ export async function requireCurrentViewer() {
   return viewer;
 }
 
+export async function requireAdminViewer() {
+  const viewer = await requireCurrentViewer();
+
+  if (viewer.role !== "admin") {
+    throw new Error("Menu admin hanya untuk akun admin.");
+  }
+
+  return viewer;
+}
+
 export async function registerAccount(input: {
   name: string;
   email: string;
@@ -163,11 +184,28 @@ export async function loginAccount(input: {
   email: string;
   password: string;
 }) {
-  const email = input.email.trim();
+  const email = input.email.trim().toLowerCase();
   const password = input.password.trim();
   const user = await getUserByEmail(email);
 
+  if (
+    user &&
+    user.role === "admin" &&
+    user.locked_until &&
+    new Date(user.locked_until).getTime() > Date.now()
+  ) {
+    throw new Error("Login admin dikunci sementara setelah 3 percobaan salah.");
+  }
+
   if (!user || !verifyPasswordHash(password, user.password_hash)) {
+    if (user && (user.role === "admin" || user.email === getAdminEmail())) {
+      const state = await registerFailedLoginAttempt(user.user_id);
+
+      if (state?.locked_until && new Date(state.locked_until).getTime() > Date.now()) {
+        throw new Error("Password admin salah 3 kali. Login dikunci 15 menit.");
+      }
+    }
+
     throw new Error("Email atau password tidak cocok.");
   }
 
@@ -177,9 +215,59 @@ export async function loginAccount(input: {
     throw new Error("Akun ditemukan, tetapi datanya gagal dimuat.");
   }
 
+  await resetFailedLoginAttempts(user.user_id).catch(() => false);
   await startSession(viewer.id);
 
   return viewer;
+}
+
+export async function updateAccountProfile(input: {
+  userId: string;
+  name: string;
+  email: string;
+  currentPassword: string;
+  newPassword?: string;
+}) {
+  const name = input.name.trim();
+  const email = input.email.trim().toLowerCase();
+
+  if (name.length < 3) {
+    throw new Error("Username minimal 3 karakter.");
+  }
+
+  if (!email.includes("@")) {
+    throw new Error("Format email belum valid.");
+  }
+
+  const user = await getUserByEmail(email);
+
+  if (user && user.user_id !== input.userId) {
+    throw new Error("Email sudah dipakai akun lain.");
+  }
+
+  const currentUser = await getViewerById(input.userId);
+
+  if (!currentUser) {
+    throw new Error("Akun tidak ditemukan.");
+  }
+
+  const loginUser = await getUserByEmail(currentUser.email);
+
+  if (!loginUser || !verifyPasswordHash(input.currentPassword.trim(), loginUser.password_hash)) {
+    throw new Error("Password saat ini tidak cocok.");
+  }
+
+  const nextPassword = input.newPassword?.trim();
+
+  if (nextPassword && nextPassword.length < 6) {
+    throw new Error("Password baru minimal 6 karakter.");
+  }
+
+  return await updateUserAccount(input.userId, {
+    name,
+    email,
+    passwordHash: nextPassword ? createPasswordHash(nextPassword) : undefined,
+  });
 }
 
 export async function logoutAccount() {

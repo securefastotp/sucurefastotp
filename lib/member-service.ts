@@ -9,6 +9,7 @@ import {
   getDepositByMidtransOrderId,
   getUserOrder,
   getViewerById,
+  listAdminUsers,
   listDepositsByUser,
   listUserOrders,
   listWalletLedger,
@@ -355,4 +356,58 @@ export async function syncUserOrder(userId: string, orderId: string) {
     ...latestOrder,
     updatedAt: new Date().toISOString(),
   });
+}
+
+export async function getAdminUserList(search = "") {
+  return await listAdminUsers(search, 40);
+}
+
+export async function applyAdminWalletAdjustment(input: {
+  actorUserId: string;
+  targetUserId: string;
+  amount: number;
+  description?: string;
+}) {
+  const actor = await getViewerById(input.actorUserId);
+
+  if (!actor || actor.role !== "admin") {
+    throw new Error("Akses admin ditolak.");
+  }
+
+  const targetUser = await getViewerById(input.targetUserId);
+
+  if (!targetUser) {
+    throw new Error("User tujuan tidak ditemukan.");
+  }
+
+  const amount = Math.trunc(input.amount);
+
+  if (!Number.isFinite(amount) || amount === 0) {
+    throw new Error("Nominal penyesuaian saldo wajib diisi.");
+  }
+
+  const kind = amount > 0 ? "manual_credit" : "manual_debit";
+  const description =
+    input.description?.trim() ||
+    (amount > 0 ? "Top up manual admin" : "Potong saldo manual admin");
+
+  await createWalletEntry({
+    userId: targetUser.id,
+    kind,
+    amount,
+    description,
+    referenceId: `admin:${actor.id}`,
+    data: {
+      actorUserId: actor.id,
+      actorEmail: actor.email,
+    },
+  });
+
+  const nextViewer = await getViewerById(targetUser.id);
+
+  if (!nextViewer) {
+    throw new Error("Saldo berhasil diubah, tetapi user tidak bisa dimuat ulang.");
+  }
+
+  return nextViewer;
 }

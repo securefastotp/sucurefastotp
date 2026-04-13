@@ -3,9 +3,11 @@ import "server-only";
 import crypto from "node:crypto";
 import { neon } from "@neondatabase/serverless";
 import type {
+  AdminUserSummary,
   AuthViewer,
   DepositRecord,
   Order,
+  UserRole,
   WalletLedgerEntry,
   WalletLedgerKind,
 } from "@/lib/types";
@@ -17,6 +19,9 @@ type StoredUserRow = {
   full_name: string;
   email: string;
   password_hash: string;
+  role: UserRole | string | null;
+  failed_login_attempts: number | null;
+  locked_until: string | null;
   created_at: string;
   updated_at: string;
   balance: number;
@@ -53,6 +58,7 @@ type CreateUserInput = {
   name: string;
   email: string;
   passwordHash: string;
+  role?: UserRole;
 };
 
 const databaseGlobal = globalThis as typeof globalThis & {
@@ -85,6 +91,23 @@ function createId(prefix: string) {
 
 function normalizeEmail(value: string) {
   return value.trim().toLowerCase();
+}
+
+function getConfiguredAdminEmail() {
+  const value =
+    process.env.ADMIN_EMAIL?.trim() ||
+    process.env.ADMIN_LOGIN_EMAIL?.trim() ||
+    "";
+
+  return value ? normalizeEmail(value) : "";
+}
+
+function normalizeUserRole(value: unknown, email: string): UserRole {
+  if (value === "admin" || value === "member") {
+    return value;
+  }
+
+  return normalizeEmail(email) === getConfiguredAdminEmail() ? "admin" : "member";
 }
 
 function parseJsonRecord<T extends object>(value: unknown) {
@@ -125,6 +148,18 @@ async function ensureAccountTables() {
           created_at TIMESTAMPTZ NOT NULL,
           updated_at TIMESTAMPTZ NOT NULL
         )
+      `;
+      await sql`
+        ALTER TABLE app_users
+        ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'member'
+      `;
+      await sql`
+        ALTER TABLE app_users
+        ADD COLUMN IF NOT EXISTS failed_login_attempts INTEGER NOT NULL DEFAULT 0
+      `;
+      await sql`
+        ALTER TABLE app_users
+        ADD COLUMN IF NOT EXISTS locked_until TIMESTAMPTZ
       `;
       await sql`
         CREATE TABLE IF NOT EXISTS app_sessions (
@@ -211,6 +246,31 @@ async function ensureAccountTables() {
         CREATE INDEX IF NOT EXISTS app_user_orders_user_id_idx
         ON app_user_orders (user_id, created_at DESC)
       `;
+      await sql`
+        UPDATE app_users
+        SET role = 'admin'
+        WHERE user_id = (
+          SELECT user_id
+          FROM app_users
+          ORDER BY created_at ASC
+          LIMIT 1
+        )
+        AND NOT EXISTS (
+          SELECT 1
+          FROM app_users
+          WHERE role = 'admin'
+        )
+      `;
+
+      const configuredAdminEmail = getConfiguredAdminEmail();
+
+      if (configuredAdminEmail) {
+        await sql`
+          UPDATE app_users
+          SET role = 'admin'
+          WHERE email = ${configuredAdminEmail}
+        `;
+      }
 
       return true;
     })().catch((error) => {
@@ -227,6 +287,7 @@ function toViewer(row: StoredUserRow): AuthViewer {
     id: row.user_id,
     name: row.full_name,
     email: row.email,
+    role: normalizeUserRole(row.role, row.email),
     createdAt: row.created_at,
     walletBalance: row.balance ?? 0,
   };
@@ -248,6 +309,19 @@ export async function createUser(input: CreateUserInput) {
   const userId = createId("usr");
   const now = new Date().toISOString();
   const email = normalizeEmail(input.email);
+  const configuredAdminEmail = getConfiguredAdminEmail();
+  const adminRows = (await sql`
+    SELECT COUNT(*)::int AS total
+    FROM app_users
+    WHERE role = 'admin'
+  `) as Array<{ total: number }>;
+  const role: UserRole =
+    input.role ||
+    (configuredAdminEmail && configuredAdminEmail === email
+      ? "admin"
+      : (adminRows[0]?.total ?? 0) === 0
+        ? "admin"
+        : "member");
 
   try {
     await sql.transaction([
@@ -257,6 +331,7 @@ export async function createUser(input: CreateUserInput) {
           full_name,
           email,
           password_hash,
+          role,
           created_at,
           updated_at
         )
@@ -265,6 +340,7 @@ export async function createUser(input: CreateUserInput) {
           ${input.name.trim()},
           ${email},
           ${input.passwordHash},
+          ${role},
           ${now},
           ${now}
         )
@@ -318,6 +394,9 @@ export async function getUserByEmail(email: string) {
       u.full_name,
       u.email,
       u.password_hash,
+      u.role,
+      u.failed_login_attempts,
+      u.locked_until,
       u.created_at,
       u.updated_at,
       COALESCE(w.balance, 0) AS balance
@@ -345,6 +424,9 @@ export async function getViewerById(userId: string) {
       u.full_name,
       u.email,
       u.password_hash,
+      u.role,
+      u.failed_login_attempts,
+      u.locked_until,
       u.created_at,
       u.updated_at,
       COALESCE(w.balance, 0) AS balance
@@ -355,6 +437,175 @@ export async function getViewerById(userId: string) {
   `) as StoredUserRow[];
 
   return rows[0] ? toViewer(rows[0]) : null;
+}
+
+export async function registerFailedLoginAttempt(userId: string) {
+  const sql = getSql();
+
+  if (!sql) {
+    return null;
+  }
+
+  await ensureAccountTables();
+
+  const rows = (await sql`
+    UPDATE app_users
+    SET
+      failed_login_attempts = failed_login_attempts + 1,
+      locked_until = CASE
+        WHEN role = 'admin' AND failed_login_attempts + 1 >= 3
+          THEN NOW() + INTERVAL '15 minutes'
+        ELSE locked_until
+      END,
+      updated_at = NOW()
+    WHERE user_id = ${userId}
+    RETURNING failed_login_attempts, locked_until, role
+  `) as Array<{
+    failed_login_attempts: number;
+    locked_until: string | null;
+    role: UserRole | string | null;
+  }>;
+
+  return rows[0] ?? null;
+}
+
+export async function resetFailedLoginAttempts(userId: string) {
+  const sql = getSql();
+
+  if (!sql) {
+    return false;
+  }
+
+  await ensureAccountTables();
+
+  await sql`
+    UPDATE app_users
+    SET
+      failed_login_attempts = 0,
+      locked_until = NULL,
+      updated_at = NOW()
+    WHERE user_id = ${userId}
+  `;
+
+  return true;
+}
+
+export async function updateUserAccount(
+  userId: string,
+  input: {
+    name: string;
+    email: string;
+    passwordHash?: string;
+  },
+) {
+  const sql = getSql();
+
+  if (!sql) {
+    throw new Error("Database akun belum tersedia.");
+  }
+
+  await ensureAccountTables();
+
+  const email = normalizeEmail(input.email);
+
+  try {
+    if (input.passwordHash) {
+      await sql`
+        UPDATE app_users
+        SET
+          full_name = ${input.name.trim()},
+          email = ${email},
+          password_hash = ${input.passwordHash},
+          updated_at = NOW()
+        WHERE user_id = ${userId}
+      `;
+    } else {
+      await sql`
+        UPDATE app_users
+        SET
+          full_name = ${input.name.trim()},
+          email = ${email},
+          updated_at = NOW()
+        WHERE user_id = ${userId}
+      `;
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Gagal memperbarui akun.";
+
+    if (/duplicate key|unique/i.test(message)) {
+      throw new Error("Email sudah dipakai akun lain.");
+    }
+
+    throw error;
+  }
+
+  const viewer = await getViewerById(userId);
+
+  if (!viewer) {
+    throw new Error("Data akun tidak bisa dibaca setelah diperbarui.");
+  }
+
+  return viewer;
+}
+
+export async function listAdminUsers(search = "", limit = 30) {
+  const sql = getSql();
+
+  if (!sql) {
+    return [] as AdminUserSummary[];
+  }
+
+  await ensureAccountTables();
+
+  const trimmedSearch = search.trim().toLowerCase();
+  const keyword = `%${trimmedSearch}%`;
+  const rows = (
+    trimmedSearch
+      ? await sql`
+          SELECT
+            u.user_id,
+            u.full_name,
+            u.email,
+            u.password_hash,
+            u.role,
+            u.failed_login_attempts,
+            u.locked_until,
+            u.created_at,
+            u.updated_at,
+            COALESCE(w.balance, 0) AS balance
+          FROM app_users u
+          LEFT JOIN app_wallets w ON w.user_id = u.user_id
+          WHERE LOWER(u.full_name) LIKE ${keyword} OR LOWER(u.email) LIKE ${keyword}
+          ORDER BY u.created_at DESC
+          LIMIT ${Math.max(1, limit)}
+        `
+      : await sql`
+          SELECT
+            u.user_id,
+            u.full_name,
+            u.email,
+            u.password_hash,
+            u.role,
+            u.failed_login_attempts,
+            u.locked_until,
+            u.created_at,
+            u.updated_at,
+            COALESCE(w.balance, 0) AS balance
+          FROM app_users u
+          LEFT JOIN app_wallets w ON w.user_id = u.user_id
+          ORDER BY u.created_at DESC
+          LIMIT ${Math.max(1, limit)}
+        `
+  ) as StoredUserRow[];
+
+  return rows.map((row) => ({
+    id: row.user_id,
+    name: row.full_name,
+    email: row.email,
+    role: normalizeUserRole(row.role, row.email),
+    createdAt: row.created_at,
+    walletBalance: row.balance ?? 0,
+  }));
 }
 
 export async function createSessionRecord(userId: string, expiresAt: string) {
