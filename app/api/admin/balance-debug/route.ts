@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminViewer } from "@/lib/auth";
+import { buildUpstreamUrl, getProviderConfig } from "@/lib/provider";
 
 export const dynamic = "force-dynamic";
 
@@ -7,10 +8,11 @@ export async function GET() {
   try {
     await requireAdminViewer();
 
-    const baseUrl = process.env.UPSTREAM_BASE_URL ?? "https://api.kirimkode.com/v1";
-    const apiKey = process.env.UPSTREAM_API_KEY ?? "";
-    const headerName = process.env.UPSTREAM_API_KEY_HEADER ?? "x-api-key";
-    const url = new URL("/balance", baseUrl).toString();
+    const config = getProviderConfig();
+    const baseUrl = config.baseUrl ?? "https://api.kirimkode.com/v1";
+    const apiKey = config.apiKey ?? "";
+    const headerName = config.apiKeyHeader ?? "x-api-key";
+    const url = buildUpstreamUrl(baseUrl, "/balance").toString();
 
     const headers = new Headers({
       Accept: "application/json",

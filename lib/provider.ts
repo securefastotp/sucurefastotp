@@ -501,6 +501,20 @@ function buildPathWithQuery(
   return `${base.pathname}${base.search}`;
 }
 
+export function buildUpstreamUrl(baseUrl: string, path: string) {
+  const url = new URL(baseUrl);
+  const queryIndex = path.indexOf("?");
+  const pathOnly = queryIndex >= 0 ? path.slice(0, queryIndex) : path;
+  const search = queryIndex >= 0 ? path.slice(queryIndex) : "";
+  const normalizedPath = pathOnly.startsWith("/") ? pathOnly.slice(1) : pathOnly;
+  const basePath = url.pathname.endsWith("/") ? url.pathname : `${url.pathname}/`;
+
+  url.pathname = `${basePath}${normalizedPath}`;
+  url.search = search;
+
+  return url;
+}
+
 function normalizeStatus(input: string, hasOtpCode = false) {
   if (hasOtpCode) {
     return "otp_received" as const;
@@ -609,7 +623,7 @@ async function fetchUpstream(
     throw new Error("Provider upstream belum dikonfigurasi.");
   }
 
-  const url = new URL(path, config.baseUrl);
+  const url = buildUpstreamUrl(config.baseUrl, path);
   const headers = new Headers({
     Accept: "application/json",
   });
