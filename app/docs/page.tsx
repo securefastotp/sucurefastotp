@@ -16,8 +16,8 @@ const envFields = [
   },
   {
     name: "NEXT_PUBLIC_MIDTRANS_CLIENT_KEY",
-    required: "Ya",
-    description: "Client key Midtrans untuk memuat Snap di browser.",
+    required: "No",
+    description: "Opsional. Dipakai hanya jika nanti Anda ingin kembali ke flow Snap.",
   },
   {
     name: "UPSTREAM_PROVIDER_MODE",
@@ -82,12 +82,12 @@ const envFields = [
   {
     name: "UPSTREAM_SERVER_BIMASAKTI_CODE",
     required: "No",
-    description: "Kode upstream untuk provider Mars. Default `api1`.",
+    description: "Kode upstream untuk provider Skyword. Default `api1`.",
   },
   {
     name: "UPSTREAM_SERVER_MARS_CODE",
     required: "No",
-    description: "Kode upstream untuk provider Saturn. Default `api2`.",
+    description: "Kode upstream untuk provider Blueverifiy. Default `api2`.",
   },
   {
     name: "UPSTREAM_MARKUP_PERCENT",
@@ -107,7 +107,22 @@ const envFields = [
   {
     name: "MIDTRANS_SERVER_KEY",
     required: "Ya",
-    description: "Server key Midtrans untuk membuat transaksi dan cek status.",
+    description: "Server key Midtrans untuk membuat QRIS, cek status, dan menerima notifikasi.",
+  },
+  {
+    name: "MIDTRANS_QRIS_FEE_PERCENT",
+    required: "No",
+    description: "Persentase fee Midtrans yang dibebankan ke pembeli. Default `0.7`.",
+  },
+  {
+    name: "MIDTRANS_QRIS_FEE_FLAT",
+    required: "No",
+    description: "Fee tambahan flat untuk pembeli. Default `0`.",
+  },
+  {
+    name: "MIDTRANS_QRIS_EXPIRY_MINUTES",
+    required: "No",
+    description: "Durasi aktif QRIS dalam menit. Default `15`.",
   },
 ];
 
@@ -153,23 +168,22 @@ export default function DocsPage() {
                 `/api/orders`.
               </p>
               <p>
-                3. Checkout dibuka lewat Midtrans Snap, lalu server memverifikasi
-                pembayaran sebelum order OTP dibuat ke provider upstream.
+                3. Saat user klik beli, server membuat QRIS Midtrans custom dan
+                menampilkan gambar QR langsung di halaman yang sama.
               </p>
               <p>
-                4. Route server Next.js menambahkan `API key` upstream dan
+                4. Setelah QRIS sukses dibayar, server memverifikasi status
+                Midtrans lalu membuat order OTP ke provider upstream.
+              </p>
+              <p>
+                5. Route server Next.js menambahkan `API key` upstream dan
                 response provider dinormalisasi agar UI Anda tetap konsisten.
-              </p>
-              <p>
-                5. Markup supplier diterapkan di server agar harga jual aman dan
-                mudah diatur dari env. Pada project ini markup saat ini diset 0
-                agar harga mengikuti KirimKode.
               </p>
             </div>
 
             <pre className="code-block mt-6 overflow-x-auto text-sm">
 {`Browser -> /api/catalog -> Next.js Route -> Upstream Provider
-Browser -> /api/payments -> Next.js Route -> Midtrans Snap
+Browser -> /api/payments -> Next.js Route -> Midtrans QRIS Charge
 Browser -> /api/payments/:id -> Next.js Route -> Midtrans Status
 Browser -> /api/orders -> Next.js Route -> Upstream Provider
 Browser -> /api/orders/:id -> Next.js Route -> Upstream Provider`}

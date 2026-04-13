@@ -1,10 +1,9 @@
 import { CatalogConsole } from "@/components/catalog-console";
-import { getCatalog, getCountries, getRuntimeStatus } from "@/lib/provider";
+import { getCatalog, getCountries } from "@/lib/provider";
 
 export const dynamic = "force-dynamic";
 
 export default async function ConsolePage() {
-  const runtime = await getRuntimeStatus();
   const initialCountries = await getCountries("bimasakti").catch(() => []);
   const initialCountryId =
     initialCountries.find((country) => country.id === 6)?.id ??
@@ -23,7 +22,6 @@ export default async function ConsolePage() {
         initialCatalog={initialCatalog}
         initialCountries={initialCountries}
         initialCountryId={initialCountryId}
-        initialRuntime={runtime}
       />
     </main>
   );

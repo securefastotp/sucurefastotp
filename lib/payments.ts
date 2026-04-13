@@ -2,7 +2,7 @@ import "server-only";
 
 import crypto from "node:crypto";
 import {
-  createMidtransTransaction,
+  createMidtransQrisTransaction,
   getMidtransConfig,
   getMidtransTransactionStatus,
   normalizeMidtransPaymentStatus,
@@ -40,15 +40,33 @@ function createPaymentId() {
   return `pay_${Date.now().toString(36)}${random}`;
 }
 
-function getCallbackUrl(paymentId: string) {
-  return `${siteConfig.url.replace(/\/$/, "")}/console?payment=${paymentId}`;
+function getNotificationUrl() {
+  return `${siteConfig.url.replace(/\/$/, "")}/api/payments/notify`;
+}
+
+function getQrisFeeConfig() {
+  const feePercent = Number(process.env.MIDTRANS_QRIS_FEE_PERCENT ?? 0.7);
+  const flatFee = Number(process.env.MIDTRANS_QRIS_FEE_FLAT ?? 0);
+  const expiryMinutes = Number(process.env.MIDTRANS_QRIS_EXPIRY_MINUTES ?? 15);
+
+  return {
+    feePercent: Number.isFinite(feePercent) ? feePercent : 0.7,
+    flatFee: Number.isFinite(flatFee) ? flatFee : 0,
+    expiryMinutes: Number.isFinite(expiryMinutes) ? expiryMinutes : 15,
+  };
+}
+
+function computeBuyerFee(subtotalAmount: number) {
+  const { feePercent, flatFee } = getQrisFeeConfig();
+  const percentageFee = Math.ceil(Math.max(0, subtotalAmount) * (feePercent / 100));
+  return Math.max(0, percentageFee + Math.max(0, Math.round(flatFee)));
 }
 
 export function getPaymentGatewayStatus() {
   const config = getMidtransConfig();
 
   return {
-    midtransConfigured: Boolean(config.serverKey && config.clientKey),
+    midtransConfigured: Boolean(config.serverKey),
     midtransEnvironment: config.environment,
     midtransClientKeyAvailable: Boolean(config.clientKey),
   } satisfies Pick<
@@ -79,6 +97,13 @@ function updatePaymentRecord(
 
   if (nextStatus === "paid" && !payment.paidAt) {
     payment.paidAt = new Date().toISOString();
+    payment.statusMessage =
+      "Pembayaran QRIS berhasil. Menyiapkan nomor OTP dari KirimKode.";
+  }
+
+  if (nextStatus === "pending" && !payment.statusMessage) {
+    payment.statusMessage =
+      "Menunggu pembayaran QRIS. Scan kode lalu cek status beberapa detik lagi.";
   }
 
   paymentStore.set(payment.id, payment);
@@ -88,18 +113,25 @@ function updatePaymentRecord(
 export async function createPaymentSession(input: CreatePaymentInput) {
   const config = getMidtransConfig();
 
-  if (!config.serverKey || !config.clientKey) {
+  if (!config.serverKey) {
     throw new Error(
-      "Midtrans belum siap. Isi MIDTRANS_SERVER_KEY dan NEXT_PUBLIC_MIDTRANS_CLIENT_KEY di Vercel.",
+      "Midtrans belum siap. Isi MIDTRANS_SERVER_KEY di Vercel.",
     );
   }
 
   const paymentId = createPaymentId();
-  const amount = Math.max(1, Math.round(input.price));
+  const subtotalAmount = Math.max(1, Math.round(input.price));
+  const feeAmount = computeBuyerFee(subtotalAmount);
+  const amount = subtotalAmount + feeAmount;
+  const { expiryMinutes } = getQrisFeeConfig();
   const now = new Date().toISOString();
+  const expiresAt = new Date(
+    Date.now() + Math.max(1, expiryMinutes) * 60 * 1000,
+  ).toISOString();
   const payment: PaymentRecord = {
     id: paymentId,
     gateway: "midtrans",
+    paymentMethod: "qris",
     serviceId: input.serviceId,
     serviceCode: input.serviceCode,
     serverId: input.serverId,
@@ -107,6 +139,8 @@ export async function createPaymentSession(input: CreatePaymentInput) {
     service: input.service,
     country: input.country,
     countryId: input.countryId,
+    subtotalAmount,
+    feeAmount,
     amount,
     currency: input.currency ?? "IDR",
     status: "pending",
@@ -116,12 +150,15 @@ export async function createPaymentSession(input: CreatePaymentInput) {
     midtransOrderId: paymentId,
     createdAt: now,
     updatedAt: now,
-    statusMessage: "Checkout Midtrans dibuat. Lanjutkan pembayaran.",
+    expiresAt,
+    statusMessage: "QRIS siap dibayar. Scan kode di bawah lalu tunggu verifikasi otomatis.",
   };
 
-  const transaction = await createMidtransTransaction({
+  const transaction = await createMidtransQrisTransaction({
     orderId: paymentId,
     amount,
+    subtotalAmount,
+    feeAmount,
     currency: payment.currency,
     serviceId: payment.serviceId,
     serviceName: payment.service,
@@ -129,11 +166,13 @@ export async function createPaymentSession(input: CreatePaymentInput) {
     customerName: payment.customerName,
     customerEmail: payment.customerEmail,
     customerPhone: payment.customerPhone,
-    callbackUrl: getCallbackUrl(paymentId),
+    notificationUrl: getNotificationUrl(),
+    expiresAt,
   });
 
-  payment.snapToken = transaction.token;
-  payment.redirectUrl = transaction.redirectUrl;
+  payment.transactionId = transaction.transactionId;
+  payment.qrCodeUrl = transaction.qrCodeUrl;
+  payment.qrString = transaction.qrString;
   paymentStore.set(payment.id, payment);
 
   return payment;
@@ -177,7 +216,7 @@ export async function activatePaymentOrder(paymentId: string) {
     country: payment.country,
     countryId: payment.countryId,
     operator: payment.operator,
-    price: payment.amount,
+    price: payment.subtotalAmount,
     currency: payment.currency,
   });
   payment.updatedAt = new Date().toISOString();
@@ -215,4 +254,13 @@ export async function handleMidtransNotification(payload: Record<string, unknown
   }
 
   return updatePaymentRecord(payment, typedPayload);
+}
+
+export function listPaymentSessions(limit = 20) {
+  return [...paymentStore.values()]
+    .sort(
+      (left, right) =>
+        new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime(),
+    )
+    .slice(0, limit);
 }

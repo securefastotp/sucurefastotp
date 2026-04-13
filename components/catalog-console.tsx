@@ -1,7 +1,6 @@
 "use client";
 
 import Image from "next/image";
-import Script from "next/script";
 import {
   type ReactNode,
   startTransition,
@@ -18,7 +17,6 @@ import type {
   CountryOption,
   Order,
   PaymentRecord,
-  RuntimeStatus,
   Service,
 } from "@/lib/types";
 
@@ -26,7 +24,6 @@ type CatalogConsoleProps = {
   initialCatalog: CatalogResponse | null;
   initialCountries: CountryOption[];
   initialCountryId: number | null;
-  initialRuntime: RuntimeStatus;
 };
 
 type ServerId = "bimasakti" | "mars";
@@ -37,36 +34,26 @@ type CountriesResponse = {
   countries: CountryOption[];
 };
 
-declare global {
-  interface Window {
-    snap?: {
-      pay: (
-        token: string,
-        options?: {
-          onClose?: () => void;
-          onError?: () => void;
-          onPending?: () => void;
-          onSuccess?: () => void;
-        },
-      ) => void;
-    };
-  }
-}
+type TransactionsResponse = {
+  updatedAt: string;
+  total: number;
+  transactions: PaymentRecord[];
+};
 
 const serverOptions = [
   {
     id: "bimasakti" as const,
-    name: "Mars",
+    name: "Skyword",
     code: "api1",
     iconKey: "mars" as const,
-    description: "Provider utama, stok terbanyak",
+    description: "Server utama, stok terbanyak",
   },
   {
     id: "mars" as const,
-    name: "Saturn",
+    name: "Blueverifiy",
     code: "api2",
     iconKey: "saturn" as const,
-    description: "Provider cadangan, lebih stabil",
+    description: "Server cadangan, lebih stabil",
   },
 ];
 
@@ -410,7 +397,7 @@ function MenuOrbIcon({ className }: { className?: string }) {
   );
 }
 
-function OtpBurstIcon({ className }: { className?: string }) {
+function HistoryIcon({ className }: { className?: string }) {
   return (
     <svg
       aria-hidden="true"
@@ -419,14 +406,32 @@ function OtpBurstIcon({ className }: { className?: string }) {
       viewBox="0 0 24 24"
     >
       <path
-        d="M12 3.8l1.5 4.1 4.4 1.5-4.4 1.5L12 15l-1.5-4.1-4.4-1.5 4.4-1.5L12 3.8z"
-        fill="currentColor"
+        d="M5 6.5h14M5 12h14M5 17.5h9"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.8"
       />
+      <circle cx="17.5" cy="17.5" fill="currentColor" r="1.4" />
+    </svg>
+  );
+}
+
+function InfoIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={className}
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.8" />
       <path
-        d="M17.4 15.8l.7 1.9 1.9.6-1.9.7-.7 1.9-.7-1.9-1.9-.7 1.9-.6.7-1.9z"
-        fill="currentColor"
-        fillOpacity=".85"
+        d="M12 10v5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.8"
       />
+      <circle cx="12" cy="7.3" fill="currentColor" r="1.1" />
     </svg>
   );
 }
@@ -462,6 +467,10 @@ function getServerGlyph(iconKey: (typeof serverOptions)[number]["iconKey"]) {
   }
 
   return <MarsIcon className="h-6 w-6" />;
+}
+
+function getServerLabel(serverId?: string) {
+  return serverOptions.find((server) => server.id === toServerId(serverId))?.name ?? "Skyword";
 }
 
 function toFlagEmoji(code?: string) {
@@ -689,6 +698,23 @@ async function requestActivatePayment(paymentId: string) {
   return payload;
 }
 
+async function requestTransactions() {
+  const response = await fetch("/api/transactions", {
+    cache: "no-store",
+  });
+  const payload = (await response.json()) as
+    | TransactionsResponse
+    | { error?: string };
+
+  if (!response.ok || hasError(payload)) {
+    throw new Error(
+      hasError(payload) ? payload.error : "Gagal membaca riwayat transaksi.",
+    );
+  }
+
+  return payload.transactions;
+}
+
 async function requestOrderStatus(orderId: string) {
   const response = await fetch(`/api/orders/${orderId}`, {
     cache: "no-store",
@@ -746,7 +772,6 @@ export function CatalogConsole({
   initialCatalog,
   initialCountries,
   initialCountryId,
-  initialRuntime,
 }: CatalogConsoleProps) {
   const [catalog, setCatalog] = useState<CatalogResponse | null>(initialCatalog);
   const [countries, setCountries] = useState<CountryOption[]>(initialCountries);
@@ -759,18 +784,19 @@ export function CatalogConsole({
   );
   const [showIntro, setShowIntro] = useState(true);
   const [introClosing, setIntroClosing] = useState(false);
-  const [quickMenuOpen, setQuickMenuOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [countryPanelOpen, setCountryPanelOpen] = useState(false);
   const [countrySearch, setCountrySearch] = useState("");
   const [serviceSearch, setServiceSearch] = useState("");
   const [servicePanelOpen, setServicePanelOpen] = useState(false);
-  const [swipeStartY, setSwipeStartY] = useState<number | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [countryError, setCountryError] = useState<string | null>(null);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const [orderError, setOrderError] = useState<string | null>(null);
+  const [transactionsError, setTransactionsError] = useState<string | null>(null);
   const [payment, setPayment] = useState<PaymentRecord | null>(null);
   const [order, setOrder] = useState<Order | null>(null);
+  const [transactions, setTransactions] = useState<PaymentRecord[]>([]);
   const [comparisonService, setComparisonService] = useState<Service | null>(null);
   const [selectedProviderServer, setSelectedProviderServer] =
     useState<ServerId>("bimasakti");
@@ -783,18 +809,9 @@ export function CatalogConsole({
   const [isCreatingPayment, setIsCreatingPayment] = useState(false);
   const [isRefreshingPayment, setIsRefreshingPayment] = useState(false);
   const [isRefreshingOrder, setIsRefreshingOrder] = useState(false);
-  const [isSnapReady, setIsSnapReady] = useState(false);
+  const [isLoadingTransactions, setIsLoadingTransactions] = useState(false);
   const deferredCountrySearch = useDeferredValue(countrySearch);
   const deferredServiceSearch = useDeferredValue(serviceSearch);
-
-  const midtransClientKey =
-    process.env.NEXT_PUBLIC_MIDTRANS_CLIENT_KEY?.trim() ?? "";
-  const snapScriptUrl =
-    initialRuntime.midtransEnvironment === "production"
-      ? "https://app.midtrans.com/snap/snap.js"
-      : "https://app.sandbox.midtrans.com/snap/snap.js";
-  const canLoadSnapScript =
-    initialRuntime.midtransClientKeyAvailable && Boolean(midtransClientKey);
 
   const selectedCountry = useMemo(
     () => countries.find((country) => country.id === selectedCountryId) ?? null,
@@ -802,9 +819,6 @@ export function CatalogConsole({
   );
   const selectedService =
     catalog?.services.find((service) => service.id === selectedServiceId) ?? null;
-  const selectedServerMeta = serverOptions.find(
-    (server) => server.id === selectedServer,
-  );
   const providerEntries = useMemo(
     () =>
       serverOptions.map((server) => ({
@@ -827,44 +841,6 @@ export function CatalogConsole({
       .toLowerCase()
       .includes(deferredCountrySearch.toLowerCase()),
   );
-  const quickMenuItems = [
-    {
-      id: "console-top",
-      label: "Overview",
-      caption: "Rahmat OTP",
-      icon: <OtpBurstIcon className="h-4 w-4" />,
-    },
-    {
-      id: "server-zone",
-      label: "Server",
-      caption: selectedServerMeta?.name ?? "Mars",
-      icon: <ServerIcon className="h-4 w-4" />,
-    },
-    {
-      id: "country-zone",
-      label: "Country",
-      caption: selectedCountry?.name ?? "Pilih negara",
-      icon: <GlobeIcon className="h-4 w-4" />,
-    },
-    {
-      id: "service-zone",
-      label: "Service",
-      caption: selectedService?.service ?? "Pilih layanan",
-      icon: <ServiceIcon className="h-4 w-4" />,
-    },
-    {
-      id: "payment-zone",
-      label: "Payment",
-      caption: payment?.status ?? "Siap checkout",
-      icon: <MenuOrbIcon className="h-4 w-4" />,
-    },
-    {
-      id: "otp-zone",
-      label: "OTP",
-      caption: order?.otpCode ?? "Menunggu hasil",
-      icon: <OtpBurstIcon className="h-4 w-4" />,
-    },
-  ] as const;
 
   async function loadCountries(serverId: ServerId) {
     setIsLoadingCountries(true);
@@ -924,25 +900,30 @@ export function CatalogConsole({
     }
   }
 
-  function openQuickMenuSheet(withFeedback = true) {
-    if (withFeedback) {
-      playUiFeedback("open");
-    }
+  async function loadTransactions() {
+    setIsLoadingTransactions(true);
+    setTransactionsError(null);
 
-    setQuickMenuOpen(true);
+    try {
+      setTransactions(await requestTransactions());
+    } catch (error) {
+      setTransactionsError(
+        error instanceof Error
+          ? error.message
+          : "Gagal membaca riwayat transaksi.",
+      );
+    } finally {
+      setIsLoadingTransactions(false);
+    }
   }
 
-  function closeQuickMenuSheet() {
-    setQuickMenuOpen(false);
+  function toggleMenu() {
+    playUiFeedback("open");
+    setMenuOpen((current) => !current);
   }
 
-  function toggleQuickMenuSheet() {
-    if (quickMenuOpen) {
-      closeQuickMenuSheet();
-      return;
-    }
-
-    openQuickMenuSheet();
+  function closeMenu() {
+    setMenuOpen(false);
   }
 
   function scrollToSection(sectionId: string) {
@@ -955,29 +936,7 @@ export function CatalogConsole({
       block: "start",
     });
     playUiFeedback("select");
-    closeQuickMenuSheet();
-  }
-
-  function handleSwipeStart(clientY: number) {
-    setSwipeStartY(clientY);
-  }
-
-  function handleSwipeEnd(clientY: number) {
-    if (swipeStartY === null) {
-      return;
-    }
-
-    const delta = swipeStartY - clientY;
-
-    if (delta > 48) {
-      openQuickMenuSheet();
-    }
-
-    if (delta < -48) {
-      closeQuickMenuSheet();
-    }
-
-    setSwipeStartY(null);
+    closeMenu();
   }
 
   function rememberPaymentId(paymentId: string | null) {
@@ -1020,6 +979,7 @@ export function CatalogConsole({
         if (activated.order) {
           setOrder(activated.order);
           rememberPaymentId(null);
+          void loadTransactions();
         } else {
           rememberPaymentId(activated.payment.id);
         }
@@ -1032,6 +992,7 @@ export function CatalogConsole({
       if (nextPayment.order) {
         setOrder(nextPayment.order);
         rememberPaymentId(null);
+        void loadTransactions();
       } else {
         rememberPaymentId(nextPayment.id);
       }
@@ -1044,36 +1005,6 @@ export function CatalogConsole({
     }
   }
 
-  function openSnap(currentPayment: PaymentRecord) {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    if (window.snap && currentPayment.snapToken) {
-      window.snap.pay(currentPayment.snapToken, {
-        onClose: () => void syncPayment(currentPayment.id),
-        onError: () => void syncPayment(currentPayment.id),
-        onPending: () => void syncPayment(currentPayment.id),
-        onSuccess: () => void syncPayment(currentPayment.id),
-      });
-      return;
-    }
-
-    if (currentPayment.redirectUrl) {
-      window.location.assign(currentPayment.redirectUrl);
-      return;
-    }
-
-    if (!currentPayment.snapToken) {
-      setPaymentError("Snap token Midtrans belum tersedia.");
-      scrollToPaymentZone();
-      return;
-    }
-
-    setPaymentError("Snap Midtrans belum siap dimuat.");
-    scrollToPaymentZone();
-  }
-
   async function handleCreateCheckout() {
     if (!selectedProviderService) {
       return;
@@ -1081,6 +1012,8 @@ export function CatalogConsole({
 
     setIsCreatingPayment(true);
     setPaymentError(null);
+    setOrder(null);
+    setOrderError(null);
 
     try {
       const createdPayment = await requestCreatePayment(
@@ -1090,7 +1023,7 @@ export function CatalogConsole({
       setPayment(createdPayment);
       rememberPaymentId(createdPayment.id);
       scrollToPaymentZone();
-      openSnap(createdPayment);
+      void loadTransactions();
     } catch (error) {
       setPaymentError(
         error instanceof Error ? error.message : "Gagal membuat checkout.",
@@ -1111,6 +1044,7 @@ export function CatalogConsole({
 
     try {
       setOrder(await requestOrderStatus(order.id));
+      void loadTransactions();
     } catch (error) {
       setOrderError(
         error instanceof Error ? error.message : "Gagal membaca status order.",
@@ -1130,6 +1064,7 @@ export function CatalogConsole({
 
     try {
       setOrder(await requestCancelOrder(order.id));
+      void loadTransactions();
     } catch (error) {
       setOrderError(
         error instanceof Error ? error.message : "Gagal membatalkan order.",
@@ -1164,6 +1099,10 @@ export function CatalogConsole({
   useEffect(() => {
     void loadCatalog(selectedServer, selectedCountryId);
   }, [selectedCountryId, selectedServer]);
+
+  useEffect(() => {
+    void loadTransactions();
+  }, []);
 
   useEffect(() => {
     if (!selectedService?.serviceCode || !selectedCountryId) {
@@ -1253,31 +1192,18 @@ export function CatalogConsole({
   }, [order?.id, order?.status]);
 
   useEffect(() => {
-    if (!canLoadSnapScript || typeof window === "undefined") {
-      return;
-    }
-
-    if (window.snap) {
-      setIsSnapReady(true);
+    if (!payment?.id || payment.status !== "pending") {
       return;
     }
 
     const intervalId = window.setInterval(() => {
-      if (window.snap) {
-        setIsSnapReady(true);
-        window.clearInterval(intervalId);
-      }
-    }, 350);
-
-    const timeoutId = window.setTimeout(() => {
-      window.clearInterval(intervalId);
-    }, 12000);
+      void syncPaymentEvent(payment.id);
+    }, 5000);
 
     return () => {
       window.clearInterval(intervalId);
-      window.clearTimeout(timeoutId);
     };
-  }, [canLoadSnapScript]);
+  }, [payment?.id, payment?.status]);
 
   const filteredServices =
     catalog?.services.filter((service) =>
@@ -1293,20 +1219,6 @@ export function CatalogConsole({
         <div className="lux-orb lux-orb-b" />
         <div className="lux-orb lux-orb-c" />
       </div>
-      {canLoadSnapScript ? (
-        <Script
-          data-client-key={midtransClientKey}
-          onError={() =>
-            setPaymentError(
-              "Script Midtrans gagal dimuat. Coba refresh halaman atau buka ulang checkout.",
-            )
-          }
-          onLoad={() => setIsSnapReady(true)}
-          onReady={() => setIsSnapReady(true)}
-          src={snapScriptUrl}
-          strategy="afterInteractive"
-        />
-      ) : null}
 
       {showIntro ? (
         <div
@@ -1333,13 +1245,13 @@ export function CatalogConsole({
               Rahmat OTP
             </h2>
             <p className="mt-3 text-sm leading-7 text-sky-50/72">
-              Menyiapkan data KirimKode dan checkout Midtrans production.
+              Menyiapkan katalog KirimKode dan QRIS Midtrans langsung di halaman.
             </p>
             <div className="mt-6 flex items-center gap-3 text-xs uppercase tracking-[0.22em] text-sky-100/58">
               <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_16px_rgba(103,232,249,0.9)]" />
-              Mars
+              Skyword
               <span className="h-1 w-1 rounded-full bg-white/24" />
-              Saturn
+              Blueverifiy
             </div>
           </div>
         </div>
@@ -1348,7 +1260,7 @@ export function CatalogConsole({
       <main className="relative z-10 mx-auto w-full max-w-[470px] px-3 py-4 pb-28 sm:px-4 sm:py-5">
         <div
           id="console-top"
-          className="lux-rise rounded-[24px] border border-white/16 bg-[linear-gradient(145deg,rgba(10,27,61,0.9),rgba(18,59,124,0.88)_56%,rgba(7,111,196,0.8))] px-4 py-3 shadow-[0_28px_90px_-42px_rgba(2,8,25,0.95)]"
+          className="lux-rise relative rounded-[24px] border border-white/16 bg-[linear-gradient(145deg,rgba(10,27,61,0.9),rgba(18,59,124,0.88)_56%,rgba(7,111,196,0.8))] px-4 py-3 shadow-[0_28px_90px_-42px_rgba(2,8,25,0.95)]"
         >
           <div className="flex items-center justify-between gap-3">
             <h1 className="text-[15px] font-medium leading-none text-white">
@@ -1356,12 +1268,56 @@ export function CatalogConsole({
             </h1>
             <button
               className="lux-menu-trigger h-9 w-9"
-              onClick={() => openQuickMenuSheet()}
+              onClick={toggleMenu}
               type="button"
             >
               <MenuOrbIcon className="h-4 w-4" />
             </button>
           </div>
+
+          {menuOpen ? (
+            <div className="absolute right-3 top-12 z-30 w-[220px] rounded-[22px] border border-white/14 bg-[linear-gradient(180deg,rgba(8,24,52,0.98),rgba(13,39,82,0.96))] p-3 shadow-[0_26px_70px_-26px_rgba(2,8,25,0.98)] backdrop-blur-xl">
+              <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.24em] text-sky-100/58">
+                Menu
+              </p>
+              <div className="mt-2 space-y-2">
+                <button
+                  className="flex w-full items-center gap-3 rounded-[16px] border border-white/10 bg-white/6 px-3 py-3 text-left"
+                  onClick={() => scrollToSection("history-zone")}
+                  type="button"
+                >
+                  <span className="flex h-9 w-9 items-center justify-center rounded-[13px] bg-sky-100/12 text-sky-50">
+                    <HistoryIcon className="h-4 w-4" />
+                  </span>
+                  <span>
+                    <span className="block text-[12px] font-medium text-white">
+                      Riwayat Transaksi
+                    </span>
+                    <span className="block text-[10px] text-sky-50/55">
+                      Lihat transaksi terbaru
+                    </span>
+                  </span>
+                </button>
+                <button
+                  className="flex w-full items-center gap-3 rounded-[16px] border border-white/10 bg-white/6 px-3 py-3 text-left"
+                  onClick={() => scrollToSection("about-zone")}
+                  type="button"
+                >
+                  <span className="flex h-9 w-9 items-center justify-center rounded-[13px] bg-sky-100/12 text-sky-50">
+                    <InfoIcon className="h-4 w-4" />
+                  </span>
+                  <span>
+                    <span className="block text-[12px] font-medium text-white">
+                      Tentang
+                    </span>
+                    <span className="block text-[10px] text-sky-50/55">
+                      Info provider dan QRIS
+                    </span>
+                  </span>
+                </button>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         {countryError ? (
@@ -1713,7 +1669,7 @@ export function CatalogConsole({
           >
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-[11px] text-sky-50/55">Payment Status</p>
+                <p className="text-[11px] text-sky-50/55">QRIS Pembayaran</p>
                 <p className="mt-1 text-[14px] font-medium text-white">
                   {payment.service}
                 </p>
@@ -1732,7 +1688,73 @@ export function CatalogConsole({
               {payment.statusMessage ?? payment.id}
             </p>
 
-            <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <div className="mt-4 grid gap-4">
+              <div className="lux-premium-surface p-4">
+                <div className="mx-auto flex w-full max-w-[240px] flex-col items-center rounded-[24px] border border-white/10 bg-white px-4 py-4 shadow-[0_20px_48px_-28px_rgba(4,10,24,0.95)]">
+                  {payment.qrCodeUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      alt={`QRIS ${payment.service}`}
+                      className="h-auto w-full rounded-[16px]"
+                      src={payment.qrCodeUrl}
+                    />
+                  ) : (
+                    <div className="flex h-[220px] w-full items-center justify-center rounded-[16px] bg-slate-100 px-4 text-center text-[12px] text-slate-500">
+                      QRIS belum tersedia. Coba buat ulang pembayaran.
+                    </div>
+                  )}
+                </div>
+                <p className="mt-3 text-center text-[12px] text-sky-50/68">
+                  Scan QRIS ini dengan e-wallet atau mobile banking. Nominal
+                  harus sama persis.
+                </p>
+                {payment.expiresAt ? (
+                  <p className="mt-1 text-center text-[11px] text-sky-50/48">
+                    Berlaku sampai {formatDateTime(payment.expiresAt)}
+                  </p>
+                ) : null}
+              </div>
+
+              <div className="lux-premium-surface p-4">
+                <p className="text-[11px] uppercase tracking-[0.18em] text-sky-50/48">
+                  Detail Pesanan
+                </p>
+                <div className="mt-3 space-y-2.5 text-[12px] text-sky-50/72">
+                  <div className="flex items-center justify-between gap-4">
+                    <span>Layanan</span>
+                    <span className="text-right text-white">{payment.service}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span>Provider</span>
+                    <span className="text-right text-white">
+                      {getServerLabel(payment.serverId)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span>Negara</span>
+                    <span className="text-right text-white">{payment.country}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span>Harga nomor</span>
+                    <span className="text-right text-white">
+                      {formatCurrency(payment.subtotalAmount, payment.currency)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4">
+                    <span>Fee Midtrans</span>
+                    <span className="text-right text-white">
+                      {formatCurrency(payment.feeAmount, payment.currency)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 border-t border-white/8 pt-2.5 text-[13px] font-medium">
+                    <span>Total bayar</span>
+                    <span className="text-right text-[#16f0a9]">
+                      {formatCurrency(payment.amount, payment.currency)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
               <button
                 className="inline-flex h-11 w-full items-center justify-center rounded-full border border-white/10 bg-[#102846] px-4 text-[12px] font-medium text-white disabled:opacity-60"
                 disabled={isRefreshingPayment}
@@ -1742,18 +1764,7 @@ export function CatalogConsole({
                 }}
                 type="button"
               >
-                {isRefreshingPayment ? "Mengecek..." : "Cek Pembayaran"}
-              </button>
-              <button
-                className="inline-flex h-11 w-full items-center justify-center rounded-full border border-white/10 bg-[#102846] px-4 text-[12px] font-medium text-white disabled:opacity-60"
-                disabled={!payment.redirectUrl && (!payment.snapToken || !isSnapReady)}
-                onClick={() => {
-                  playUiFeedback("confirm");
-                  openSnap(payment);
-                }}
-                type="button"
-              >
-                Buka Midtrans
+                {isRefreshingPayment ? "Mengecek Pembayaran..." : "Cek Pembayaran"}
               </button>
             </div>
           </section>
@@ -1842,92 +1853,94 @@ export function CatalogConsole({
             </div>
           )}
         </section>
-      </main>
-
-      <div className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
-        <button
-          className="lux-swipe-pill"
-          onClick={toggleQuickMenuSheet}
-          onTouchEnd={(event) => handleSwipeEnd(event.changedTouches[0]?.clientY ?? 0)}
-          onTouchStart={(event) => handleSwipeStart(event.changedTouches[0]?.clientY ?? 0)}
-          type="button"
+        <section
+          id="history-zone"
+          className="lux-rise lux-panel mt-4 rounded-[24px] border border-white/14 bg-[linear-gradient(180deg,rgba(15,46,93,0.95),rgba(10,34,72,0.96))] p-3.5 sm:p-4"
         >
-          <span className="h-1.5 w-10 rounded-full bg-white/30" />
-          <span className="flex items-center gap-2">
-            <MenuOrbIcon className="h-4 w-4" />
-            Menu
-          </span>
-          <span className="text-[0.65rem] uppercase tracking-[0.24em] text-sky-100/55">
-            swipe
-          </span>
-        </button>
-      </div>
+          <SectionTitle
+            icon={<HistoryIcon className="h-4 w-4" />}
+            title="Riwayat Transaksi"
+          />
 
-      <div
-        aria-hidden={!quickMenuOpen}
-        className={cn(
-          "fixed inset-0 z-50 transition-all duration-300",
-          quickMenuOpen ? "pointer-events-auto" : "pointer-events-none",
-        )}
-      >
-        <button
-          className={cn(
-            "absolute inset-0 bg-[#020614]/48 backdrop-blur-sm transition-opacity duration-300",
-            quickMenuOpen ? "opacity-100" : "opacity-0",
-          )}
-          onClick={closeQuickMenuSheet}
-          type="button"
-        />
-
-        <div
-          className={cn(
-            "absolute inset-x-0 bottom-0 mx-auto w-full max-w-[470px] px-3 pb-[max(1rem,env(safe-area-inset-bottom))] transition-transform duration-300",
-            quickMenuOpen ? "translate-y-0" : "translate-y-[110%]",
-          )}
-        >
-          <div className="rounded-[32px] border border-white/14 bg-[linear-gradient(180deg,rgba(7,21,48,0.98),rgba(12,37,78,0.95))] p-4 shadow-[0_32px_90px_-30px_rgba(2,8,25,0.98)]">
-            <div className="mb-4 flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.26em] text-sky-100/58">
-                  Menu
-                </p>
-                <p className="mt-2 text-xl font-semibold text-white">
-                  Navigasi cepat console
-                </p>
-                <p className="mt-1 text-sm leading-6 text-sky-50/62">
-                  Geser ke atas atau tap menu untuk pindah bagian dengan cepat.
-                </p>
-              </div>
-              <button
-                className="rounded-full border border-white/12 bg-white/8 px-3 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-sky-50"
-                onClick={closeQuickMenuSheet}
-                type="button"
-              >
-                Tutup
-              </button>
+          {transactionsError ? (
+            <div className="mt-4 rounded-[18px] border border-rose-200/20 bg-rose-300/12 px-4 py-4 text-sm leading-7 text-rose-50">
+              {transactionsError}
             </div>
+          ) : null}
 
-            <div className="grid grid-cols-2 gap-3">
-              {quickMenuItems.map((item) => (
-                <button
-                  key={item.id}
-                  className="rounded-[22px] border border-white/10 bg-white/7 p-4 text-left transition-transform duration-200 hover:-translate-y-0.5"
-                  onClick={() => scrollToSection(item.id)}
-                  type="button"
-                >
-                  <span className="flex h-10 w-10 items-center justify-center rounded-[15px] bg-[linear-gradient(145deg,rgba(255,255,255,0.24),rgba(86,159,255,0.2))] text-sky-50">
-                    {item.icon}
+          <div className="mt-3 space-y-2.5">
+            {transactions.map((transaction) => (
+              <div
+                key={transaction.id}
+                className="rounded-[18px] border border-white/10 bg-[#102846] p-3"
+              >
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-medium text-white">
+                      {transaction.service}
+                    </p>
+                    <p className="mt-1 text-[11px] text-sky-50/55">
+                      {getServerLabel(transaction.serverId)} • {transaction.country}
+                    </p>
+                  </div>
+                  <span
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]",
+                      getPaymentStatusClass(transaction.status),
+                    )}
+                  >
+                    {transaction.status}
                   </span>
-                  <p className="mt-3 text-sm font-semibold text-white">{item.label}</p>
-                  <p className="mt-1 truncate text-xs uppercase tracking-[0.18em] text-sky-100/52">
-                    {item.caption}
+                </div>
+
+                <div className="mt-3 grid gap-1 text-[11px] text-sky-50/60">
+                  <p>Harga nomor: {formatCurrency(transaction.subtotalAmount, transaction.currency)}</p>
+                  <p>Fee Midtrans: {formatCurrency(transaction.feeAmount, transaction.currency)}</p>
+                  <p className="text-[12px] font-medium text-[#16f0a9]">
+                    Total: {formatCurrency(transaction.amount, transaction.currency)}
                   </p>
-                </button>
-              ))}
+                  <p>Dibuat: {formatDateTime(transaction.createdAt)}</p>
+                  {transaction.order?.phoneNumber ? (
+                    <p>Nomor: {transaction.order.phoneNumber}</p>
+                  ) : null}
+                  {transaction.order?.otpCode ? (
+                    <p>OTP: {transaction.order.otpCode}</p>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+
+            {!transactions.length && !isLoadingTransactions ? (
+              <div className="rounded-[18px] bg-[#102846] px-4 py-6 text-center text-[12px] leading-6 text-sky-50/58">
+                Belum ada transaksi tersimpan. Saat QRIS dibuat, riwayat akan tampil di sini.
+              </div>
+            ) : null}
+          </div>
+        </section>
+
+        <section
+          id="about-zone"
+          className="lux-rise lux-panel mt-4 rounded-[24px] border border-white/14 bg-[linear-gradient(180deg,rgba(15,46,93,0.95),rgba(10,34,72,0.96))] p-3.5 sm:p-4"
+        >
+          <SectionTitle
+            icon={<InfoIcon className="h-4 w-4" />}
+            title="Tentang"
+          />
+          <div className="lux-premium-surface mt-3 p-4 text-[12px] leading-7 text-sky-50/68">
+            <p>
+              Rahmat OTP mengambil katalog dan order OTP langsung dari KirimKode.
+              Pembayaran QRIS dibuat lewat Midtrans Core API agar QR tampil langsung
+              di halaman ini tanpa buka tab baru.
+            </p>
+            <div className="mt-3 grid gap-2 text-[11px] text-sky-50/62">
+              <p>Provider 1: Skyword → api1</p>
+              <p>Provider 2: Blueverifiy → api2</p>
+              <p>Harga: mengikuti harga asli KirimKode</p>
+              <p>Riwayat transaksi: saat ini tersimpan di store aplikasi dan siap dipindah ke Vercel DB.</p>
             </div>
           </div>
-        </div>
-      </div>
+        </section>
+      </main>
     </div>
   );
 }

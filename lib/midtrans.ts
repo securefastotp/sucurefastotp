@@ -7,6 +7,8 @@ type MidtransEnvironment = "sandbox" | "production";
 type CreateSnapTransactionInput = {
   orderId: string;
   amount: number;
+  subtotalAmount: number;
+  feeAmount: number;
   currency: string;
   serviceId: string;
   serviceName: string;
@@ -14,7 +16,8 @@ type CreateSnapTransactionInput = {
   customerName?: string;
   customerEmail?: string;
   customerPhone?: string;
-  callbackUrl?: string;
+  notificationUrl?: string;
+  expiresAt?: string;
 };
 
 type MidtransTransactionStatus = {
@@ -128,6 +131,7 @@ async function requestMidtrans(
   options?: {
     method?: "GET" | "POST";
     body?: Record<string, unknown>;
+    headers?: Record<string, string | undefined>;
   },
 ) {
   const config = getMidtransConfig();
@@ -150,6 +154,7 @@ async function requestMidtrans(
       Accept: "application/json",
       Authorization: `Basic ${buildBasicAuth(config.serverKey)}`,
       "Content-Type": "application/json",
+      ...(options?.headers ?? {}),
     },
     body: options?.body ? JSON.stringify(options.body) : undefined,
     cache: "no-store",
@@ -168,12 +173,31 @@ async function requestMidtrans(
   return payload ?? {};
 }
 
-export async function createMidtransTransaction(
+function toMidtransTimestamp(value: string) {
+  const date = new Date(value);
+  const jakartaTime = new Date(date.getTime() + 7 * 60 * 60 * 1000);
+  const year = jakartaTime.getUTCFullYear();
+  const month = String(jakartaTime.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(jakartaTime.getUTCDate()).padStart(2, "0");
+  const hours = String(jakartaTime.getUTCHours()).padStart(2, "0");
+  const minutes = String(jakartaTime.getUTCMinutes()).padStart(2, "0");
+  const seconds = String(jakartaTime.getUTCSeconds()).padStart(2, "0");
+
+  return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} +0700`;
+}
+
+export async function createMidtransQrisTransaction(
   input: CreateSnapTransactionInput,
 ) {
-  const payload = await requestMidtrans("/snap/v1/transactions", {
+  const payload = await requestMidtrans("/v2/charge", {
     method: "POST",
+    headers: input.notificationUrl
+      ? {
+          "X-Override-Notification": input.notificationUrl,
+        }
+      : undefined,
     body: {
+      payment_type: "qris",
       transaction_details: {
         order_id: input.orderId,
         gross_amount: Math.max(1, Math.round(input.amount)),
@@ -182,21 +206,37 @@ export async function createMidtransTransaction(
         {
           id: input.serviceId,
           name: `${input.serviceName} ${input.country}`.slice(0, 50),
-          price: Math.max(1, Math.round(input.amount)),
+          price: Math.max(1, Math.round(input.subtotalAmount)),
           quantity: 1,
           category: "OTP Service",
         },
+        ...(input.feeAmount > 0
+          ? [
+              {
+                id: "midtrans-fee",
+                name: "Biaya Transaksi",
+                price: Math.round(input.feeAmount),
+                quantity: 1,
+                category: "Service Fee",
+              },
+            ]
+          : []),
       ],
       customer_details: {
         first_name: input.customerName || "OTP Customer",
         email: input.customerEmail || undefined,
         phone: input.customerPhone || undefined,
       },
-      callbacks: input.callbackUrl
+      custom_expiry: input.expiresAt
         ? {
-            finish: input.callbackUrl,
-            pending: input.callbackUrl,
-            error: input.callbackUrl,
+            order_time: toMidtransTimestamp(new Date().toISOString()),
+            expiry_duration: Math.max(
+              1,
+              Math.round(
+                (new Date(input.expiresAt).getTime() - Date.now()) / 60000,
+              ),
+            ),
+            unit: "minute",
           }
         : undefined,
       custom_field1: input.serviceId,
@@ -205,14 +245,27 @@ export async function createMidtransTransaction(
     },
   });
 
+  const actions = Array.isArray(payload.actions)
+    ? (payload.actions as Array<Record<string, unknown>>)
+    : [];
+  const qrAction = actions.find(
+    (action) =>
+      typeof action.name === "string" &&
+      action.name.toLowerCase() === "generate-qr-code",
+  );
+
   return {
-    token:
-      typeof payload.token === "string" && payload.token
-        ? payload.token
+    transactionId:
+      typeof payload.transaction_id === "string" && payload.transaction_id
+        ? payload.transaction_id
         : undefined,
-    redirectUrl:
-      typeof payload.redirect_url === "string" && payload.redirect_url
-        ? payload.redirect_url
+    qrCodeUrl:
+      qrAction && typeof qrAction.url === "string" && qrAction.url
+        ? qrAction.url
+        : undefined,
+    qrString:
+      typeof payload.qr_string === "string" && payload.qr_string
+        ? payload.qr_string
         : undefined,
   };
 }

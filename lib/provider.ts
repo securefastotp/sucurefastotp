@@ -158,7 +158,7 @@ function getProviderConfig() {
     marsCode: process.env.UPSTREAM_SERVER_MARS_CODE ?? "api2",
     countryScanIds:
       process.env.UPSTREAM_COUNTRY_SCAN_IDS ??
-      "1,2,4,5,6,7,8,9,10,11,12,13,14,15,16,21,25,31,32,34,35,36,37,39,40",
+      "1,3,4,5,6,7,8,9,10,11,13,14,15,16,18,21,25,31,32,34,35,36,37,39,40,61",
     countryCacheTtlMs: Number(process.env.UPSTREAM_COUNTRY_CACHE_TTL_MS ?? 1800000),
   } as const;
 }
@@ -196,7 +196,7 @@ function resolveUpstreamServer(serverId?: string) {
 }
 
 function getServerName(serverId?: string) {
-  return resolveServerId(serverId) === "mars" ? "Saturn" : "Mars";
+  return resolveServerId(serverId) === "mars" ? "Blueverifiy" : "Skyword";
 }
 
 function resolveCountryId(countryId?: number | string) {
@@ -223,7 +223,7 @@ const countryHintMap: Record<
     flagEmoji?: string;
   }
 > = {
-  1: { name: "Ukraine", code: "UA" },
+  1: { name: "Afghanistan", code: "AF" },
   2: { name: "Kazakhstan", code: "KZ" },
   3: { name: "China", code: "CN" },
   4: { name: "Philippines", code: "PH" },

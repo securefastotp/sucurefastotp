@@ -39,13 +39,16 @@ UPSTREAM_ORDER_STATUS_PATH=/order/{id}/status
 UPSTREAM_CANCEL_PATH=/order/{id}/cancel
 UPSTREAM_ORDER_METHOD=POST
 UPSTREAM_CANCEL_METHOD=POST
-UPSTREAM_MARKUP_PERCENT=100
+UPSTREAM_MARKUP_PERCENT=0
 UPSTREAM_MIN_MARGIN=0
 UPSTREAM_CURRENCY=IDR
 UPSTREAM_TIMEOUT_MS=15000
 
 MIDTRANS_ENVIRONMENT=sandbox
 MIDTRANS_SERVER_KEY=isi_server_key_midtrans
+MIDTRANS_QRIS_FEE_PERCENT=0.7
+MIDTRANS_QRIS_FEE_FLAT=0
+MIDTRANS_QRIS_EXPIRY_MINUTES=15
 ```
 
 ## Deploy ke GitHub + Vercel
@@ -54,14 +57,14 @@ MIDTRANS_SERVER_KEY=isi_server_key_midtrans
 2. Upload seluruh isi folder ini ke repository tersebut.
 3. Import repository ke Vercel.
 4. Tambahkan semua environment variables di dashboard Vercel, termasuk Midtrans.
-5. Deploy, lalu tes `/api/health`, `/api/payments`, dan halaman `/console`.
+5. Deploy, lalu tes `/api/health`, `/api/payments`, `/api/transactions`, dan halaman `/console`.
 
 ## Catatan Produksi
 
 - Jika format API provider berbeda, cukup ubah env path atau sesuaikan normalizer di `lib/provider.ts`.
 - Saat `UPSTREAM_PROVIDER_MODE=mock`, aplikasi memakai data demo dan order in-memory.
-- Flow Midtrans di template ini memakai Snap + in-memory payment store. Untuk production serius, simpan payment session dan aktivasi order ke database.
+- Flow Midtrans di template ini sekarang memakai QRIS Core API + in-memory payment store. Untuk production serius, simpan payment session dan aktivasi order ke database.
 - Untuk production volume tinggi, simpan context order ke database atau Redis agar status order tetap stabil antar serverless instance.
 - Dari pengujian live 12 April 2026, KirimKode API menerima auth via header `x-api-key`, memakai `GET /balance`, `GET /orders`, `POST /order`, `GET /order/{id}/status`, dan `POST /order/{id}/cancel`.
 - Mode live sekarang hanya memakai katalog real dari endpoint `GET /services` KirimKode. Jika upstream kosong atau error, website akan menampilkan status asli upstream tanpa katalog buatan.
-- Harga jual sekarang dikunci ke markup 100% dari harga upstream.
+- Harga jual sekarang mengikuti harga asli upstream tanpa markup tambahan.

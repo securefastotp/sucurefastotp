@@ -94,6 +94,7 @@ export type PaymentStatus =
 export type PaymentRecord = {
   id: string;
   gateway: "midtrans";
+  paymentMethod: "qris";
   serviceId: string;
   serviceCode: string;
   serverId: string;
@@ -101,14 +102,18 @@ export type PaymentRecord = {
   service: string;
   country: string;
   countryId: number;
+  subtotalAmount: number;
+  feeAmount: number;
   amount: number;
   currency: string;
   status: PaymentStatus;
   customerName?: string;
   customerEmail?: string;
   customerPhone?: string;
-  snapToken?: string;
-  redirectUrl?: string;
+  qrCodeUrl?: string;
+  qrString?: string;
+  expiresAt?: string;
+  transactionId?: string;
   midtransOrderId: string;
   statusMessage?: string;
   paidAt?: string;
