@@ -7,6 +7,7 @@ import {
   createUser,
   deleteExpiredSessions,
   deleteSessionRecord,
+  ensureAdminRoleForUser,
   getSessionRecord,
   getUserByEmail,
   getViewerById,
@@ -209,6 +210,7 @@ export async function loginAccount(input: {
     throw new Error("Email atau password tidak cocok.");
   }
 
+  await ensureAdminRoleForUser(user.user_id, user.email).catch(() => false);
   const viewer = await getViewerById(user.user_id);
 
   if (!viewer) {

@@ -490,6 +490,47 @@ export async function resetFailedLoginAttempts(userId: string) {
   return true;
 }
 
+export async function ensureAdminRoleForUser(userId: string, email: string) {
+  const sql = getSql();
+
+  if (!sql) {
+    return false;
+  }
+
+  await ensureAccountTables();
+
+  const normalizedEmail = normalizeEmail(email);
+  const configuredAdminEmail = getConfiguredAdminEmail();
+
+  if (configuredAdminEmail && configuredAdminEmail === normalizedEmail) {
+    await sql`
+      UPDATE app_users
+      SET role = 'admin', updated_at = NOW()
+      WHERE user_id = ${userId}
+    `;
+
+    return true;
+  }
+
+  const rows = (await sql`
+    SELECT COUNT(*)::int AS total
+    FROM app_users
+    WHERE role = 'admin'
+  `) as Array<{ total: number }>;
+
+  if ((rows[0]?.total ?? 0) === 0) {
+    await sql`
+      UPDATE app_users
+      SET role = 'admin', updated_at = NOW()
+      WHERE user_id = ${userId}
+    `;
+
+    return true;
+  }
+
+  return false;
+}
+
 export async function updateUserAccount(
   userId: string,
   input: {
