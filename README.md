@@ -5,7 +5,7 @@ Website supplier OTP siap deploy ke GitHub + Vercel.
 Project ini dibuat sebagai template untuk model bisnis seperti `kirimkode.com`, tetapi diposisikan sebagai website supplier/reseller Anda sendiri. Aplikasi sudah berisi:
 
 - landing page brandable
-- halaman `/console` untuk cari service, order nomor, cek OTP, dan cancel
+- halaman `/console` untuk login member, deposit saldo, beli nomor OTP, dan lihat riwayat transaksi
 - route internal `/api/catalog`, `/api/balance`, `/api/history`, `/api/orders`, `/api/orders/:id`, `/api/payments`, `/api/payments/:id`, `/api/health`
 - adapter upstream berbasis `API key`
 - flow pembayaran Midtrans sebelum aktivasi order OTP
@@ -27,6 +27,7 @@ NEXT_PUBLIC_SITE_NAME=Rahmat OTP
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
 NEXT_PUBLIC_MIDTRANS_CLIENT_KEY=isi_client_key_midtrans
 PAYMENT_SESSION_SECRET=isi_secret_session_stabil
+AUTH_SESSION_SECRET=opsional_secret_login_khusus
 # POSTGRES_URL akan otomatis tersedia saat Neon Postgres terhubung di Vercel
 
 UPSTREAM_PROVIDER_MODE=rest
@@ -65,8 +66,9 @@ MIDTRANS_QRIS_EXPIRY_MINUTES=15
 
 - Jika format API provider berbeda, cukup ubah env path atau sesuaikan normalizer di `lib/provider.ts`.
 - Saat `UPSTREAM_PROVIDER_MODE=mock`, aplikasi memakai data demo dan order in-memory.
-- Flow Midtrans sekarang memakai QRIS Core API + signed recovery token, jadi status payment dan order tidak langsung hilang saat serverless Vercel berpindah instance.
+- Flow Midtrans sekarang dipakai untuk deposit saldo user, bukan hanya checkout per order.
 - Saat Neon Postgres terhubung di Vercel, transaksi payment disimpan di tabel `otp_transactions` dan order/OTP disimpan di tabel `otp_orders`.
+- Data akun member, session login, wallet, deposit, dan riwayat order member sekarang juga tersimpan di Neon Postgres.
 - Riwayat transaksi sekarang bisa mengambil snapshot payment dan status OTP terbaru dari database, bukan hanya memory browser.
 - Dari pengujian live 12 April 2026, KirimKode API menerima auth via header `x-api-key`, memakai `GET /balance`, `GET /orders`, `POST /order`, `GET /order/{id}/status`, dan `POST /order/{id}/cancel`.
 - Mode live sekarang hanya memakai katalog real dari endpoint `GET /services` KirimKode. Jika upstream kosong atau error, website akan menampilkan status asli upstream tanpa katalog buatan.

@@ -20,6 +20,7 @@ function fromBase64Url(value: string) {
 
 function getSessionTokenSecret() {
   const configuredSecret =
+    process.env.AUTH_SESSION_SECRET?.trim() ||
     process.env.PAYMENT_SESSION_SECRET?.trim() ||
     process.env.MIDTRANS_SERVER_KEY?.trim() ||
     process.env.UPSTREAM_API_KEY?.trim() ||

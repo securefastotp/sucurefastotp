@@ -57,6 +57,7 @@ export type Order = {
   expiresAt: string;
   providerRef?: string;
   contextToken?: string;
+  updatedAt?: string;
 };
 
 export type RuntimeStatus = {
@@ -71,6 +72,72 @@ export type RuntimeStatus = {
   midtransClientKeyAvailable: boolean;
   paymentDatabaseConfigured: boolean;
   orderDatabaseConfigured: boolean;
+};
+
+export type AuthViewer = {
+  id: string;
+  name: string;
+  email: string;
+  createdAt: string;
+  walletBalance: number;
+};
+
+export type WalletLedgerKind =
+  | "deposit_credit"
+  | "order_debit"
+  | "order_refund"
+  | "manual_credit"
+  | "manual_debit";
+
+export type WalletLedgerEntry = {
+  id: string;
+  userId: string;
+  kind: WalletLedgerKind;
+  amount: number;
+  balanceAfter: number;
+  description: string;
+  referenceId?: string;
+  createdAt: string;
+};
+
+export type DepositStatus =
+  | "pending"
+  | "paid"
+  | "failed"
+  | "expired"
+  | "cancelled";
+
+export type DepositRecord = {
+  id: string;
+  userId: string;
+  amount: number;
+  feeAmount: number;
+  totalAmount: number;
+  currency: string;
+  status: DepositStatus;
+  qrCodeUrl?: string;
+  qrString?: string;
+  expiresAt?: string;
+  transactionId?: string;
+  midtransOrderId: string;
+  statusMessage?: string;
+  paidAt?: string;
+  creditedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DashboardSummary = {
+  viewer: AuthViewer;
+  metrics: {
+    totalOrders: number;
+    successfulOtps: number;
+    pendingOrders: number;
+    totalDeposits: number;
+  };
+  deposits: DepositRecord[];
+  orders: Order[];
+  ledger: WalletLedgerEntry[];
 };
 
 export type Balance = {

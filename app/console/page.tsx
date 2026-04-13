@@ -1,24 +1,36 @@
-import { CatalogConsole } from "@/components/catalog-console";
+import { MemberConsole } from "@/components/member-console";
+import { getCurrentViewer } from "@/lib/auth";
+import { getDashboardSummary } from "@/lib/member-service";
 import { getCatalog, getCountries } from "@/lib/provider";
 
 export const dynamic = "force-dynamic";
 
 export default async function ConsolePage() {
-  const initialCountries = await getCountries("bimasakti").catch(() => []);
-  const initialCountryId =
-    initialCountries.find((country) => country.id === 6)?.id ??
-    initialCountries[0]?.id ??
-    null;
-  const initialCatalog = initialCountryId
-    ? await getCatalog({
-        serverId: "bimasakti",
-        countryId: initialCountryId,
-      }).catch(() => null)
+  const initialViewer = await getCurrentViewer().catch(() => null);
+  const initialSummary = initialViewer
+    ? await getDashboardSummary(initialViewer.id).catch(() => null)
     : null;
+  const initialCountries = initialViewer
+    ? await getCountries("bimasakti").catch(() => [])
+    : [];
+  const initialCountryId = initialViewer
+    ? initialCountries.find((country) => country.id === 6)?.id ??
+      initialCountries[0]?.id ??
+      null
+    : null;
+  const initialCatalog =
+    initialViewer && initialCountryId
+      ? await getCatalog({
+          serverId: "bimasakti",
+          countryId: initialCountryId,
+        }).catch(() => null)
+      : null;
 
   return (
     <main className="min-h-[100dvh]">
-      <CatalogConsole
+      <MemberConsole
+        initialViewer={initialViewer}
+        initialSummary={initialSummary}
         initialCatalog={initialCatalog}
         initialCountries={initialCountries}
         initialCountryId={initialCountryId}
