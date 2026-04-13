@@ -118,6 +118,38 @@ function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
+function resolveOrderStatusLabel(status: Order["status"]) {
+  if (status === "pending") {
+    return "Menunggu";
+  }
+
+  if (status === "otp_received") {
+    return "Berhasil";
+  }
+
+  if (status === "cancelled") {
+    return "Dibatalkan";
+  }
+
+  return "Expired";
+}
+
+function resolveOrderStatusTone(status: Order["status"]) {
+  if (status === "pending") {
+    return "bg-amber-500/20 text-amber-100 border-amber-300/30";
+  }
+
+  if (status === "otp_received") {
+    return "bg-emerald-500/20 text-emerald-100 border-emerald-300/30";
+  }
+
+  if (status === "cancelled") {
+    return "bg-rose-500/20 text-rose-100 border-rose-300/30";
+  }
+
+  return "bg-slate-500/20 text-slate-100 border-slate-300/30";
+}
+
 function hasError(payload: unknown): payload is { error?: string } {
   return Boolean(payload && typeof payload === "object" && "error" in payload);
 }
@@ -191,6 +223,15 @@ function ClockIcon({ className }: { className?: string }) {
     <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
       <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.8" />
       <path d="M12 8v4l2.8 1.7" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function CopyIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
+      <rect x="9" y="9" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.6" />
+      <rect x="5" y="5" width="10" height="10" rx="2" stroke="currentColor" strokeWidth="1.6" />
     </svg>
   );
 }
@@ -703,6 +744,7 @@ export function MemberConsole({
   const [selectedAdminUserId, setSelectedAdminUserId] = useState("");
   const [manualAmount, setManualAmount] = useState("");
   const [manualDescription, setManualDescription] = useState("");
+  const [historyPage, setHistoryPage] = useState(1);
   const [activeDeposit, setActiveDeposit] = useState<DepositRecord | null>(
     initialSummary?.deposits.find((deposit) => deposit.status === "pending") ?? null,
   );
@@ -752,6 +794,19 @@ export function MemberConsole({
       `${service.service} ${service.serviceCode}`.toLowerCase().includes(query),
     );
   }, [catalog, deferredSearch]);
+  const historyPageSize = 10;
+  const totalHistoryPages = Math.max(
+    1,
+    Math.ceil((summary?.orders.length ?? 0) / historyPageSize),
+  );
+  const pagedOrders = useMemo(() => {
+    if (!summary?.orders.length) {
+      return [];
+    }
+
+    const start = (historyPage - 1) * historyPageSize;
+    return summary.orders.slice(start, start + historyPageSize);
+  }, [historyPage, historyPageSize, summary?.orders]);
   const selectedAdminUser = useMemo(
     () =>
       adminUsers.find((item) => item.id === selectedAdminUserId) ??
@@ -782,6 +837,10 @@ export function MemberConsole({
     setSettingsName(viewer.name);
     setSettingsEmail(viewer.email);
   }, [viewer]);
+
+  useEffect(() => {
+    setHistoryPage(1);
+  }, [summary?.orders.length]);
 
   async function refreshSummary() {
     if (!viewer) {
@@ -1164,6 +1223,21 @@ export function MemberConsole({
       setToast({
         type: "error",
         message,
+      });
+    }
+  }
+
+  async function handleCopy(value: string, label: string) {
+    try {
+      await navigator.clipboard.writeText(value);
+      setToast({
+        type: "success",
+        message: `${label} berhasil disalin.`,
+      });
+    } catch {
+      setToast({
+        type: "error",
+        message: "Gagal menyalin ke clipboard.",
       });
     }
   }
@@ -1995,45 +2069,89 @@ export function MemberConsole({
                 icon={<CartIcon className="h-4.5 w-4.5" />}
                 title="Riwayat Order OTP"
               />
-              <div className="mt-4 space-y-2">
-                {summary.orders.map((order) => (
-                  <div
-                    key={order.id}
-                    className="rounded-[18px] border border-white/8 bg-white/4 px-4 py-3"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-[13px] font-medium text-white">
-                          {order.service}
-                        </p>
-                        <p className="mt-1 text-[11px] text-sky-100/56">
+              <div className="mt-4 overflow-hidden rounded-[18px] border border-white/10">
+                <div className="grid grid-cols-[1.6fr_1fr_0.9fr] gap-2 border-b border-white/10 bg-white/4 px-4 py-2 text-[11px] uppercase tracking-[0.14em] text-sky-100/60">
+                  <span>Nomor</span>
+                  <span>OTP</span>
+                  <span>Status</span>
+                </div>
+                <div className="divide-y divide-white/8">
+                  {pagedOrders.map((order) => (
+                    <div
+                      key={order.id}
+                      className="grid grid-cols-[1.6fr_1fr_0.9fr] items-center gap-2 px-4 py-3 text-[12px] text-sky-100/80"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-white">
                           {order.phoneNumber}
-                        </p>
-                        <p className="mt-1 text-[11px] text-sky-100/56">
-                          {formatDateTime(order.createdAt)}
-                        </p>
+                        </span>
+                        <button
+                          className="rounded-full border border-white/10 bg-white/5 p-1 text-sky-100/70"
+                          onClick={() => void handleCopy(order.phoneNumber, "Nomor")}
+                          type="button"
+                        >
+                          <CopyIcon className="h-3.5 w-3.5" />
+                        </button>
                       </div>
-                      <div className="text-right">
-                        <p className="text-[13px] font-semibold text-cyan-100">
-                          {formatCurrency(order.price, order.currency)}
-                        </p>
-                        <p className="mt-1 text-[11px] capitalize text-sky-100/56">
-                          {order.status}
-                        </p>
+                      <div className="flex items-center gap-2 text-emerald-100">
+                        <span className="font-semibold">
+                          {order.otpCode ?? "-"}
+                        </span>
                         {order.otpCode ? (
-                          <p className="mt-1 text-[12px] font-semibold text-emerald-100">
-                            OTP {order.otpCode}
-                          </p>
+                          <button
+                            className="rounded-full border border-white/10 bg-white/5 p-1 text-sky-100/70"
+                            onClick={() => void handleCopy(order.otpCode ?? "", "OTP")}
+                            type="button"
+                          >
+                            <CopyIcon className="h-3.5 w-3.5" />
+                          </button>
                         ) : null}
                       </div>
+                      <div>
+                        <span
+                          className={cn(
+                            "inline-flex rounded-full border px-3 py-1 text-[11px] font-semibold",
+                            resolveOrderStatusTone(order.status),
+                          )}
+                        >
+                          {resolveOrderStatusLabel(order.status)}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                ))}
-                {!summary.orders.length ? (
-                  <div className="rounded-[18px] border border-white/8 bg-white/4 px-4 py-6 text-center text-[12px] text-sky-100/56">
-                    Belum ada riwayat order OTP.
-                  </div>
-                ) : null}
+                  ))}
+                  {!pagedOrders.length ? (
+                    <div className="px-4 py-6 text-center text-[12px] text-sky-100/56">
+                      Belum ada riwayat order OTP.
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+              <div className="mt-4 flex items-center justify-between text-[12px] text-sky-100/70">
+                <span>
+                  Halaman {historyPage} dari {totalHistoryPages}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-sky-100/70 disabled:opacity-40"
+                    disabled={historyPage === 1}
+                    onClick={() => setHistoryPage((current) => Math.max(1, current - 1))}
+                    type="button"
+                  >
+                    Sebelumnya
+                  </button>
+                  <button
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] text-sky-100/70 disabled:opacity-40"
+                    disabled={historyPage === totalHistoryPages}
+                    onClick={() =>
+                      setHistoryPage((current) =>
+                        Math.min(totalHistoryPages, current + 1),
+                      )
+                    }
+                    type="button"
+                  >
+                    Selanjutnya
+                  </button>
+                </div>
               </div>
             </div>
           </div>
