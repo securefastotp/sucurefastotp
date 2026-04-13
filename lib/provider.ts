@@ -819,15 +819,25 @@ function normalizeHistory(payload: unknown): OrderHistoryResponse {
         pickString(record, ["status"], "pending"),
         Boolean(otpCode),
       );
-      const timestamp = extractTimestamp(payload, new Date().toISOString());
+      const timestamp = pickString(
+        record,
+        ["created_at", "createdAt", "updated_at", "updatedAt"],
+        extractTimestamp(payload, new Date().toISOString()),
+      );
+      const countryLabel = pickString(record, ["country"], "") || defaultCountry.name;
+      const countryMeta = /^\d+$/.test(countryLabel)
+        ? getCountryMeta(Number(countryLabel))
+        : null;
+      const serverId = resolveServerId(pickString(record, ["server"], ""));
 
       return {
         id: orderId || pickString(record, ["id"], ""),
         serviceId: serviceCode,
         serviceCode,
         service: formatServiceName(serviceCode),
-        country: defaultCountry.name,
-        countryId: defaultCountry.id,
+        serverId,
+        country: countryMeta?.name ?? countryLabel,
+        countryId: countryMeta?.id ?? defaultCountry.id,
         phoneNumber: pickString(record, ["number", "phoneNumber"], "-"),
         price: pickNumber(record, ["price"], 0),
         currency: getPricingConfig().currency,
@@ -860,6 +870,61 @@ function normalizeHistory(payload: unknown): OrderHistoryResponse {
     total: pickNumber(pagination, ["total"], orders.length),
     orders,
   };
+}
+
+async function resolveProviderRefFromHistory(context: OrderContext) {
+  try {
+    const history = await getHistory();
+    const currentCreatedAt = new Date(context.createdAt).getTime();
+    const directMatch = history.orders.find(
+      (order) =>
+        order.id === context.localOrderId ||
+        order.providerRef === context.localOrderId,
+    );
+    const fallbackMatch = history.orders.find((order) => {
+      const samePhone = order.phoneNumber === context.phoneNumber;
+      const sameService =
+        order.serviceCode.toLowerCase() === context.serviceCode.toLowerCase();
+      const sameServer =
+        resolveServerId(order.serverId) === resolveServerId(context.serverId);
+      const createdAt = new Date(order.createdAt).getTime();
+      const closeInTime =
+        Number.isFinite(currentCreatedAt) &&
+        Number.isFinite(createdAt) &&
+        Math.abs(createdAt - currentCreatedAt) <= 30 * 60 * 1000;
+
+      return samePhone && sameService && sameServer && closeInTime;
+    });
+    const matchedOrder = directMatch ?? fallbackMatch;
+
+    if (!matchedOrder) {
+      return null;
+    }
+
+    const providerRef =
+      matchedOrder.providerRef ??
+      (matchedOrder.id !== context.localOrderId ? matchedOrder.id : undefined);
+
+    if (!providerRef) {
+      return null;
+    }
+
+    return {
+      ...context,
+      upstreamOrderId: providerRef,
+      providerRef,
+      phoneNumber:
+        context.phoneNumber && context.phoneNumber !== "-"
+          ? context.phoneNumber
+          : matchedOrder.phoneNumber,
+      otpCode: context.otpCode ?? matchedOrder.otpCode,
+      status:
+        context.status === "pending" ? matchedOrder.status : context.status,
+    } satisfies OrderContext;
+  } catch (error) {
+    console.error("Gagal mencari providerRef dari history upstream:", error);
+    return null;
+  }
 }
 
 function toOrderContext(order: Order): OrderContext {
@@ -1182,9 +1247,15 @@ export async function getOrder(orderId: string, contextToken?: string | null) {
     );
   }
 
+  const hydratedFallback =
+    !resolvedFallback.providerRef || resolvedFallback.providerRef === resolvedFallback.localOrderId
+      ? await resolveProviderRefFromHistory(resolvedFallback)
+      : null;
+  const effectiveFallback = hydratedFallback ?? resolvedFallback;
+
   const orderRequestCandidates = [
-    resolvedFallback.upstreamOrderId,
-    resolvedFallback.localOrderId,
+    effectiveFallback.upstreamOrderId,
+    effectiveFallback.localOrderId,
     orderId,
   ].filter((candidate, index, values) => Boolean(candidate) && values.indexOf(candidate) === index);
   let lastError: unknown = null;
@@ -1209,7 +1280,7 @@ export async function getOrder(orderId: string, contextToken?: string | null) {
     throw (lastError instanceof Error ? lastError : new Error("Gagal membaca status order."));
   }
 
-  const order = normalizeStatusOrder(payload, resolvedFallback);
+  const order = normalizeStatusOrder(payload, effectiveFallback);
 
   return await persistOrder(order);
 }
@@ -1261,9 +1332,15 @@ export async function cancelOrder(orderId: string, contextToken?: string | null)
     return null;
   }
 
+  const hydratedFallback =
+    !fallback.providerRef || fallback.providerRef === fallback.localOrderId
+      ? await resolveProviderRefFromHistory(fallback)
+      : null;
+  const effectiveFallback = hydratedFallback ?? fallback;
+
   const cancelRequestCandidates = [
-    fallback.upstreamOrderId,
-    fallback.localOrderId,
+    effectiveFallback.upstreamOrderId,
+    effectiveFallback.localOrderId,
     orderId,
   ].filter((candidate, index, values) => Boolean(candidate) && values.indexOf(candidate) === index);
   let cancelSucceeded = false;
@@ -1292,21 +1369,21 @@ export async function cancelOrder(orderId: string, contextToken?: string | null)
   }
 
   const order = {
-    id: fallback.localOrderId,
-    serviceId: fallback.serviceId,
-    serviceCode: fallback.serviceCode,
-    serverId: fallback.serverId,
-    service: fallback.service,
-    country: fallback.country,
-    countryId: fallback.countryId,
-    phoneNumber: fallback.phoneNumber,
-    price: fallback.price,
-    currency: fallback.currency,
+    id: effectiveFallback.localOrderId,
+    serviceId: effectiveFallback.serviceId,
+    serviceCode: effectiveFallback.serviceCode,
+    serverId: effectiveFallback.serverId,
+    service: effectiveFallback.service,
+    country: effectiveFallback.country,
+    countryId: effectiveFallback.countryId,
+    phoneNumber: effectiveFallback.phoneNumber,
+    price: effectiveFallback.price,
+    currency: effectiveFallback.currency,
     status: "cancelled" as const,
-    otpCode: fallback.otpCode,
-    createdAt: fallback.createdAt,
-    expiresAt: fallback.expiresAt,
-    providerRef: fallback.providerRef,
+    otpCode: effectiveFallback.otpCode,
+    createdAt: effectiveFallback.createdAt,
+    expiresAt: effectiveFallback.expiresAt,
+    providerRef: effectiveFallback.providerRef,
   } satisfies Order;
 
   return await persistOrder(order);
