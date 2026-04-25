@@ -26,6 +26,10 @@ import {
   normalizeMidtransPaymentStatus,
   verifyMidtransSignature,
 } from "@/lib/midtrans";
+import {
+  isOperatorAllowedForCountry,
+  normalizeOperatorForCountry,
+} from "@/lib/operators";
 import { hashPasswordForStorage } from "@/lib/auth";
 import { cancelOrder, createOrder, getBalance, getCatalog, getOrder } from "@/lib/provider";
 import { siteConfig } from "@/lib/site-config";
@@ -345,6 +349,12 @@ export async function purchaseOtpWithWallet(input: PurchaseOrderInput) {
     throw new Error("Stok layanan habis. Silakan pilih layanan lain.");
   }
 
+  if (!isOperatorAllowedForCountry(service.countryId, input.operator)) {
+    throw new Error("Operator Indonesia hanya bisa dipakai untuk region Indonesia.");
+  }
+
+  const operator = normalizeOperatorForCountry(service.countryId, input.operator);
+
   const purchaseReferenceId = createId("ordpay");
 
   await createWalletEntry({
@@ -370,7 +380,7 @@ export async function purchaseOtpWithWallet(input: PurchaseOrderInput) {
       service: service.service,
       country: service.country,
       countryId: service.countryId,
-      operator: input.operator ?? "any",
+      operator,
       price: service.price,
       currency: service.currency,
     });

@@ -14,6 +14,11 @@ import {
   formatDateTime,
   formatElapsedTimer,
 } from "@/lib/format";
+import {
+  DEFAULT_OPERATOR,
+  getOperatorOptionsForCountry,
+  normalizeOperatorForCountry,
+} from "@/lib/operators";
 import type {
   AdminUserSummary,
   AuthViewer,
@@ -84,16 +89,6 @@ const serverOptions = [
     name: "Blueverifiy",
     description: "Server cadangan, lebih stabil",
   },
-];
-
-const operatorOptions = [
-  { id: "any", label: "Random" },
-  { id: "telkomsel", label: "Telkomsel" },
-  { id: "indosat", label: "Indosat" },
-  { id: "xl", label: "XL" },
-  { id: "axis", label: "Axis" },
-  { id: "tri", label: "Tri" },
-  { id: "smartfren", label: "Smartfren" },
 ];
 
 const SUPPORT_LINKS = [
@@ -962,7 +957,7 @@ export function MemberConsole({
   const [selectedServiceId, setSelectedServiceId] = useState(
     initialCatalog?.services[0]?.id ?? "",
   );
-  const [selectedOperator, setSelectedOperator] = useState("any");
+  const [selectedOperator, setSelectedOperator] = useState(DEFAULT_OPERATOR);
   const [serviceSearch, setServiceSearch] = useState("");
   const [activeTab, setActiveTab] = useState<
     "dashboard" | "deposit" | "buy" | "history" | "settings" | "admin"
@@ -1055,6 +1050,10 @@ export function MemberConsole({
     () => catalog?.services.find((service) => service.id === selectedServiceId) ?? null,
     [catalog, selectedServiceId],
   );
+  const availableOperatorOptions = useMemo(
+    () => getOperatorOptionsForCountry(selectedCountryId),
+    [selectedCountryId],
+  );
   const isSelectedOutOfStock = Boolean(
     selectedService && Number.isFinite(selectedService.stock) && selectedService.stock <= 0,
   );
@@ -1070,6 +1069,16 @@ export function MemberConsole({
       `${service.service} ${service.serviceCode}`.toLowerCase().includes(query),
     );
   }, [catalog, deferredSearch]);
+  useEffect(() => {
+    const normalizedOperator = normalizeOperatorForCountry(
+      selectedCountryId ?? 0,
+      selectedOperator,
+    );
+
+    if (normalizedOperator !== selectedOperator) {
+      setSelectedOperator(normalizedOperator);
+    }
+  }, [selectedCountryId, selectedOperator]);
   const historyPageSize = 10;
   const totalHistoryPages = Math.max(
     1,
@@ -1671,7 +1680,7 @@ export function MemberConsole({
       setCountries([]);
       setSelectedCountryId(null);
       setSelectedServiceId("");
-      setSelectedOperator("any");
+      setSelectedOperator(DEFAULT_OPERATOR);
       setActiveDeposit(null);
       setActiveOrder(null);
       setAdminUsers([]);
@@ -1761,7 +1770,7 @@ export function MemberConsole({
         serviceCode: selectedService.serviceCode,
         serverId: selectedServer,
         countryId: selectedCountryId,
-        operator: selectedOperator,
+        operator: normalizeOperatorForCountry(selectedCountryId, selectedOperator),
       });
       setActiveOrder(order);
       await refreshSummary();
@@ -2452,19 +2461,21 @@ export function MemberConsole({
             </div>
           </div>
 
-          {isMenuOpen ? (
-          <div className="fixed inset-0 z-50">
+        </div>
+
+        {isMenuOpen ? (
+          <div className="fixed inset-0 z-[80]">
             <button
               aria-label="Tutup menu"
-              className="absolute inset-0 bg-black/45"
+              className="absolute inset-0 bg-[#020617]/72"
               onClick={() => setIsMenuOpen(false)}
               type="button"
             />
             <aside
-              className="absolute left-0 top-0 h-full w-[80vw] max-w-[304px] border-r border-slate-600/35 bg-[#101b2d] px-4 py-4 shadow-[24px_0_80px_-36px_rgba(0,0,0,0.9)]"
+              className="absolute left-0 top-0 h-full w-[82vw] max-w-[304px] border-r border-slate-600/45 bg-[#09111f] px-4 py-4 text-slate-100 shadow-[24px_0_80px_-36px_rgba(0,0,0,0.95)]"
               id="member-side-menu"
             >
-              <div className="flex items-center gap-3 border-b border-slate-600/30 pb-4">
+              <div className="flex items-center gap-3 border-b border-slate-600/35 pb-4">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[linear-gradient(135deg,#55d9ef,#5263d6)] text-[16px] font-semibold text-white">
                   {firstName.slice(0, 1).toUpperCase()}
                 </div>
@@ -2478,7 +2489,7 @@ export function MemberConsole({
                 </div>
                 <button
                   aria-label="Tutup menu"
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-white/5 text-[15px] font-semibold text-slate-300"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-white/8 text-[15px] font-semibold text-slate-200"
                   onClick={() => setIsMenuOpen(false)}
                   type="button"
                 >
@@ -2486,42 +2497,41 @@ export function MemberConsole({
                 </button>
               </div>
               <div className="mt-4 grid gap-1.5">
-              {[
-                { id: "dashboard", label: "Dashboard", icon: <ServerIcon className="h-4 w-4" /> },
-                { id: "deposit", label: "Deposit", icon: <WalletIcon className="h-4 w-4" /> },
-                { id: "buy", label: "Beli Nomor", icon: <CartIcon className="h-4 w-4" /> },
-                { id: "history", label: "Riwayat", icon: <ClockIcon className="h-4 w-4" /> },
-                { id: "settings", label: "Pengaturan", icon: <SettingsIcon className="h-4 w-4" /> },
-                ...(canAccessAdmin
-                  ? [{ id: "admin", label: "Admin", icon: <ShieldIcon className="h-4 w-4" /> }]
-                  : []),
-              ].map((item) => (
-                <button
-                  key={item.id}
-                  className={cn(
-                    "flex h-11 items-center gap-3 rounded-[14px] px-3 text-left text-[13px] transition",
-                    activeTab === item.id
-                      ? "bg-emerald-400/13 text-emerald-100"
-                      : "text-slate-300 hover:bg-white/5",
-                  )}
-                  onClick={() => {
-                    setActiveTab(item.id as typeof activeTab);
-                    setIsMenuOpen(false);
-                  }}
-                  type="button"
-                >
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] bg-white/5 text-slate-400">
-                    {item.icon}
-                  </span>
-                  <span className="flex-1">{item.label}</span>
-                  <span className="text-[12px] text-slate-500">&gt;</span>
-                </button>
-              ))}
+                {[
+                  { id: "dashboard", label: "Dashboard", icon: <ServerIcon className="h-4 w-4" /> },
+                  { id: "deposit", label: "Deposit", icon: <WalletIcon className="h-4 w-4" /> },
+                  { id: "buy", label: "Beli Nomor", icon: <CartIcon className="h-4 w-4" /> },
+                  { id: "history", label: "Riwayat", icon: <ClockIcon className="h-4 w-4" /> },
+                  { id: "settings", label: "Pengaturan", icon: <SettingsIcon className="h-4 w-4" /> },
+                  ...(canAccessAdmin
+                    ? [{ id: "admin", label: "Admin", icon: <ShieldIcon className="h-4 w-4" /> }]
+                    : []),
+                ].map((item) => (
+                  <button
+                    key={item.id}
+                    className={cn(
+                      "flex h-11 items-center gap-3 rounded-[14px] px-3 text-left text-[13px] transition",
+                      activeTab === item.id
+                        ? "bg-emerald-400/15 text-emerald-100"
+                        : "text-slate-300 hover:bg-white/6",
+                    )}
+                    onClick={() => {
+                      setActiveTab(item.id as typeof activeTab);
+                      setIsMenuOpen(false);
+                    }}
+                    type="button"
+                  >
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] bg-white/6 text-slate-400">
+                      {item.icon}
+                    </span>
+                    <span className="flex-1">{item.label}</span>
+                    <span className="text-[12px] text-slate-500">&gt;</span>
+                  </button>
+                ))}
               </div>
             </aside>
           </div>
-          ) : null}
-        </div>
+        ) : null}
 
         {canAccessAdmin ? (
           <div className="mx-4 mt-4 rounded-[18px] border border-cyan-300/18 bg-[linear-gradient(135deg,rgba(95,216,255,0.12),rgba(56,110,255,0.14))] px-4 py-3 text-[12px] text-cyan-50">
@@ -2768,7 +2778,7 @@ export function MemberConsole({
                       setCatalog(null);
                       setSelectedCountryId(null);
                       setSelectedServiceId("");
-                      setSelectedOperator("any");
+                      setSelectedOperator(DEFAULT_OPERATOR);
                     }}
                     type="button"
                   >
@@ -2789,7 +2799,7 @@ export function MemberConsole({
                 className="mt-4 w-full rounded-[16px] border border-white/10 bg-[#07111f] px-4 py-3 text-[14px] text-white outline-none transition focus:border-sky-300/60"
                 onChange={(event) => {
                   setSelectedCountryId(Number(event.target.value));
-                  setSelectedOperator("any");
+                  setSelectedOperator(DEFAULT_OPERATOR);
                 }}
                 value={selectedCountryId ?? ""}
               >
@@ -2810,7 +2820,7 @@ export function MemberConsole({
                 title="Operator"
               />
               <div className="mt-4 grid grid-cols-2 gap-2">
-                {operatorOptions.map((operator) => (
+                {availableOperatorOptions.map((operator) => (
                   <button
                     key={operator.id}
                     className={cn(
@@ -2887,7 +2897,7 @@ export function MemberConsole({
                   <div className="flex items-center justify-between gap-3">
                     <span>Operator</span>
                     <span className="text-white">
-                      {operatorOptions.find((operator) => operator.id === selectedOperator)?.label ?? "Random"}
+                      {availableOperatorOptions.find((operator) => operator.id === selectedOperator)?.label ?? "Random"}
                     </span>
                   </div>
                   <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-2">

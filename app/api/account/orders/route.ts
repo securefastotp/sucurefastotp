@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireCurrentViewer } from "@/lib/auth";
 import { getDashboardSummary, purchaseOtpWithWallet } from "@/lib/member-service";
+import { isOperatorAllowedForCountry } from "@/lib/operators";
 
 type CreateOrderBody = {
   serviceId?: string;
@@ -39,6 +40,13 @@ export async function POST(request: Request) {
   if (!body?.serviceId || !body.serverId || !Number.isFinite(countryId)) {
     return NextResponse.json(
       { error: "serviceId, serverId, dan countryId wajib diisi." },
+      { status: 400 },
+    );
+  }
+
+  if (!isOperatorAllowedForCountry(countryId, body.operator)) {
+    return NextResponse.json(
+      { error: "Operator Indonesia hanya bisa dipakai untuk region Indonesia." },
       { status: 400 },
     );
   }

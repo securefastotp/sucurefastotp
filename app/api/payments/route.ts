@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import {
+  isOperatorAllowedForCountry,
+  normalizeOperatorForCountry,
+} from "@/lib/operators";
 import { createPaymentSession } from "@/lib/payments";
 
 type CreatePaymentBody = {
@@ -45,12 +49,19 @@ export async function POST(request: Request) {
     );
   }
 
+  if (!isOperatorAllowedForCountry(countryId, body.operator)) {
+    return NextResponse.json(
+      { error: "Operator Indonesia hanya bisa dipakai untuk region Indonesia." },
+      { status: 400 },
+    );
+  }
+
   try {
     const payment = await createPaymentSession({
       serviceId: body.serviceId,
       serviceCode: body.serviceCode,
       serverId: body.serverId,
-      operator: body.operator,
+      operator: normalizeOperatorForCountry(countryId, body.operator),
       service: body.service,
       country: body.country,
       countryId,

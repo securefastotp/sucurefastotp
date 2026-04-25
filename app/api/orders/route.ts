@@ -1,4 +1,8 @@
 import { NextResponse } from "next/server";
+import {
+  isOperatorAllowedForCountry,
+  normalizeOperatorForCountry,
+} from "@/lib/operators";
 import { createOrder } from "@/lib/provider";
 
 type CreateOrderBody = {
@@ -42,6 +46,13 @@ export async function POST(request: Request) {
     );
   }
 
+  if (!isOperatorAllowedForCountry(countryId, body.operator)) {
+    return NextResponse.json(
+      { error: "Operator Indonesia hanya bisa dipakai untuk region Indonesia." },
+      { status: 400 },
+    );
+  }
+
   try {
     const order = await createOrder({
       serviceId: body.serviceId,
@@ -50,7 +61,7 @@ export async function POST(request: Request) {
       service: body.service,
       country: body.country,
       countryId,
-      operator: body.operator,
+      operator: normalizeOperatorForCountry(countryId, body.operator),
       price: body.price,
       currency: body.currency,
     });
