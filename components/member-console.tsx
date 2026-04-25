@@ -86,6 +86,16 @@ const serverOptions = [
   },
 ];
 
+const operatorOptions = [
+  { id: "any", label: "Random" },
+  { id: "telkomsel", label: "Telkomsel" },
+  { id: "indosat", label: "Indosat" },
+  { id: "xl", label: "XL" },
+  { id: "axis", label: "Axis" },
+  { id: "tri", label: "Tri" },
+  { id: "smartfren", label: "Smartfren" },
+];
+
 const SUPPORT_LINKS = [
   {
     id: "admin",
@@ -644,6 +654,7 @@ async function requestCreateOrder(input: {
   serviceCode: string;
   serverId: ServerId;
   countryId: number;
+  operator?: string;
 }) {
   const response = await fetch("/api/account/orders", {
     method: "POST",
@@ -951,9 +962,10 @@ export function MemberConsole({
   const [selectedServiceId, setSelectedServiceId] = useState(
     initialCatalog?.services[0]?.id ?? "",
   );
+  const [selectedOperator, setSelectedOperator] = useState("any");
   const [serviceSearch, setServiceSearch] = useState("");
   const [activeTab, setActiveTab] = useState<
-    "dashboard" | "buy" | "history" | "settings" | "admin"
+    "dashboard" | "deposit" | "buy" | "history" | "settings" | "admin"
   >("dashboard");
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
@@ -1659,6 +1671,7 @@ export function MemberConsole({
       setCountries([]);
       setSelectedCountryId(null);
       setSelectedServiceId("");
+      setSelectedOperator("any");
       setActiveDeposit(null);
       setActiveOrder(null);
       setAdminUsers([]);
@@ -1748,6 +1761,7 @@ export function MemberConsole({
         serviceCode: selectedService.serviceCode,
         serverId: selectedServer,
         countryId: selectedCountryId,
+        operator: selectedOperator,
       });
       setActiveOrder(order);
       await refreshSummary();
@@ -2400,7 +2414,7 @@ export function MemberConsole({
 
             <button
               className="inline-flex h-9 shrink-0 items-center rounded-full border border-emerald-300/24 bg-emerald-400/12 px-3 text-[12px] font-semibold text-emerald-300 shadow-[0_10px_30px_-24px_rgba(16,185,129,0.9)]"
-              onClick={() => setActiveTab("dashboard")}
+              onClick={() => setActiveTab("deposit")}
               type="button"
             >
               <span className="max-w-[96px] truncate">
@@ -2438,33 +2452,23 @@ export function MemberConsole({
             </div>
           </div>
 
-          <div
-            className={cn(
-              "fixed inset-0 z-50 transition",
-              isMenuOpen ? "pointer-events-auto" : "pointer-events-none",
-            )}
-          >
+          {isMenuOpen ? (
+          <div className="fixed inset-0 z-50">
             <button
               aria-label="Tutup menu"
-              className={cn(
-                "absolute inset-0 bg-black/45 transition-opacity duration-300",
-                isMenuOpen ? "opacity-100" : "opacity-0",
-              )}
+              className="absolute inset-0 bg-black/45"
               onClick={() => setIsMenuOpen(false)}
               type="button"
             />
             <aside
-              className={cn(
-                "absolute left-0 top-0 h-full w-[80vw] max-w-[304px] border-r border-slate-600/35 bg-[#101b2d] px-4 py-4 shadow-[24px_0_80px_-36px_rgba(0,0,0,0.9)] transition-transform duration-300 ease-out",
-                isMenuOpen ? "translate-x-0" : "-translate-x-full",
-              )}
+              className="absolute left-0 top-0 h-full w-[80vw] max-w-[304px] border-r border-slate-600/35 bg-[#101b2d] px-4 py-4 shadow-[24px_0_80px_-36px_rgba(0,0,0,0.9)]"
               id="member-side-menu"
             >
               <div className="flex items-center gap-3 border-b border-slate-600/30 pb-4">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[linear-gradient(135deg,#55d9ef,#5263d6)] text-[16px] font-semibold text-white">
                   {firstName.slice(0, 1).toUpperCase()}
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <p className="truncate text-[14px] font-semibold text-slate-100">
                     {viewer.name}
                   </p>
@@ -2472,10 +2476,19 @@ export function MemberConsole({
                     {viewer.email}
                   </p>
                 </div>
+                <button
+                  aria-label="Tutup menu"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-white/5 text-[15px] font-semibold text-slate-300"
+                  onClick={() => setIsMenuOpen(false)}
+                  type="button"
+                >
+                  x
+                </button>
               </div>
               <div className="mt-4 grid gap-1.5">
               {[
                 { id: "dashboard", label: "Dashboard", icon: <ServerIcon className="h-4 w-4" /> },
+                { id: "deposit", label: "Deposit", icon: <WalletIcon className="h-4 w-4" /> },
                 { id: "buy", label: "Beli Nomor", icon: <CartIcon className="h-4 w-4" /> },
                 { id: "history", label: "Riwayat", icon: <ClockIcon className="h-4 w-4" /> },
                 { id: "settings", label: "Pengaturan", icon: <SettingsIcon className="h-4 w-4" /> },
@@ -2507,6 +2520,7 @@ export function MemberConsole({
               </div>
             </aside>
           </div>
+          ) : null}
         </div>
 
         {canAccessAdmin ? (
@@ -2640,7 +2654,11 @@ export function MemberConsole({
                 ) : null}
               </div>
             </div>
+          </div>
+        ) : null}
 
+        {activeTab === "deposit" ? (
+          <div className="space-y-4">
             <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
               <SectionTitle icon={<WalletIcon className="h-4.5 w-4.5" />} title="Deposit" />
               <form className="mt-4 space-y-3" onSubmit={handleDepositSubmit}>
@@ -2733,7 +2751,7 @@ export function MemberConsole({
         {activeTab === "buy" ? (
           <div className="space-y-4">
             <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
-              <SectionTitle icon={<ServerIcon className="h-4.5 w-4.5" />} title="Select Server" />
+              <SectionTitle icon={<ServerIcon className="h-4.5 w-4.5" />} title="Pilih Server" />
               <div className="mt-4 space-y-2.5">
                 {serverOptions.map((server) => (
                   <button
@@ -2750,6 +2768,7 @@ export function MemberConsole({
                       setCatalog(null);
                       setSelectedCountryId(null);
                       setSelectedServiceId("");
+                      setSelectedOperator("any");
                     }}
                     type="button"
                   >
@@ -2763,12 +2782,15 @@ export function MemberConsole({
             <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
               <SectionTitle
                 icon={<GlobeIcon className="h-4.5 w-4.5" />}
-                title="Select Country"
+                title="Pilih Negara"
                 action={isCountriesLoading ? <span className="text-[11px] text-sky-100/60">Loading...</span> : null}
               />
               <select
                 className="mt-4 w-full rounded-[16px] border border-white/10 bg-[#07111f] px-4 py-3 text-[14px] text-white outline-none transition focus:border-sky-300/60"
-                onChange={(event) => setSelectedCountryId(Number(event.target.value))}
+                onChange={(event) => {
+                  setSelectedCountryId(Number(event.target.value));
+                  setSelectedOperator("any");
+                }}
                 value={selectedCountryId ?? ""}
               >
                 <option value="" disabled>
@@ -2784,8 +2806,32 @@ export function MemberConsole({
 
             <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
               <SectionTitle
+                icon={<GlobeIcon className="h-4.5 w-4.5" />}
+                title="Operator"
+              />
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                {operatorOptions.map((operator) => (
+                  <button
+                    key={operator.id}
+                    className={cn(
+                      "h-10 rounded-[14px] border px-3 text-[12px] font-medium transition",
+                      selectedOperator === operator.id
+                        ? "border-emerald-300/50 bg-emerald-400/13 text-emerald-100"
+                        : "border-white/10 bg-white/4 text-sky-100/72",
+                    )}
+                    onClick={() => setSelectedOperator(operator.id)}
+                    type="button"
+                  >
+                    {operator.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
+              <SectionTitle
                 icon={<CartIcon className="h-4.5 w-4.5" />}
-                title="Select Service"
+                title="Pilih Layanan"
                 action={isCatalogLoading ? <span className="text-[11px] text-sky-100/60">Loading...</span> : null}
               />
               <input
@@ -2837,6 +2883,12 @@ export function MemberConsole({
                   <div className="flex items-center justify-between gap-3">
                     <span>Harga</span>
                     <span className="text-white">{formatCurrency(selectedService.price, selectedService.currency)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span>Operator</span>
+                    <span className="text-white">
+                      {operatorOptions.find((operator) => operator.id === selectedOperator)?.label ?? "Random"}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-2">
                     <span>Saldo Anda</span>
