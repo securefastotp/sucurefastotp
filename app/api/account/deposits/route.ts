@@ -4,6 +4,8 @@ import { createDepositSession, getDashboardSummary } from "@/lib/member-service"
 
 export const dynamic = "force-dynamic";
 
+const MIN_DEPOSIT_AMOUNT = 1000;
+
 export async function GET() {
   try {
     const viewer = await requireCurrentViewer();
@@ -37,9 +39,9 @@ export async function POST(request: Request) {
         ? Number(body.amount)
         : NaN;
 
-  if (!Number.isFinite(rawAmount) || rawAmount <= 0) {
+  if (!Number.isFinite(rawAmount) || rawAmount < MIN_DEPOSIT_AMOUNT) {
     return NextResponse.json(
-      { error: "Nominal deposit wajib diisi dan harus lebih dari 0." },
+      { error: "Minimal deposit Rp1.000." },
       { status: 400 },
     );
   }

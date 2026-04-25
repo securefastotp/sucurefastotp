@@ -64,6 +64,7 @@ type AdminPricingStatePayload = {
 };
 
 const CANCEL_COOLDOWN_SECONDS = 180;
+const MIN_DEPOSIT_AMOUNT = 1000;
 
 type ToastState =
   | {
@@ -257,12 +258,120 @@ function CartIcon({ className }: { className?: string }) {
   );
 }
 
+function MenuIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
+      <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeLinecap="round" strokeWidth="1.9" />
+    </svg>
+  );
+}
+
+function BellIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
+      <path d="M7 10a5 5 0 0 1 10 0v3.4l1.5 2.1H5.5L7 13.4V10Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.8" />
+      <path d="M10 18a2.2 2.2 0 0 0 4 0" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function SunIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="3.2" stroke="currentColor" strokeWidth="1.8" />
+      <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function CheckCircleIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.8" />
+      <path d="m8.6 12.2 2.2 2.2 4.8-5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" />
+    </svg>
+  );
+}
+
+function XCircleIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.8" />
+      <path d="m9.5 9.5 5 5M14.5 9.5l-5 5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.9" />
+    </svg>
+  );
+}
+
+function TrendIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
+      <path d="M4.5 16.5 9 12l3.2 3.2L19.5 8" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" />
+      <path d="M14.5 8h5v5" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.9" />
+    </svg>
+  );
+}
+
+function StarIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
+      <path d="m12 4.2 2.2 4.5 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5-3.6-3.5 5-.7L12 4.2Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function TelegramIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
+      <path d="M20 5 4.7 11.2c-.9.4-.9 1.6.1 1.9l3.9 1.2 1.5 4.4c.3.8 1.4.9 1.9.2l2.1-3 4 2.9c.8.6 1.9.1 2-1l1.7-11.5c.1-.9-.8-1.5-1.9-1.3Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.7" />
+      <path d="m8.8 14.3 7.6-5.2-5.8 6.8" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.7" />
+    </svg>
+  );
+}
+
 function ClockIcon({ className }: { className?: string }) {
   return (
     <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
       <circle cx="12" cy="12" r="8" stroke="currentColor" strokeWidth="1.8" />
       <path d="M12 8v4l2.8 1.7" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
     </svg>
+  );
+}
+
+function DashboardStatCard({
+  icon,
+  label,
+  value,
+  badge,
+  tone = "emerald",
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  badge: string;
+  tone?: "emerald" | "rose" | "cyan";
+}) {
+  const badgeTone =
+    tone === "rose"
+      ? "bg-rose-400/18 text-rose-100"
+      : tone === "cyan"
+        ? "bg-cyan-400/16 text-cyan-100"
+        : "bg-emerald-400/16 text-emerald-100";
+
+  return (
+    <div className="min-h-[164px] rounded-[26px] border border-slate-500/24 bg-[#132136] px-4 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex h-12 w-12 items-center justify-center rounded-[18px] bg-emerald-400/12 text-emerald-300">
+          {icon}
+        </div>
+        <span className={cn("rounded-full px-3 py-1 text-[11px] font-medium", badgeTone)}>
+          {badge}
+        </span>
+      </div>
+      <p className="mt-8 break-words text-[28px] font-semibold leading-none text-slate-100">
+        {value}
+      </p>
+      <p className="mt-3 text-[13px] leading-5 text-slate-400">{label}</p>
+    </div>
   );
 }
 
@@ -846,6 +955,7 @@ export function MemberConsole({
   const [activeTab, setActiveTab] = useState<
     "dashboard" | "buy" | "history" | "settings" | "admin"
   >("dashboard");
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [authName, setAuthName] = useState("");
   const [authEmail, setAuthEmail] = useState("");
@@ -999,6 +1109,72 @@ export function MemberConsole({
           ) ?? null
         : null,
     [adminPriceOverrides, selectedAdminPricingService],
+  );
+  const todayOrderCount = useMemo(() => {
+    const now = new Date();
+
+    return (summary?.orders ?? []).filter((order) => {
+      const createdAt = new Date(order.createdAt);
+
+      return (
+        createdAt.getFullYear() === now.getFullYear() &&
+        createdAt.getMonth() === now.getMonth() &&
+        createdAt.getDate() === now.getDate()
+      );
+    }).length;
+  }, [summary?.orders]);
+  const failedOrderCount = useMemo(
+    () =>
+      (summary?.orders ?? []).filter(
+        (order) => order.status === "cancelled" || order.status === "expired",
+      ).length,
+    [summary?.orders],
+  );
+  const monthlySpend = useMemo(() => {
+    const now = new Date();
+
+    return (summary?.orders ?? []).reduce((total, order) => {
+      const createdAt = new Date(order.createdAt);
+      const isCurrentMonth =
+        createdAt.getFullYear() === now.getFullYear() &&
+        createdAt.getMonth() === now.getMonth();
+
+      if (
+        !isCurrentMonth ||
+        order.status === "cancelled" ||
+        order.status === "expired"
+      ) {
+        return total;
+      }
+
+      return total + order.price;
+    }, 0);
+  }, [summary?.orders]);
+  const monthLabel = useMemo(
+    () =>
+      new Intl.DateTimeFormat("id-ID", {
+        month: "long",
+      }).format(new Date()),
+    [],
+  );
+  const favoriteService = useMemo(() => {
+    const counter = new Map<string, number>();
+
+    for (const order of summary?.orders ?? []) {
+      counter.set(order.service, (counter.get(order.service) ?? 0) + 1);
+    }
+
+    const [name, count] =
+      [...counter.entries()].sort((left, right) => right[1] - left[1])[0] ?? [];
+
+    return {
+      name: name ?? "-",
+      count: count ?? 0,
+    };
+  }, [summary?.orders]);
+  const firstName = useMemo(
+    () => (viewer?.name.trim().split(/\s+/)[0] || "Member"),
+    [viewer?.name],
   );
   const hasPendingOrderTimer = Boolean(
     activeOrder?.status === "pending" ||
@@ -1277,42 +1453,82 @@ export function MemberConsole({
   }, [canAccessAdmin]);
 
   useEffect(() => {
-    if (!viewer || countries.length) {
+    if (!viewer) {
       return;
     }
 
+    let ignoreResult = false;
     setIsCountriesLoading(true);
     void requestCountries(selectedServer)
       .then((result) => {
+        if (ignoreResult) {
+          return;
+        }
+
         setCountries(result);
-        setSelectedCountryId(result.find((country) => country.id === 6)?.id ?? result[0]?.id ?? null);
+        setSelectedCountryId((current) => {
+          if (current && result.some((country) => country.id === current)) {
+            return current;
+          }
+
+          return result.find((country) => country.id === 6)?.id ?? result[0]?.id ?? null;
+        });
       })
       .catch((error) => {
+        if (ignoreResult) {
+          return;
+        }
+
+        setCountries([]);
+        setSelectedCountryId(null);
         setDashboardError(error instanceof Error ? error.message : "Gagal memuat negara.");
       })
       .finally(() => {
-        setIsCountriesLoading(false);
+        if (!ignoreResult) {
+          setIsCountriesLoading(false);
+        }
       });
-  }, [viewer, countries.length, selectedServer]);
+
+    return () => {
+      ignoreResult = true;
+    };
+  }, [viewer, selectedServer]);
 
   useEffect(() => {
     if (!viewer || !selectedCountryId) {
       return;
     }
 
+    let ignoreResult = false;
     setIsCatalogLoading(true);
     void requestCatalog(selectedServer, selectedCountryId)
       .then((result) => {
+        if (ignoreResult) {
+          return;
+        }
+
         applyMemberCatalogResult(result);
       })
       .catch((error) => {
+        if (ignoreResult) {
+          return;
+        }
+
+        setCatalog(null);
+        setSelectedServiceId("");
         setOrderError(
           error instanceof Error ? error.message : "Gagal memuat katalog layanan.",
         );
       })
       .finally(() => {
-        setIsCatalogLoading(false);
+        if (!ignoreResult) {
+          setIsCatalogLoading(false);
+        }
       });
+
+    return () => {
+      ignoreResult = true;
+    };
   }, [viewer, selectedServer, selectedCountryId]);
 
   useEffect(() => {
@@ -1466,11 +1682,23 @@ export function MemberConsole({
 
   async function handleDepositSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const amount = Number(depositAmount);
+
+    if (!Number.isFinite(amount) || amount < MIN_DEPOSIT_AMOUNT) {
+      const message = "Minimal deposit Rp1.000.";
+      setDepositError(message);
+      setToast({
+        type: "error",
+        message,
+      });
+      return;
+    }
+
     setIsDepositLoading(true);
     setDepositError(null);
 
     try {
-      const deposit = await requestCreateDeposit(Number(depositAmount));
+      const deposit = await requestCreateDeposit(amount);
       setActiveDeposit(deposit);
       await refreshSummary();
       setToast({
@@ -2141,7 +2369,7 @@ export function MemberConsole({
   }
 
   return (
-    <div className="min-h-[100dvh] px-4 py-4 text-white sm:px-6">
+    <div className="min-h-[100dvh] bg-[#0a1325] text-white">
       {toast ? (
         <div
           className={cn(
@@ -2156,61 +2384,95 @@ export function MemberConsole({
           {toast.message}
         </div>
       ) : null}
-      <div className="mx-auto flex w-full max-w-[460px] flex-col gap-4 rounded-[32px] border border-white/12 bg-[#0d1a2d]/82 p-4 shadow-[0_32px_120px_-48px_rgba(3,8,20,0.92)] backdrop-blur-xl">
-        <div className="flex items-center justify-between gap-3 rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))] px-4 py-3">
-          <div className="flex items-center gap-3">
-            <BrandMark />
-            <div>
-              <p className="text-[15px] font-semibold text-white">Rahmat OTP</p>
-              <p className="text-[11px] text-sky-100/65">
-                {viewer.name}
-                {canAccessAdmin ? " - admin" : ""}
-              </p>
+      <div className="mx-auto flex min-h-[100dvh] w-full max-w-[760px] flex-col bg-[#0b1426] pb-24 shadow-[0_0_80px_rgba(0,0,0,0.28)]">
+        <div className="sticky top-0 z-30 border-b border-slate-500/20 bg-[#132136]/96 px-4 py-4 backdrop-blur-xl">
+          <div className="flex items-center justify-between gap-3">
+            <button
+              aria-label="Buka menu"
+              className="flex h-11 w-11 items-center justify-center rounded-[16px] text-slate-300 transition hover:bg-white/6"
+              onClick={() => setIsMenuOpen((current) => !current)}
+              type="button"
+            >
+              <MenuIcon className="h-6 w-6" />
+            </button>
+
+            <button
+              className="inline-flex min-h-11 items-center gap-2 rounded-full border border-emerald-300/28 bg-emerald-400/12 px-4 text-[14px] font-semibold text-emerald-300 shadow-[0_10px_36px_-24px_rgba(16,185,129,0.9)]"
+              onClick={() => setActiveTab("dashboard")}
+              type="button"
+            >
+              <WalletIcon className="h-5 w-5" />
+              {formatCurrency(summary.viewer.walletBalance, "IDR")}
+            </button>
+
+            <button
+              className="hidden min-h-11 rounded-[16px] border border-slate-500/28 bg-white/4 px-4 text-[14px] font-semibold text-slate-300 min-[360px]:inline-flex"
+              type="button"
+            >
+              <span className="text-emerald-300">ID</span>
+              <span className="mx-2 text-slate-500">/</span>
+              EN
+            </button>
+
+            <button
+              aria-label="Tema"
+              className="flex h-11 w-11 items-center justify-center rounded-[16px] text-slate-400 transition hover:bg-white/6"
+              type="button"
+            >
+              <SunIcon className="h-6 w-6" />
+            </button>
+
+            <button
+              aria-label="Notifikasi"
+              className="flex h-11 w-11 items-center justify-center rounded-[16px] text-slate-400 transition hover:bg-white/6"
+              type="button"
+            >
+              <BellIcon className="h-6 w-6" />
+            </button>
+
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[linear-gradient(135deg,#6af6ff,#4f64d8)] text-[20px] font-semibold text-white shadow-[0_16px_38px_-22px_rgba(74,124,255,0.9)]">
+              {firstName.slice(0, 1).toUpperCase()}
             </div>
           </div>
 
-          <div className="text-right">
-            <p className="text-[11px] text-sky-100/65">Saldo</p>
-            <p className="text-[14px] font-semibold text-cyan-100">
-              {formatCurrency(summary.viewer.walletBalance, "IDR")}
-            </p>
-          </div>
+          {isMenuOpen ? (
+            <div className="mt-4 grid gap-2 rounded-[22px] border border-slate-500/22 bg-[#0a1325] p-2 shadow-[0_22px_70px_-40px_rgba(0,0,0,0.85)]">
+              {[
+                { id: "dashboard", label: "Dashboard" },
+                { id: "buy", label: "Beli Nomor" },
+                { id: "history", label: "Riwayat" },
+                { id: "settings", label: "Pengaturan" },
+                ...(canAccessAdmin ? [{ id: "admin", label: "Admin" }] : []),
+              ].map((item) => (
+                <button
+                  key={item.id}
+                  className={cn(
+                    "flex min-h-11 items-center justify-between rounded-[16px] px-4 text-left text-[13px] transition",
+                    activeTab === item.id
+                      ? "bg-emerald-400/14 text-emerald-100"
+                      : "text-slate-300 hover:bg-white/5",
+                  )}
+                  onClick={() => {
+                    setActiveTab(item.id as typeof activeTab);
+                    setIsMenuOpen(false);
+                  }}
+                  type="button"
+                >
+                  {item.label}
+                  <span className="text-slate-500">&gt;</span>
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
 
         {canAccessAdmin ? (
-          <div className="rounded-[18px] border border-cyan-300/18 bg-[linear-gradient(135deg,rgba(95,216,255,0.12),rgba(56,110,255,0.14))] px-4 py-3 text-[12px] text-cyan-50">
+          <div className="mx-4 mt-4 rounded-[18px] border border-cyan-300/18 bg-[linear-gradient(135deg,rgba(95,216,255,0.12),rgba(56,110,255,0.14))] px-4 py-3 text-[12px] text-cyan-50">
             Menu admin aktif untuk akun <span className="font-semibold text-white">{viewer.email}</span>
           </div>
         ) : null}
 
-        <div
-          className={cn(
-            "grid gap-2 rounded-[20px] border border-white/10 bg-white/5 p-1",
-            canAccessAdmin ? "grid-cols-5" : "grid-cols-4",
-          )}
-        >
-          {[
-            { id: "dashboard", label: "Dashboard" },
-            ...(canAccessAdmin ? [{ id: "admin", label: "Admin" }] : []),
-            { id: "buy", label: "Buy Number" },
-            { id: "history", label: "Riwayat" },
-            { id: "settings", label: "Pengaturan" },
-          ].map((item) => (
-            <button
-              key={item.id}
-              className={cn(
-                "rounded-[14px] px-2 py-2 text-[11px] transition",
-                activeTab === item.id
-                  ? "bg-[linear-gradient(135deg,#74ecff,#378cff)] font-semibold text-[#08111f]"
-                  : "text-sky-100/72",
-              )}
-              onClick={() => setActiveTab(item.id as typeof activeTab)}
-              type="button"
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
+        <div className="flex-1 px-4 py-5 sm:px-6">
 
         {dashboardError ? (
           <div className="rounded-[16px] border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-[12px] text-rose-100">
@@ -2219,31 +2481,121 @@ export function MemberConsole({
         ) : null}
 
         {activeTab === "dashboard" ? (
-          <div className="space-y-4">
-            <div className="rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(67,147,255,0.16),rgba(10,20,38,0.36))] p-4">
-              <p className="text-[12px] text-sky-100/70">Sistem order panel</p>
-              <h1 className="mt-1 text-[22px] font-semibold text-white">
-                Harap lakukan deposit terlebih dahulu untuk memulai transaksi.
+          <div className="space-y-5 pt-3">
+            <div className="px-1">
+              <h1 className="text-[34px] font-semibold leading-tight tracking-tight text-slate-100">
+                Dashboard
               </h1>
-              <p className="mt-2 text-[12px] text-sky-100/65">
-                Pastikan saldo anda cukup. Untuk mulai melakukan pembelian nomor saldo
-                anda harus cukup. Jika anda kurang paham menggunakan panel ini silahkan
-                hubungi admin di menu pengaturan.
+              <p className="mt-2 text-[18px] leading-7 text-slate-400">
+                Selamat datang kembali, {firstName}!
               </p>
+              <button
+                className="mt-6 inline-flex min-h-14 items-center gap-3 rounded-full bg-emerald-400 px-8 text-[18px] font-semibold text-[#071321] shadow-[0_18px_48px_-22px_rgba(52,211,153,0.9)] transition active:scale-[0.98]"
+                onClick={() => setActiveTab("buy")}
+                type="button"
+              >
+                <CartIcon className="h-6 w-6" />
+                Beli Nomor
+              </button>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              {[
-                ["Saldo", formatCurrency(summary.viewer.walletBalance, "IDR")],
-                ["Total Order", String(summary.metrics.totalOrders)],
-                ["OTP Sukses", String(summary.metrics.successfulOtps)],
-                ["Total Deposit", formatCurrency(summary.metrics.totalDeposits, "IDR")],
-              ].map(([label, value]) => (
-                <div key={label} className="rounded-[22px] border border-white/10 bg-white/5 p-4">
-                  <p className="text-[11px] uppercase tracking-[0.18em] text-sky-100/55">{label}</p>
-                  <p className="mt-3 text-[18px] font-semibold text-white">{value}</p>
-                </div>
-              ))}
+              <DashboardStatCard
+                badge="Saldo aktif"
+                icon={<WalletIcon className="h-6 w-6" />}
+                label="Saldo"
+                value={formatCurrency(summary.viewer.walletBalance, "IDR")}
+              />
+              <DashboardStatCard
+                badge={`${todayOrderCount} hari ini`}
+                icon={<CartIcon className="h-6 w-6" />}
+                label="Total Pembelian"
+                value={String(summary.metrics.totalOrders)}
+              />
+              <DashboardStatCard
+                badge={
+                  summary.metrics.totalOrders > 0
+                    ? `${Math.round((summary.metrics.successfulOtps / summary.metrics.totalOrders) * 100)}% success rate`
+                    : "0% success rate"
+                }
+                icon={<CheckCircleIcon className="h-6 w-6" />}
+                label="OTP Berhasil"
+                value={String(summary.metrics.successfulOtps)}
+              />
+              <DashboardStatCard
+                badge="Refund otomatis"
+                icon={<XCircleIcon className="h-6 w-6" />}
+                label="OTP Gagal/Batal"
+                tone="rose"
+                value={String(failedOrderCount)}
+              />
+              <DashboardStatCard
+                badge={monthLabel}
+                icon={<TrendIcon className="h-6 w-6" />}
+                label="Pengeluaran Bulan Ini"
+                tone="cyan"
+                value={formatCurrency(monthlySpend, "IDR")}
+              />
+              <DashboardStatCard
+                badge={`${favoriteService.count}x order`}
+                icon={<StarIcon className="h-6 w-6" />}
+                label="Layanan Favorit"
+                tone="cyan"
+                value={favoriteService.name}
+              />
+            </div>
+
+            <div className="rounded-[26px] border border-slate-500/24 bg-[#132136] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+              <div className="flex items-center justify-between gap-4">
+                <h2 className="text-[24px] font-semibold text-slate-100">
+                  Transaksi Terakhir
+                </h2>
+                <button
+                  className="text-[15px] font-medium text-slate-100"
+                  onClick={() => setActiveTab("history")}
+                  type="button"
+                >
+                  Lihat Semua
+                </button>
+              </div>
+              <div className="mt-6 grid grid-cols-[1.1fr_0.8fr_0.9fr] border-b border-slate-500/28 pb-3 text-[12px] text-slate-400">
+                <span>Layanan</span>
+                <span>OTP</span>
+                <span>Status</span>
+              </div>
+              <div className="divide-y divide-slate-500/16">
+                {summary.orders.slice(0, 4).map((order) => (
+                  <div
+                    key={order.id}
+                    className="grid grid-cols-[1.1fr_0.8fr_0.9fr] items-center gap-3 py-4 text-[12px]"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-slate-100">
+                        {order.service}
+                      </p>
+                      <p className="mt-1 truncate text-[10px] text-slate-500">
+                        {order.phoneNumber}
+                      </p>
+                    </div>
+                    <span className="truncate font-semibold text-emerald-200">
+                      {order.otpCode ?? "-"}
+                    </span>
+                    <span
+                      className={cn(
+                        "w-fit rounded-full border px-2 py-1 text-[10px] font-semibold",
+                        resolveOrderStatusTone(order.status),
+                      )}
+                    >
+                      {resolveOrderStatusLabel(order.status)}
+                    </span>
+                  </div>
+                ))}
+                {!summary.orders.length ? (
+                  <div className="py-8 text-center text-[13px] text-slate-500">
+                    Belum ada transaksi OTP.
+                  </div>
+                ) : null}
+              </div>
             </div>
 
             <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
@@ -2252,6 +2604,7 @@ export function MemberConsole({
                 <input
                   className="w-full rounded-[16px] border border-white/10 bg-[#07111f] px-4 py-3 text-[14px] text-white outline-none transition focus:border-sky-300/60"
                   inputMode="numeric"
+                  min={MIN_DEPOSIT_AMOUNT}
                   onChange={(event) => setDepositAmount(event.target.value.replace(/[^\d]/g, ""))}
                   placeholder="Nominal deposit"
                   value={depositAmount}
@@ -3381,6 +3734,17 @@ export function MemberConsole({
             <Spinner label="Memuat ulang dashboard..." />
           </div>
         ) : null}
+        </div>
+
+        <a
+          aria-label="Hubungi admin"
+          className="fixed bottom-6 right-5 z-40 flex h-16 w-16 items-center justify-center rounded-full bg-[#1397d6] text-white shadow-[0_24px_70px_-24px_rgba(19,151,214,0.95)] transition active:scale-95"
+          href={ADMIN_SUPPORT_LINK.href}
+          rel="noreferrer"
+          target="_blank"
+        >
+          <TelegramIcon className="h-8 w-8" />
+        </a>
       </div>
     </div>
   );

@@ -7,15 +7,15 @@ export const platformMetrics = [
 export const supplierBenefits = [
   {
     kicker: "Brand Sendiri",
-    title: "White-label penuh untuk domain dan nama usaha Anda",
+    title: "Tampilan premium untuk bisnis OTP Anda",
     description:
-      "Landing page, copywriting, dan dokumentasi API bisa langsung diganti dengan branding Anda tanpa tergantung nama provider upstream.",
+      "Landing page, dashboard, dan copywriting memakai identitas sendiri sehingga pelanggan melihat brand Anda, bukan nama supplier upstream.",
   },
   {
     kicker: "Markup Aman",
     title: "Harga supplier dikendalikan di server, bukan di browser",
     description:
-      "Harga tetap dihitung di server agar aman, tetapi sekarang mengikuti harga asli upstream KirimKode tanpa markup tambahan.",
+      "Harga tetap dihitung di server agar aman, dengan opsi profit global atau harga custom per layanan.",
   },
   {
     kicker: "Reseller Flow",
@@ -34,7 +34,7 @@ export const workflowSteps = [
   {
     title: "Tampilkan katalog real",
     description:
-      "Route `/api/catalog` mengambil data langsung dari KirimKode sesuai server dan negara yang dipilih user.",
+      "Route `/api/catalog` mengambil data supplier sesuai server dan negara yang dipilih user.",
   },
   {
     title: "Terima order & OTP",
@@ -57,6 +57,6 @@ export const apiCapabilities = [
   {
     title: "Live catalog relay",
     description:
-      "Katalog live diambil langsung dari KirimKode sementara API key tetap aman di route Next.js Anda.",
+      "Katalog live diambil langsung dari supplier sementara API key tetap aman di route Next.js Anda.",
   },
 ];

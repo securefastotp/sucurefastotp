@@ -9,14 +9,14 @@ export function SiteFooter() {
           <div>
             <p className="font-display text-2xl text-ink">{siteConfig.name}</p>
             <p className="mt-2 max-w-xl text-sm leading-7 text-ink/65">
-              Website supplier OTP dengan landing page, dashboard supply, dan
-              server route aman untuk integrasi provider upstream via API key.
+              Website nomor virtual OTP dengan deposit saldo, dashboard member,
+              order nomor, pantau SMS, dan server route aman untuk koneksi supplier.
             </p>
           </div>
           <div className="flex gap-5 text-sm font-medium text-ink/70">
-            <Link href="/">Home</Link>
-            <Link href="/console">Console</Link>
-            <Link href="/docs">Docs</Link>
+            <Link href="#fitur">Fitur</Link>
+            <Link href="#layanan">Layanan</Link>
+            <Link href="/console">Masuk</Link>
           </div>
         </div>
       </div>

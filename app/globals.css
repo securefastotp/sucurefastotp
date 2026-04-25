@@ -10,6 +10,12 @@
   --brand-2: #4a7cff;
 }
 
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -24,11 +30,16 @@
 
 body {
   min-height: 100vh;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at top left, rgba(74, 124, 255, 0.22), transparent 28%),
     radial-gradient(circle at top right, rgba(103, 240, 255, 0.16), transparent 26%),
     linear-gradient(180deg, #081321 0%, #07101d 42%, #040913 100%);
   color: var(--foreground);
+}
+
+html {
+  overflow-x: hidden;
 }
 
 a {
@@ -162,11 +173,14 @@ a {
 
 @layer components {
   .section-shell {
-    @apply mx-auto w-full max-w-7xl px-5 sm:px-8;
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-8;
+    min-width: 0;
   }
 
   .panel {
     @apply rounded-[30px] border border-white/10 bg-white/82 shadow-[0_24px_80px_-40px_rgba(6,14,24,0.72)] backdrop-blur;
+    max-width: 100%;
+    min-width: 0;
   }
 
   .hero-button {
