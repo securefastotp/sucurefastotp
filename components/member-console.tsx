@@ -352,25 +352,25 @@ function DashboardStatCard({
 }) {
   const badgeTone =
     tone === "rose"
-      ? "bg-rose-400/18 text-rose-100"
+      ? "bg-rose-400/14 text-rose-100"
       : tone === "cyan"
-        ? "bg-cyan-400/16 text-cyan-100"
-        : "bg-emerald-400/16 text-emerald-100";
+        ? "bg-cyan-400/12 text-cyan-100"
+        : "bg-emerald-400/12 text-emerald-100";
 
   return (
-    <div className="min-h-[164px] rounded-[26px] border border-slate-500/24 bg-[#132136] px-4 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex h-12 w-12 items-center justify-center rounded-[18px] bg-emerald-400/12 text-emerald-300">
+    <div className="min-h-[126px] rounded-[18px] border border-slate-600/35 bg-[#111d30] px-3 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[12px] bg-emerald-400/10 text-emerald-300">
           {icon}
         </div>
-        <span className={cn("rounded-full px-3 py-1 text-[11px] font-medium", badgeTone)}>
+        <span className={cn("max-w-[72px] truncate rounded-full px-2 py-0.5 text-[9px] font-medium leading-4", badgeTone)}>
           {badge}
         </span>
       </div>
-      <p className="mt-8 break-words text-[28px] font-semibold leading-none text-slate-100">
+      <p className="mt-5 break-words text-[20px] font-semibold leading-6 text-slate-100">
         {value}
       </p>
-      <p className="mt-3 text-[13px] leading-5 text-slate-400">{label}</p>
+      <p className="mt-1.5 text-[11px] leading-4 text-slate-400">{label}</p>
     </div>
   );
 }
@@ -2384,72 +2384,111 @@ export function MemberConsole({
           {toast.message}
         </div>
       ) : null}
-      <div className="mx-auto flex min-h-[100dvh] w-full max-w-[760px] flex-col bg-[#0b1426] pb-24 shadow-[0_0_80px_rgba(0,0,0,0.28)]">
-        <div className="sticky top-0 z-30 border-b border-slate-500/20 bg-[#132136]/96 px-4 py-4 backdrop-blur-xl">
-          <div className="flex items-center justify-between gap-3">
+      <div className="mx-auto flex min-h-[100dvh] w-full max-w-[480px] flex-col bg-[#0b1426] pb-20 shadow-[0_0_80px_rgba(0,0,0,0.28)]">
+        <div className="sticky top-0 z-30 border-b border-slate-600/30 bg-[#101b2d]/98 px-3 py-2.5 backdrop-blur-xl">
+          <div className="flex h-10 items-center gap-1.5">
             <button
+              aria-controls="member-side-menu"
+              aria-expanded={isMenuOpen}
               aria-label="Buka menu"
-              className="flex h-11 w-11 items-center justify-center rounded-[16px] text-slate-300 transition hover:bg-white/6"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] text-slate-300 transition hover:bg-white/6"
               onClick={() => setIsMenuOpen((current) => !current)}
               type="button"
             >
-              <MenuIcon className="h-6 w-6" />
+              <MenuIcon className="h-5 w-5" />
             </button>
 
             <button
-              className="inline-flex min-h-11 items-center gap-2 rounded-full border border-emerald-300/28 bg-emerald-400/12 px-4 text-[14px] font-semibold text-emerald-300 shadow-[0_10px_36px_-24px_rgba(16,185,129,0.9)]"
+              className="inline-flex h-9 shrink-0 items-center rounded-full border border-emerald-300/24 bg-emerald-400/12 px-3 text-[12px] font-semibold text-emerald-300 shadow-[0_10px_30px_-24px_rgba(16,185,129,0.9)]"
               onClick={() => setActiveTab("dashboard")}
               type="button"
             >
-              <WalletIcon className="h-5 w-5" />
-              {formatCurrency(summary.viewer.walletBalance, "IDR")}
+              <span className="max-w-[96px] truncate">
+                {formatCurrency(summary.viewer.walletBalance, "IDR")}
+              </span>
             </button>
 
             <button
-              className="hidden min-h-11 rounded-[16px] border border-slate-500/28 bg-white/4 px-4 text-[14px] font-semibold text-slate-300 min-[360px]:inline-flex"
+              className="hidden h-9 shrink-0 items-center rounded-[12px] border border-slate-500/24 bg-white/4 px-2.5 text-[12px] font-semibold text-slate-300 min-[340px]:inline-flex"
               type="button"
             >
               <span className="text-emerald-300">ID</span>
-              <span className="mx-2 text-slate-500">/</span>
+              <span className="mx-1.5 text-slate-500">/</span>
               EN
             </button>
 
             <button
               aria-label="Tema"
-              className="flex h-11 w-11 items-center justify-center rounded-[16px] text-slate-400 transition hover:bg-white/6"
+              className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] text-slate-400 transition hover:bg-white/6"
               type="button"
             >
-              <SunIcon className="h-6 w-6" />
+              <SunIcon className="h-[18px] w-[18px]" />
             </button>
 
             <button
               aria-label="Notifikasi"
-              className="flex h-11 w-11 items-center justify-center rounded-[16px] text-slate-400 transition hover:bg-white/6"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] text-slate-400 transition hover:bg-white/6"
               type="button"
             >
-              <BellIcon className="h-6 w-6" />
+              <BellIcon className="h-[18px] w-[18px]" />
             </button>
 
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[linear-gradient(135deg,#6af6ff,#4f64d8)] text-[20px] font-semibold text-white shadow-[0_16px_38px_-22px_rgba(74,124,255,0.9)]">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#55d9ef,#5263d6)] text-[15px] font-semibold text-white shadow-[0_12px_30px_-22px_rgba(74,124,255,0.9)]">
               {firstName.slice(0, 1).toUpperCase()}
             </div>
           </div>
 
-          {isMenuOpen ? (
-            <div className="mt-4 grid gap-2 rounded-[22px] border border-slate-500/22 bg-[#0a1325] p-2 shadow-[0_22px_70px_-40px_rgba(0,0,0,0.85)]">
+          <div
+            className={cn(
+              "fixed inset-0 z-50 transition",
+              isMenuOpen ? "pointer-events-auto" : "pointer-events-none",
+            )}
+          >
+            <button
+              aria-label="Tutup menu"
+              className={cn(
+                "absolute inset-0 bg-black/45 transition-opacity duration-300",
+                isMenuOpen ? "opacity-100" : "opacity-0",
+              )}
+              onClick={() => setIsMenuOpen(false)}
+              type="button"
+            />
+            <aside
+              className={cn(
+                "absolute left-0 top-0 h-full w-[80vw] max-w-[304px] border-r border-slate-600/35 bg-[#101b2d] px-4 py-4 shadow-[24px_0_80px_-36px_rgba(0,0,0,0.9)] transition-transform duration-300 ease-out",
+                isMenuOpen ? "translate-x-0" : "-translate-x-full",
+              )}
+              id="member-side-menu"
+            >
+              <div className="flex items-center gap-3 border-b border-slate-600/30 pb-4">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[linear-gradient(135deg,#55d9ef,#5263d6)] text-[16px] font-semibold text-white">
+                  {firstName.slice(0, 1).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-[14px] font-semibold text-slate-100">
+                    {viewer.name}
+                  </p>
+                  <p className="truncate text-[11px] text-slate-400">
+                    {viewer.email}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 grid gap-1.5">
               {[
-                { id: "dashboard", label: "Dashboard" },
-                { id: "buy", label: "Beli Nomor" },
-                { id: "history", label: "Riwayat" },
-                { id: "settings", label: "Pengaturan" },
-                ...(canAccessAdmin ? [{ id: "admin", label: "Admin" }] : []),
+                { id: "dashboard", label: "Dashboard", icon: <ServerIcon className="h-4 w-4" /> },
+                { id: "buy", label: "Beli Nomor", icon: <CartIcon className="h-4 w-4" /> },
+                { id: "history", label: "Riwayat", icon: <ClockIcon className="h-4 w-4" /> },
+                { id: "settings", label: "Pengaturan", icon: <SettingsIcon className="h-4 w-4" /> },
+                ...(canAccessAdmin
+                  ? [{ id: "admin", label: "Admin", icon: <ShieldIcon className="h-4 w-4" /> }]
+                  : []),
               ].map((item) => (
                 <button
                   key={item.id}
                   className={cn(
-                    "flex min-h-11 items-center justify-between rounded-[16px] px-4 text-left text-[13px] transition",
+                    "flex h-11 items-center gap-3 rounded-[14px] px-3 text-left text-[13px] transition",
                     activeTab === item.id
-                      ? "bg-emerald-400/14 text-emerald-100"
+                      ? "bg-emerald-400/13 text-emerald-100"
                       : "text-slate-300 hover:bg-white/5",
                   )}
                   onClick={() => {
@@ -2458,12 +2497,16 @@ export function MemberConsole({
                   }}
                   type="button"
                 >
-                  {item.label}
-                  <span className="text-slate-500">&gt;</span>
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[11px] bg-white/5 text-slate-400">
+                    {item.icon}
+                  </span>
+                  <span className="flex-1">{item.label}</span>
+                  <span className="text-[12px] text-slate-500">&gt;</span>
                 </button>
               ))}
-            </div>
-          ) : null}
+              </div>
+            </aside>
+          </div>
         </div>
 
         {canAccessAdmin ? (
@@ -2472,7 +2515,7 @@ export function MemberConsole({
           </div>
         ) : null}
 
-        <div className="flex-1 px-4 py-5 sm:px-6">
+        <div className="flex-1 px-3 py-4 sm:px-4">
 
         {dashboardError ? (
           <div className="rounded-[16px] border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-[12px] text-rose-100">
@@ -2481,34 +2524,34 @@ export function MemberConsole({
         ) : null}
 
         {activeTab === "dashboard" ? (
-          <div className="space-y-5 pt-3">
-            <div className="px-1">
-              <h1 className="text-[34px] font-semibold leading-tight tracking-tight text-slate-100">
+          <div className="space-y-4 pt-2">
+            <div className="px-0.5">
+              <h1 className="text-[28px] font-semibold leading-tight text-slate-100">
                 Dashboard
               </h1>
-              <p className="mt-2 text-[18px] leading-7 text-slate-400">
+              <p className="mt-1.5 text-[14px] leading-6 text-slate-400">
                 Selamat datang kembali, {firstName}!
               </p>
               <button
-                className="mt-6 inline-flex min-h-14 items-center gap-3 rounded-full bg-emerald-400 px-8 text-[18px] font-semibold text-[#071321] shadow-[0_18px_48px_-22px_rgba(52,211,153,0.9)] transition active:scale-[0.98]"
+                className="mt-4 inline-flex h-11 items-center gap-2 rounded-full bg-emerald-400 px-5 text-[14px] font-semibold text-[#071321] shadow-[0_14px_36px_-22px_rgba(52,211,153,0.9)] transition active:scale-[0.98]"
                 onClick={() => setActiveTab("buy")}
                 type="button"
               >
-                <CartIcon className="h-6 w-6" />
+                <CartIcon className="h-4 w-4" />
                 Beli Nomor
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2.5">
               <DashboardStatCard
                 badge="Saldo aktif"
-                icon={<WalletIcon className="h-6 w-6" />}
+                icon={<WalletIcon className="h-4 w-4" />}
                 label="Saldo"
                 value={formatCurrency(summary.viewer.walletBalance, "IDR")}
               />
               <DashboardStatCard
                 badge={`${todayOrderCount} hari ini`}
-                icon={<CartIcon className="h-6 w-6" />}
+                icon={<CartIcon className="h-4 w-4" />}
                 label="Total Pembelian"
                 value={String(summary.metrics.totalOrders)}
               />
@@ -2518,47 +2561,47 @@ export function MemberConsole({
                     ? `${Math.round((summary.metrics.successfulOtps / summary.metrics.totalOrders) * 100)}% success rate`
                     : "0% success rate"
                 }
-                icon={<CheckCircleIcon className="h-6 w-6" />}
+                icon={<CheckCircleIcon className="h-4 w-4" />}
                 label="OTP Berhasil"
                 value={String(summary.metrics.successfulOtps)}
               />
               <DashboardStatCard
                 badge="Refund otomatis"
-                icon={<XCircleIcon className="h-6 w-6" />}
+                icon={<XCircleIcon className="h-4 w-4" />}
                 label="OTP Gagal/Batal"
                 tone="rose"
                 value={String(failedOrderCount)}
               />
               <DashboardStatCard
                 badge={monthLabel}
-                icon={<TrendIcon className="h-6 w-6" />}
+                icon={<TrendIcon className="h-4 w-4" />}
                 label="Pengeluaran Bulan Ini"
                 tone="cyan"
                 value={formatCurrency(monthlySpend, "IDR")}
               />
               <DashboardStatCard
                 badge={`${favoriteService.count}x order`}
-                icon={<StarIcon className="h-6 w-6" />}
+                icon={<StarIcon className="h-4 w-4" />}
                 label="Layanan Favorit"
                 tone="cyan"
                 value={favoriteService.name}
               />
             </div>
 
-            <div className="rounded-[26px] border border-slate-500/24 bg-[#132136] p-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
+            <div className="rounded-[20px] border border-slate-600/35 bg-[#111d30] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.035)]">
               <div className="flex items-center justify-between gap-4">
-                <h2 className="text-[24px] font-semibold text-slate-100">
+                <h2 className="text-[18px] font-semibold text-slate-100">
                   Transaksi Terakhir
                 </h2>
                 <button
-                  className="text-[15px] font-medium text-slate-100"
+                  className="text-[12px] font-medium text-slate-200"
                   onClick={() => setActiveTab("history")}
                   type="button"
                 >
                   Lihat Semua
                 </button>
               </div>
-              <div className="mt-6 grid grid-cols-[1.1fr_0.8fr_0.9fr] border-b border-slate-500/28 pb-3 text-[12px] text-slate-400">
+              <div className="mt-4 grid grid-cols-[1.1fr_0.8fr_0.9fr] border-b border-slate-500/28 pb-2.5 text-[11px] text-slate-400">
                 <span>Layanan</span>
                 <span>OTP</span>
                 <span>Status</span>
@@ -2567,7 +2610,7 @@ export function MemberConsole({
                 {summary.orders.slice(0, 4).map((order) => (
                   <div
                     key={order.id}
-                    className="grid grid-cols-[1.1fr_0.8fr_0.9fr] items-center gap-3 py-4 text-[12px]"
+                    className="grid grid-cols-[1.1fr_0.8fr_0.9fr] items-center gap-2.5 py-3 text-[11px]"
                   >
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-slate-100">
@@ -2582,7 +2625,7 @@ export function MemberConsole({
                     </span>
                     <span
                       className={cn(
-                        "w-fit rounded-full border px-2 py-1 text-[10px] font-semibold",
+                        "w-fit rounded-full border px-2 py-0.5 text-[9px] font-semibold",
                         resolveOrderStatusTone(order.status),
                       )}
                     >
