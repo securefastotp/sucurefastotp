@@ -131,28 +131,63 @@ export function listMockServices(filters?: {
   countryId?: number;
 }) {
   const serverMeta = getServerMeta(filters?.serverId ?? "bimasakti");
+  const providerVariants =
+    serverMeta.id === "bimasakti"
+      ? [
+          {
+            code: "api1",
+            name: "Mars",
+            icon: "🔴",
+            stockRatio: 1,
+            priceRatio: 1,
+          },
+          {
+            code: "api3",
+            name: "Saturn",
+            icon: "🟣",
+            stockRatio: 0.58,
+            priceRatio: 1.32,
+          },
+        ]
+      : [
+          {
+            code: "api1",
+            name: "Blueverifiy",
+            icon: undefined,
+            stockRatio: serverMeta.stockRatio,
+            priceRatio: 1,
+          },
+        ];
 
-  return rawCatalog.map((service) => {
-    const stock = Math.max(0, Math.round(service.stock * serverMeta.stockRatio));
+  return rawCatalog.flatMap((service) =>
+    providerVariants.map((provider) => {
+      const stock = Math.max(0, Math.round(service.stock * provider.stockRatio));
+      const upstreamPrice = Math.round(service.upstreamPrice * provider.priceRatio);
 
-    return {
-      id: `${serverMeta.id}-${defaultCountry.id}-${service.serviceCode}`,
-      slug: slugify(`${service.service}-${defaultCountry.name}-${serverMeta.id}`),
-      serverId: serverMeta.id,
-      serviceCode: service.serviceCode,
-      service: service.service,
-      country: defaultCountry.name,
-      countryId: filters?.countryId ?? defaultCountry.id,
-      countryCode: defaultCountry.code,
-      category: service.category,
-      upstreamPrice: service.upstreamPrice,
-      price: computeRetailPrice(service.upstreamPrice),
-      stock,
-      currency: "IDR",
-      deliveryEtaSeconds: service.deliveryEtaSeconds,
-      tags: service.tags,
-    } satisfies Service;
-  });
+      return {
+        id: `${serverMeta.id}-${defaultCountry.id}-${service.serviceCode}-${provider.code}`,
+        slug: slugify(`${service.service}-${defaultCountry.name}-${serverMeta.id}-${provider.code}`),
+        serverId: serverMeta.id,
+        serviceCode: service.serviceCode,
+        service: service.service,
+        providerServerId: provider.code,
+        providerName: provider.name,
+        providerIcon: provider.icon,
+        providerCountryId: filters?.countryId ?? defaultCountry.id,
+        providerServiceCode: service.serviceCode,
+        country: defaultCountry.name,
+        countryId: filters?.countryId ?? defaultCountry.id,
+        countryCode: defaultCountry.code,
+        category: service.category,
+        upstreamPrice,
+        price: computeRetailPrice(upstreamPrice),
+        stock,
+        currency: "IDR",
+        deliveryEtaSeconds: service.deliveryEtaSeconds,
+        tags: [...service.tags, provider.name],
+      } satisfies Service;
+    }),
+  );
 }
 
 export function getMockServiceById(

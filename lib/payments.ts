@@ -24,6 +24,10 @@ type CreatePaymentInput = {
   serviceId: string;
   serviceCode: string;
   serverId: string;
+  providerServerId?: string;
+  providerName?: string;
+  providerCountryId?: number;
+  providerServiceCode?: string;
   operator?: string;
   service: string;
   country: string;
@@ -202,6 +206,10 @@ export async function createPaymentSession(input: CreatePaymentInput) {
     serviceId: input.serviceId,
     serviceCode: input.serviceCode,
     serverId: input.serverId,
+    providerServerId: input.providerServerId,
+    providerName: input.providerName,
+    providerCountryId: input.providerCountryId,
+    providerServiceCode: input.providerServiceCode,
     operator: input.operator ?? "any",
     service: input.service,
     country: input.country,
@@ -291,6 +299,9 @@ export async function activatePaymentOrder(
     serviceId: payment.serviceId,
     serviceCode: payment.serviceCode,
     serverId: payment.serverId,
+    providerServerId: payment.providerServerId,
+    providerCountryId: payment.providerCountryId,
+    providerServiceCode: payment.providerServiceCode,
     service: payment.service,
     country: payment.country,
     countryId: payment.countryId,

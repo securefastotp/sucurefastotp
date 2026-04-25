@@ -47,6 +47,9 @@ type CreateOrderInput = {
   service: string;
   country: string;
   countryId: number;
+  providerServerId?: string;
+  providerCountryId?: number;
+  providerServiceCode?: string;
   operator?: string;
   price?: number;
   currency?: string;
@@ -180,8 +183,11 @@ export function getProviderConfig() {
     cancelMethod:
       process.env.UPSTREAM_CANCEL_METHOD === "DELETE" ? "DELETE" : "POST",
     timeoutMs: Number(process.env.UPSTREAM_TIMEOUT_MS ?? 15000),
-    bimasaktiCode: process.env.UPSTREAM_SERVER_BIMASAKTI_CODE ?? "api1",
-    marsCode: process.env.UPSTREAM_SERVER_MARS_CODE ?? "api2",
+    bimasaktiCode: process.env.UPSTREAM_SERVER_BIMASAKTI_CODE ?? "unified",
+    marsCode: process.env.UPSTREAM_SERVER_MARS_CODE ?? "api1",
+    bimasaktiProviderCodes:
+      process.env.UPSTREAM_SERVER_BIMASAKTI_PROVIDER_CODES ??
+      "api1:Mars:🔴,api3:Saturn:🟣",
     countryScanIds:
       process.env.UPSTREAM_COUNTRY_SCAN_IDS ??
       "1,3,4,5,6,7,8,9,10,11,13,14,15,16,18,21,25,31,32,34,35,36,37,39,40,61",
@@ -212,7 +218,7 @@ function resolveServerId(serverId?: string) {
 function resolveUpstreamServer(serverId?: string) {
   const config = getProviderConfig();
 
-  if (serverId === "api1" || serverId === "api2") {
+  if (serverId === "api1" || serverId === "api2" || serverId === "api3" || serverId === "unified") {
     return serverId;
   }
 
@@ -223,6 +229,36 @@ function resolveUpstreamServer(serverId?: string) {
 
 function getServerName(serverId?: string) {
   return resolveServerId(serverId) === "mars" ? "Blueverifiy" : "Skyword";
+}
+
+function parseBimasaktiProviderCodes() {
+  const config = getProviderConfig();
+  const providers = config.bimasaktiProviderCodes
+    .split(",")
+    .map((item) => {
+      const [code, name, icon] = item.split(":").map((part) => part.trim());
+
+      if (!code) {
+        return null;
+      }
+
+      return {
+        code,
+        name: name || code.toUpperCase(),
+        icon: icon || undefined,
+      };
+    })
+    .filter(
+      (provider): provider is { code: string; name: string; icon: string | undefined } =>
+        Boolean(provider),
+    );
+
+  return providers.length > 0
+    ? providers
+    : [
+        { code: "api1", name: "Mars", icon: "🔴" },
+        { code: "api3", name: "Saturn", icon: "🟣" },
+      ];
 }
 
 function resolveCountryId(countryId?: number | string) {
@@ -558,6 +594,11 @@ function normalizeService(
   context: {
     serverId: string;
     countryId: number;
+    provider?: {
+      code: string;
+      name: string;
+      icon?: string;
+    };
   },
 ): Service | null {
   if (!item || typeof item !== "object" || Array.isArray(item)) {
@@ -577,13 +618,35 @@ function normalizeService(
     serviceCode,
     pickString(record, ["name"], ""),
   );
+  const providerServerId =
+    context.provider?.code ??
+    pickString(record, ["providerServerId", "serverId", "server"], "");
+  const providerName =
+    context.provider?.name ??
+    pickString(record, ["providerName", "provider", "source"], "");
+  const providerIcon =
+    context.provider?.icon ?? pickString(record, ["providerIcon", "icon"], "");
+  const providerCountryId = pickNumber(
+    record,
+    ["providerCountryId", "negaraId", "countryId"],
+    context.countryId,
+  );
+  const providerServiceCode =
+    pickString(record, ["providerServiceCode", "actualCode", "actual_code"], "") ||
+    serviceCode;
+  const providerSuffix = providerServerId ? `-${providerServerId}` : "";
 
   return {
-    id: `${context.serverId}-${countryMeta.id}-${serviceCode}`,
-    slug: `${context.serverId}-${countryMeta.id}-${serviceCode}`,
+    id: `${context.serverId}-${countryMeta.id}-${serviceCode}${providerSuffix}`,
+    slug: `${context.serverId}-${countryMeta.id}-${serviceCode}${providerSuffix}`,
     serverId: context.serverId,
     serviceCode,
     service: serviceName,
+    providerServerId: providerServerId || undefined,
+    providerName: providerName || undefined,
+    providerIcon: providerIcon || undefined,
+    providerCountryId,
+    providerServiceCode,
     country: countryMeta.name,
     countryId: countryMeta.id,
     countryCode: countryMeta.code,
@@ -593,8 +656,86 @@ function normalizeService(
     stock: pickNumber(record, ["stock"], 0),
     currency: getPricingConfig().currency,
     deliveryEtaSeconds: 20,
-    tags: ["Live API", getServerName(context.serverId)],
+    tags: [
+      "Live API",
+      getServerName(context.serverId),
+      ...(providerName ? [providerName] : []),
+    ],
   };
+}
+
+async function fetchLiveServices(serverId: string, countryId: number) {
+  if (resolveServerId(serverId) !== "bimasakti") {
+    const payload = await fetchServicesPayload(serverId, countryId);
+
+    return extractArray(payload)
+      .map((item) =>
+        normalizeService(item, {
+          serverId,
+          countryId,
+          provider: {
+            code: resolveUpstreamServer(serverId),
+            name: getServerName(serverId),
+          },
+        }),
+      )
+      .filter((service): service is Service => Boolean(service));
+  }
+
+  const providerResults = await Promise.allSettled(
+    parseBimasaktiProviderCodes().map(async (provider) => {
+      const payload = await fetchServicesPayload(provider.code, countryId);
+
+      return extractArray(payload)
+        .map((item) =>
+          normalizeService(item, {
+            serverId,
+            countryId,
+            provider,
+          }),
+        )
+        .filter((service): service is Service => Boolean(service));
+    }),
+  );
+
+  const services = providerResults.flatMap((result) =>
+    result.status === "fulfilled" ? result.value : [],
+  );
+
+  if (services.length > 0) {
+    return services;
+  }
+
+  const payload = await fetchServicesPayload(serverId, countryId);
+
+  return extractArray(payload)
+    .map((item) => normalizeService(item, { serverId, countryId }))
+    .filter((service): service is Service => Boolean(service));
+}
+
+async function getAvailableServiceCountForCountry(serverId: string, countryId: number) {
+  if (resolveServerId(serverId) !== "bimasakti") {
+    const payload = await fetchServicesPayload(serverId, countryId);
+    return extractArray(payload).length;
+  }
+
+  const providerResults = await Promise.allSettled(
+    parseBimasaktiProviderCodes().map(async (provider) => {
+      const payload = await fetchServicesPayload(provider.code, countryId);
+      return extractArray(payload).length;
+    }),
+  );
+  const count = providerResults.reduce(
+    (sum, result) => sum + (result.status === "fulfilled" ? result.value : 0),
+    0,
+  );
+
+  if (count > 0) {
+    return count;
+  }
+
+  const payload = await fetchServicesPayload(serverId, countryId);
+  return extractArray(payload).length;
 }
 
 function applyFilters(services: Service[], filters: CatalogFilters) {
@@ -1016,11 +1157,9 @@ export async function getCatalog(filters: CatalogFilters = {}) {
       ),
       filters,
     );
-    const payload = await fetchServicesPayload(serverId, countryId);
-    const services = extractArray(payload)
-      .map((item) => normalizeService(item, { serverId, countryId }))
-      .filter((service): service is Service => Boolean(service))
-      .map((service) => applyPricingToService(service, pricingRules));
+    const services = (await fetchLiveServices(serverId, countryId)).map((service) =>
+      applyPricingToService(service, pricingRules),
+    );
     const filteredServices = applyFilters(services, filters);
 
     if (filteredServices.length === 0 && cachedServices.length > 0) {
@@ -1092,10 +1231,12 @@ export async function getCountries(serverId?: string): Promise<CountryOption[]> 
   const results = await Promise.all(
     ids.map(async (countryId): Promise<CountryOption | null> => {
       try {
-        const payload = await fetchServicesPayload(resolvedServerId, countryId);
-        const items = extractArray(payload);
+        const availableServices = await getAvailableServiceCountForCountry(
+          resolvedServerId,
+          countryId,
+        );
 
-        if (items.length === 0) {
+        if (availableServices === 0) {
           return null;
         }
 
@@ -1106,7 +1247,7 @@ export async function getCountries(serverId?: string): Promise<CountryOption[]> 
           name: meta.name,
           code: meta.code,
           flagEmoji: meta.flagEmoji ?? countryCodeToFlagEmoji(meta.code),
-          availableServices: items.length,
+          availableServices,
           serverId: resolvedServerId,
         } satisfies CountryOption;
       } catch {
@@ -1182,9 +1323,9 @@ export async function createOrder(input: CreateOrderInput) {
   const payload = await fetchUpstream(config.orderPath, {
     method: config.orderMethod,
     body: {
-      server: resolveUpstreamServer(input.serverId),
-      country: input.countryId,
-      service: input.serviceCode,
+      server: input.providerServerId ?? resolveUpstreamServer(input.serverId),
+      country: input.providerCountryId ?? input.countryId,
+      service: input.providerServiceCode ?? input.serviceCode,
       operator: input.operator ?? "any",
     },
   });

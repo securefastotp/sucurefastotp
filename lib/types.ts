@@ -6,6 +6,11 @@ export type Service = {
   serverId: string;
   serviceCode: string;
   service: string;
+  providerServerId?: string;
+  providerName?: string;
+  providerIcon?: string;
+  providerCountryId?: number;
+  providerServiceCode?: string;
   country: string;
   countryId: number;
   countryCode: string;
@@ -205,6 +210,10 @@ export type PaymentRecord = {
   serviceId: string;
   serviceCode: string;
   serverId: string;
+  providerServerId?: string;
+  providerName?: string;
+  providerCountryId?: number;
+  providerServiceCode?: string;
   operator: string;
   service: string;
   country: string;

@@ -9,6 +9,9 @@ type CreateOrderBody = {
   serviceId?: string;
   serviceCode?: string;
   serverId?: string;
+  providerServerId?: string;
+  providerCountryId?: number | string;
+  providerServiceCode?: string;
   service?: string;
   country?: string;
   countryId?: number | string;
@@ -58,6 +61,14 @@ export async function POST(request: Request) {
       serviceId: body.serviceId,
       serviceCode: body.serviceCode,
       serverId: body.serverId,
+      providerServerId: body.providerServerId,
+      providerCountryId:
+        typeof body.providerCountryId === "number"
+          ? body.providerCountryId
+          : typeof body.providerCountryId === "string"
+            ? Number(body.providerCountryId)
+            : undefined,
+      providerServiceCode: body.providerServiceCode,
       service: body.service,
       country: body.country,
       countryId,

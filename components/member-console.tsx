@@ -14,11 +14,6 @@ import {
   formatDateTime,
   formatElapsedTimer,
 } from "@/lib/format";
-import {
-  DEFAULT_OPERATOR,
-  getOperatorOptionsForCountry,
-  normalizeOperatorForCountry,
-} from "@/lib/operators";
 import type {
   AdminUserSummary,
   AuthViewer,
@@ -28,6 +23,7 @@ import type {
   DepositRecord,
   Order,
   PricingSettings,
+  Service,
   ServicePriceOverride,
   WalletLedgerEntry,
 } from "@/lib/types";
@@ -90,6 +86,101 @@ const serverOptions = [
     description: "Server cadangan, lebih stabil",
   },
 ];
+
+type ServiceGroup = Service & {
+  variants: Service[];
+};
+
+function getProviderSortWeight(service: Service) {
+  if (service.providerServerId === "api1") {
+    return 1;
+  }
+
+  if (service.providerServerId === "api3") {
+    return 2;
+  }
+
+  return 10;
+}
+
+function buildServiceGroups(services: Service[], serverId: ServerId) {
+  const grouped = new Map<string, Service[]>();
+
+  for (const service of services) {
+    const key = `${service.serviceCode.toLowerCase()}::${service.service.toLowerCase()}`;
+    grouped.set(key, [...(grouped.get(key) ?? []), service]);
+  }
+
+  return Array.from(grouped.values())
+    .map((variants) => {
+      const sortedVariants = [...variants].sort((left, right) => {
+        const stockRank =
+          Number(right.stock > 0) - Number(left.stock > 0);
+
+        if (stockRank !== 0) {
+          return stockRank;
+        }
+
+        const providerRank =
+          getProviderSortWeight(left) - getProviderSortWeight(right);
+
+        if (providerRank !== 0) {
+          return providerRank;
+        }
+
+        return left.price - right.price;
+      });
+      const availableVariants = sortedVariants.filter((service) => service.stock > 0);
+      const cheapestVariant = (availableVariants.length > 0
+        ? availableVariants
+        : sortedVariants
+      ).reduce((best, service) => (service.price < best.price ? service : best));
+      const totalStock = sortedVariants.reduce(
+        (sum, service) => sum + Math.max(0, service.stock),
+        0,
+      );
+      const minUpstreamPrice = sortedVariants.reduce(
+        (best, service) =>
+          service.upstreamPrice < best ? service.upstreamPrice : best,
+        sortedVariants[0]?.upstreamPrice ?? cheapestVariant.upstreamPrice,
+      );
+
+      return {
+        ...cheapestVariant,
+        id: `${serverId}-${cheapestVariant.countryId}-${cheapestVariant.serviceCode}-group`,
+        slug: `${serverId}-${cheapestVariant.countryId}-${cheapestVariant.serviceCode}-group`,
+        stock: totalStock,
+        upstreamPrice: minUpstreamPrice,
+        price: cheapestVariant.price,
+        variants: sortedVariants,
+      } satisfies ServiceGroup;
+    })
+    .sort((left, right) => {
+      const stockRank = Number(right.stock > 0) - Number(left.stock > 0);
+
+      if (stockRank !== 0) {
+        return stockRank;
+      }
+
+      return left.service.localeCompare(right.service);
+    });
+}
+
+function getProviderName(service: Service, selectedServer: ServerId) {
+  return service.providerName ?? (selectedServer === "mars" ? "Blueverifiy" : "Skyword");
+}
+
+function getProviderIcon(service: Service, selectedServer: ServerId) {
+  if (service.providerIcon) {
+    return service.providerIcon;
+  }
+
+  if (service.providerServerId === "api3") {
+    return "S";
+  }
+
+  return selectedServer === "mars" ? "B" : "M";
+}
 
 const SUPPORT_LINKS = [
   {
@@ -957,8 +1048,14 @@ export function MemberConsole({
   const [selectedServiceId, setSelectedServiceId] = useState(
     initialCatalog?.services[0]?.id ?? "",
   );
-  const [selectedOperator, setSelectedOperator] = useState(DEFAULT_OPERATOR);
+  const [selectedProviderServiceId, setSelectedProviderServiceId] = useState(
+    initialCatalog?.services[0]?.id ?? "",
+  );
   const [serviceSearch, setServiceSearch] = useState("");
+  const [buyHistorySearch, setBuyHistorySearch] = useState("");
+  const [buyHistoryStatus, setBuyHistoryStatus] = useState<
+    "all" | Order["status"]
+  >("all");
   const [activeTab, setActiveTab] = useState<
     "dashboard" | "deposit" | "buy" | "history" | "settings" | "admin"
   >("dashboard");
@@ -1043,42 +1140,65 @@ export function MemberConsole({
   const [nowTimestamp, setNowTimestamp] = useState(() => Date.now());
 
   const deferredSearch = useDeferredValue(serviceSearch);
+  const deferredBuyHistorySearch = useDeferredValue(buyHistorySearch);
   const deferredAdminSearch = useDeferredValue(adminSearch);
   const deferredAdminPricingSearch = useDeferredValue(adminPricingSearch);
   const canAccessAdmin = viewer?.role === "admin";
-  const selectedService = useMemo(
-    () => catalog?.services.find((service) => service.id === selectedServiceId) ?? null,
-    [catalog, selectedServiceId],
+  const serviceGroups = useMemo(
+    () => buildServiceGroups(catalog?.services ?? [], selectedServer),
+    [catalog?.services, selectedServer],
   );
-  const availableOperatorOptions = useMemo(
-    () => getOperatorOptionsForCountry(selectedCountryId),
-    [selectedCountryId],
+  const selectedServiceGroup = useMemo(
+    () =>
+      serviceGroups.find(
+        (service) =>
+          service.id === selectedServiceId ||
+          service.variants.some((variant) => variant.id === selectedServiceId),
+      ) ?? null,
+    [selectedServiceId, serviceGroups],
   );
+  const selectedService = useMemo(() => {
+    const variants = selectedServiceGroup?.variants ?? [];
+
+    return (
+      variants.find((service) => service.id === selectedProviderServiceId) ??
+      variants.find((service) => service.stock > 0) ??
+      variants[0] ??
+      null
+    );
+  }, [selectedProviderServiceId, selectedServiceGroup]);
+  const selectedProviderVariants = selectedServiceGroup?.variants ?? [];
+  const requiresProviderSelection =
+    selectedServer === "bimasakti" && selectedProviderVariants.length > 0;
   const isSelectedOutOfStock = Boolean(
     selectedService && Number.isFinite(selectedService.stock) && selectedService.stock <= 0,
   );
   const filteredServices = useMemo(() => {
-    const services = catalog?.services ?? [];
     const query = deferredSearch.trim().toLowerCase();
 
     if (!query) {
-      return services;
+      return serviceGroups;
     }
 
-    return services.filter((service) =>
+    return serviceGroups.filter((service) =>
       `${service.service} ${service.serviceCode}`.toLowerCase().includes(query),
     );
-  }, [catalog, deferredSearch]);
-  useEffect(() => {
-    const normalizedOperator = normalizeOperatorForCountry(
-      selectedCountryId ?? 0,
-      selectedOperator,
-    );
+  }, [deferredSearch, serviceGroups]);
+  const buyHistoryOrders = useMemo(() => {
+    const query = deferredBuyHistorySearch.trim().toLowerCase();
 
-    if (normalizedOperator !== selectedOperator) {
-      setSelectedOperator(normalizedOperator);
-    }
-  }, [selectedCountryId, selectedOperator]);
+    return (summary?.orders ?? []).filter((order) => {
+      const matchesStatus =
+        buyHistoryStatus === "all" || order.status === buyHistoryStatus;
+      const matchesQuery =
+        !query ||
+        `${order.service} ${order.serviceCode} ${order.phoneNumber}`
+          .toLowerCase()
+          .includes(query);
+
+      return matchesStatus && matchesQuery;
+    });
+  }, [buyHistoryStatus, deferredBuyHistorySearch, summary?.orders]);
   const historyPageSize = 10;
   const totalHistoryPages = Math.max(
     1,
@@ -1249,6 +1369,23 @@ export function MemberConsole({
   }, [summary?.orders.length]);
 
   useEffect(() => {
+    const variants = selectedServiceGroup?.variants ?? [];
+
+    if (!variants.length) {
+      setSelectedProviderServiceId("");
+      return;
+    }
+
+    if (variants.some((service) => service.id === selectedProviderServiceId)) {
+      return;
+    }
+
+    setSelectedProviderServiceId(
+      variants.find((service) => service.stock > 0)?.id ?? variants[0].id,
+    );
+  }, [selectedProviderServiceId, selectedServiceGroup]);
+
+  useEffect(() => {
     if (!hasPendingOrderTimer) {
       return;
     }
@@ -1303,12 +1440,19 @@ export function MemberConsole({
 
   function applyMemberCatalogResult(nextCatalog: CatalogResponse) {
     setCatalog(nextCatalog);
+    setSelectedProviderServiceId((current) => {
+      if (current && nextCatalog.services.some((service) => service.id === current)) {
+        return current;
+      }
+
+      return nextCatalog.services.find((service) => service.stock > 0)?.id ?? nextCatalog.services[0]?.id ?? "";
+    });
     setSelectedServiceId((current) => {
       if (current && nextCatalog.services.some((service) => service.id === current)) {
         return current;
       }
 
-      return nextCatalog.services[0]?.id ?? "";
+      return nextCatalog.services.find((service) => service.stock > 0)?.id ?? nextCatalog.services[0]?.id ?? "";
     });
   }
 
@@ -1537,6 +1681,7 @@ export function MemberConsole({
 
         setCatalog(null);
         setSelectedServiceId("");
+        setSelectedProviderServiceId("");
         setOrderError(
           error instanceof Error ? error.message : "Gagal memuat katalog layanan.",
         );
@@ -1680,7 +1825,7 @@ export function MemberConsole({
       setCountries([]);
       setSelectedCountryId(null);
       setSelectedServiceId("");
-      setSelectedOperator(DEFAULT_OPERATOR);
+      setSelectedProviderServiceId("");
       setActiveDeposit(null);
       setActiveOrder(null);
       setAdminUsers([]);
@@ -1770,7 +1915,7 @@ export function MemberConsole({
         serviceCode: selectedService.serviceCode,
         serverId: selectedServer,
         countryId: selectedCountryId,
-        operator: normalizeOperatorForCountry(selectedCountryId, selectedOperator),
+        operator: "any",
       });
       setActiveOrder(order);
       await refreshSummary();
@@ -1819,6 +1964,38 @@ export function MemberConsole({
     } finally {
       setIsOrderCancelling(false);
     }
+  }
+
+  function handleExportBuyHistory() {
+    if (!buyHistoryOrders.length || typeof window === "undefined") {
+      return;
+    }
+
+    const rows = [
+      ["Tanggal", "Layanan", "Kode", "Negara", "Nomor", "Status", "Harga"],
+      ...buyHistoryOrders.map((order) => [
+        formatCompactDateTime(order.createdAt),
+        order.service,
+        order.serviceCode.toUpperCase(),
+        order.country,
+        order.phoneNumber,
+        resolveOrderStatusLabel(order.status),
+        String(order.price),
+      ]),
+    ];
+    const csv = rows
+      .map((row) =>
+        row.map((value) => `"${String(value).replaceAll('"', '""')}"`).join(","),
+      )
+      .join("\n");
+    const url = window.URL.createObjectURL(
+      new Blob([csv], { type: "text/csv;charset=utf-8" }),
+    );
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "riwayat-order-otp.csv";
+    link.click();
+    window.URL.revokeObjectURL(url);
   }
 
   async function handleRefreshOrder() {
@@ -2778,7 +2955,7 @@ export function MemberConsole({
                       setCatalog(null);
                       setSelectedCountryId(null);
                       setSelectedServiceId("");
-                      setSelectedOperator(DEFAULT_OPERATOR);
+                      setSelectedProviderServiceId("");
                     }}
                     type="button"
                   >
@@ -2799,7 +2976,8 @@ export function MemberConsole({
                 className="mt-4 w-full rounded-[16px] border border-white/10 bg-[#07111f] px-4 py-3 text-[14px] text-white outline-none transition focus:border-sky-300/60"
                 onChange={(event) => {
                   setSelectedCountryId(Number(event.target.value));
-                  setSelectedOperator(DEFAULT_OPERATOR);
+                  setSelectedServiceId("");
+                  setSelectedProviderServiceId("");
                 }}
                 value={selectedCountryId ?? ""}
               >
@@ -2814,29 +2992,21 @@ export function MemberConsole({
               </select>
             </div>
 
-            <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
-              <SectionTitle
-                icon={<GlobeIcon className="h-4.5 w-4.5" />}
-                title="Operator"
-              />
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                {availableOperatorOptions.map((operator) => (
-                  <button
-                    key={operator.id}
-                    className={cn(
-                      "h-10 rounded-[14px] border px-3 text-[12px] font-medium transition",
-                      selectedOperator === operator.id
-                        ? "border-emerald-300/50 bg-emerald-400/13 text-emerald-100"
-                        : "border-white/10 bg-white/4 text-sky-100/72",
-                    )}
-                    onClick={() => setSelectedOperator(operator.id)}
-                    type="button"
-                  >
-                    {operator.label}
-                  </button>
-                ))}
+            {selectedServer === "mars" ? (
+              <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
+                <SectionTitle
+                  icon={<GlobeIcon className="h-4.5 w-4.5" />}
+                  title="Provider"
+                />
+                <button
+                  className="mt-4 flex h-12 w-full items-center justify-between rounded-[16px] border border-white/10 bg-[#07111f] px-4 text-[13px] font-medium text-white"
+                  type="button"
+                >
+                  <span>Semua Provider</span>
+                  <span className="text-sky-100/45">any</span>
+                </button>
               </div>
-            </div>
+            ) : null}
 
             <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
               <SectionTitle
@@ -2857,10 +3027,17 @@ export function MemberConsole({
                     disabled={service.stock <= 0}
                     className={cn(
                       "flex w-full items-center justify-between gap-3 border-b border-white/6 px-4 py-3 text-left last:border-b-0",
-                      selectedServiceId === service.id ? "bg-sky-300/10" : "",
+                      selectedServiceGroup?.id === service.id ? "bg-sky-300/10" : "",
                       service.stock <= 0 ? "cursor-not-allowed opacity-60" : "",
                     )}
-                    onClick={() => setSelectedServiceId(service.id)}
+                    onClick={() => {
+                      setSelectedServiceId(service.id);
+                      setSelectedProviderServiceId(
+                        service.variants.find((variant) => variant.stock > 0)?.id ??
+                          service.variants[0]?.id ??
+                          "",
+                      );
+                    }}
                     type="button"
                   >
                     <div className="min-w-0">
@@ -2882,6 +3059,65 @@ export function MemberConsole({
               </div>
             </div>
 
+            {requiresProviderSelection && selectedServiceGroup ? (
+              <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <p className="text-[11px] text-sky-100/58">Layanan</p>
+                    <p className="mt-2 text-[10px] font-semibold uppercase text-sky-100/50">
+                      Pilih Provider:
+                    </p>
+                  </div>
+                  <p className="text-right text-[14px] font-semibold text-white">
+                    {selectedServiceGroup.service}
+                  </p>
+                </div>
+                <div className="mt-3 space-y-2">
+                  {selectedProviderVariants.map((variant) => {
+                    const active = selectedService?.id === variant.id;
+
+                    return (
+                      <button
+                        key={variant.id}
+                        className={cn(
+                          "flex w-full items-center justify-between gap-3 rounded-[16px] border px-3 py-3 text-left transition",
+                          active
+                            ? "border-sky-300/55 bg-sky-300/12"
+                            : "border-white/10 bg-white/4",
+                          variant.stock <= 0 ? "cursor-not-allowed opacity-55" : "",
+                        )}
+                        disabled={variant.stock <= 0}
+                        onClick={() => setSelectedProviderServiceId(variant.id)}
+                        type="button"
+                      >
+                        <div className="flex min-w-0 items-center gap-3">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] bg-white/8 text-[15px] text-white">
+                            {getProviderIcon(variant, selectedServer)}
+                          </span>
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-semibold text-white">
+                              {variant.service}
+                            </p>
+                            <p className="mt-0.5 text-[11px] text-sky-100/58">
+                              {getProviderName(variant, selectedServer)}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <p className="text-[13px] font-semibold text-cyan-100">
+                            {formatCurrency(variant.price, variant.currency)}
+                          </p>
+                          <p className="mt-1 text-[11px] text-sky-100/58">
+                            stok: {variant.stock}
+                          </p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
             {selectedService ? (
               <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
                 <SectionTitle icon={<WalletIcon className="h-4.5 w-4.5" />} title="Detail Pesanan" />
@@ -2895,10 +3131,8 @@ export function MemberConsole({
                     <span className="text-white">{formatCurrency(selectedService.price, selectedService.currency)}</span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <span>Operator</span>
-                    <span className="text-white">
-                      {availableOperatorOptions.find((operator) => operator.id === selectedOperator)?.label ?? "Random"}
-                    </span>
+                    <span>Provider</span>
+                    <span className="text-white">{getProviderName(selectedService, selectedServer)}</span>
                   </div>
                   <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-2">
                     <span>Saldo Anda</span>
@@ -3016,6 +3250,87 @@ export function MemberConsole({
                 ) : null}
               </div>
             ) : null}
+
+            <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
+              <SectionTitle
+                icon={<ClockIcon className="h-4.5 w-4.5" />}
+                title="Riwayat Order"
+                action={
+                  <button
+                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[11px] font-medium text-sky-100/78 disabled:opacity-45"
+                    disabled={!buyHistoryOrders.length}
+                    onClick={handleExportBuyHistory}
+                    type="button"
+                  >
+                    Export CSV
+                  </button>
+                }
+              />
+              <div className="mt-4 flex flex-col gap-3">
+                <input
+                  className="h-11 w-full rounded-[15px] border border-white/10 bg-[#07111f] px-4 text-[13px] text-white outline-none placeholder:text-sky-100/35 focus:border-sky-300/60"
+                  onChange={(event) => setBuyHistorySearch(event.target.value)}
+                  placeholder="Cari nomor..."
+                  value={buyHistorySearch}
+                />
+                <div className="flex flex-wrap gap-2">
+                  {[
+                    { id: "all", label: "Semua" },
+                    { id: "otp_received", label: "Berhasil" },
+                    { id: "pending", label: "Menunggu" },
+                    { id: "cancelled", label: "Dibatalkan" },
+                  ].map((filter) => (
+                    <button
+                      key={filter.id}
+                      className={cn(
+                        "rounded-full border px-3 py-1.5 text-[11px] font-medium transition",
+                        buyHistoryStatus === filter.id
+                          ? "border-cyan-200/50 bg-cyan-300/13 text-cyan-100"
+                          : "border-white/10 bg-white/4 text-sky-100/65",
+                      )}
+                      onClick={() =>
+                        setBuyHistoryStatus(filter.id as typeof buyHistoryStatus)
+                      }
+                      type="button"
+                    >
+                      {filter.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-4 space-y-2">
+                {buyHistoryOrders.slice(0, 5).map((order) => (
+                  <div
+                    key={order.id}
+                    className="rounded-[16px] border border-white/8 bg-white/4 px-3.5 py-3"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] font-semibold text-white">
+                          {order.service}
+                        </p>
+                        <p className="mt-1 text-[11px] text-sky-100/55">
+                          {order.phoneNumber} | {formatCompactDateTime(order.createdAt)}
+                        </p>
+                      </div>
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-semibold",
+                          resolveOrderStatusTone(order.status),
+                        )}
+                      >
+                        {resolveOrderStatusLabel(order.status)}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+                {!buyHistoryOrders.length ? (
+                  <div className="rounded-[16px] border border-white/8 bg-white/4 px-4 py-8 text-center text-[12px] text-sky-100/55">
+                    Belum ada order
+                  </div>
+                ) : null}
+              </div>
+            </div>
           </div>
         ) : null}
 

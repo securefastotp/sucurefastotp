@@ -9,6 +9,10 @@ type CreatePaymentBody = {
   serviceId?: string;
   serviceCode?: string;
   serverId?: string;
+  providerServerId?: string;
+  providerName?: string;
+  providerCountryId?: number | string;
+  providerServiceCode?: string;
   operator?: string;
   service?: string;
   country?: string;
@@ -61,6 +65,15 @@ export async function POST(request: Request) {
       serviceId: body.serviceId,
       serviceCode: body.serviceCode,
       serverId: body.serverId,
+      providerServerId: body.providerServerId,
+      providerName: body.providerName,
+      providerCountryId:
+        typeof body.providerCountryId === "number"
+          ? body.providerCountryId
+          : typeof body.providerCountryId === "string"
+            ? Number(body.providerCountryId)
+            : undefined,
+      providerServiceCode: body.providerServiceCode,
       operator: normalizeOperatorForCountry(countryId, body.operator),
       service: body.service,
       country: body.country,
