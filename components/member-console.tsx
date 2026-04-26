@@ -23,6 +23,7 @@ import type {
   DepositRecord,
   Order,
   PricingSettings,
+  ProviderVariantResponse,
   Service,
   ServicePriceOverride,
   WalletLedgerEntry,
@@ -221,6 +222,31 @@ function toFlagEmoji(code?: string) {
 function getCountryLabel(country: CountryOption) {
   const flag = country.flagEmoji ?? toFlagEmoji(country.code);
   return `${flag ? `${flag} ` : ""}${country.name}`;
+}
+
+function findPreferredCountryId(
+  countries: CountryOption[],
+  fallbackId?: number | null,
+) {
+  const fallbackCountry =
+    typeof fallbackId === "number"
+      ? countries.find((country) => country.id === fallbackId)
+      : null;
+  const indonesiaByName = countries.find(
+    (country) => country.name.trim().toLowerCase() === "indonesia",
+  );
+  const indonesiaByCode = countries.find(
+    (country) => country.code.trim().toUpperCase() === "ID",
+  );
+
+  return (
+    indonesiaByName?.id ??
+    indonesiaByCode?.id ??
+    fallbackCountry?.id ??
+    countries.find((country) => country.id === 88)?.id ??
+    countries[0]?.id ??
+    null
+  );
 }
 
 function cn(...values: Array<string | false | null | undefined>) {
@@ -641,6 +667,28 @@ async function requestCatalog(serverId: ServerId, countryId: number) {
   return payload;
 }
 
+async function requestProviderVariants(
+  serverId: ServerId,
+  countryId: number,
+  serviceCode: string,
+) {
+  const response = await fetch(
+    `/api/catalog/providers?server=${serverId}&countryId=${countryId}&serviceCode=${encodeURIComponent(serviceCode)}`,
+    {
+      cache: "no-store",
+    },
+  );
+  const payload = (await response.json()) as ProviderVariantResponse | ErrorResponse;
+
+  if (!response.ok || hasError(payload) || !("services" in payload)) {
+    throw new Error(
+      hasError(payload) ? payload.error : "Gagal memuat provider layanan.",
+    );
+  }
+
+  return payload.services;
+}
+
 async function requestRegister(input: {
   name: string;
   email: string;
@@ -740,6 +788,9 @@ async function requestCreateOrder(input: {
   serviceCode: string;
   serverId: ServerId;
   countryId: number;
+  providerServerId?: string;
+  providerCountryId?: number;
+  providerServiceCode?: string;
   operator?: string;
 }) {
   const response = await fetch("/api/account/orders", {
@@ -1051,6 +1102,7 @@ export function MemberConsole({
   const [selectedProviderServiceId, setSelectedProviderServiceId] = useState(
     initialCatalog?.services[0]?.id ?? "",
   );
+  const [providerVariants, setProviderVariants] = useState<Service[]>([]);
   const [serviceSearch, setServiceSearch] = useState("");
   const [buyHistorySearch, setBuyHistorySearch] = useState("");
   const [buyHistoryStatus, setBuyHistoryStatus] = useState<
@@ -1068,6 +1120,7 @@ export function MemberConsole({
   const [dashboardError, setDashboardError] = useState<string | null>(null);
   const [depositError, setDepositError] = useState<string | null>(null);
   const [orderError, setOrderError] = useState<string | null>(null);
+  const [providerError, setProviderError] = useState<string | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [adminError, setAdminError] = useState<string | null>(null);
   const [adminPricingError, setAdminPricingError] = useState<string | null>(null);
@@ -1093,6 +1146,7 @@ export function MemberConsole({
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [isCountriesLoading, setIsCountriesLoading] = useState(false);
   const [isCatalogLoading, setIsCatalogLoading] = useState(false);
+  const [isProviderLoading, setIsProviderLoading] = useState(false);
   const [isDepositLoading, setIsDepositLoading] = useState(false);
   const [isOrderLoading, setIsOrderLoading] = useState(false);
   const [isOrderCancelling, setIsOrderCancelling] = useState(false);
@@ -1158,7 +1212,10 @@ export function MemberConsole({
     [selectedServiceId, serviceGroups],
   );
   const selectedService = useMemo(() => {
-    const variants = selectedServiceGroup?.variants ?? [];
+    const variants =
+      selectedServer === "bimasakti"
+        ? providerVariants
+        : selectedServiceGroup?.variants ?? [];
 
     return (
       variants.find((service) => service.id === selectedProviderServiceId) ??
@@ -1166,10 +1223,13 @@ export function MemberConsole({
       variants[0] ??
       null
     );
-  }, [selectedProviderServiceId, selectedServiceGroup]);
-  const selectedProviderVariants = selectedServiceGroup?.variants ?? [];
+  }, [providerVariants, selectedProviderServiceId, selectedServer, selectedServiceGroup]);
+  const selectedProviderVariants =
+    selectedServer === "bimasakti"
+      ? providerVariants
+      : selectedServiceGroup?.variants ?? [];
   const requiresProviderSelection =
-    selectedServer === "bimasakti" && selectedProviderVariants.length > 0;
+    selectedServer === "bimasakti" && Boolean(selectedServiceGroup);
   const isSelectedOutOfStock = Boolean(
     selectedService && Number.isFinite(selectedService.stock) && selectedService.stock <= 0,
   );
@@ -1369,21 +1429,85 @@ export function MemberConsole({
   }, [summary?.orders.length]);
 
   useEffect(() => {
-    const variants = selectedServiceGroup?.variants ?? [];
-
-    if (!variants.length) {
+    if (!selectedServiceGroup) {
+      setProviderVariants([]);
+      setProviderError(null);
+      setIsProviderLoading(false);
       setSelectedProviderServiceId("");
       return;
     }
 
-    if (variants.some((service) => service.id === selectedProviderServiceId)) {
+    if (selectedServer !== "bimasakti") {
+      const variants = selectedServiceGroup.variants;
+
+      setProviderVariants([]);
+      setProviderError(null);
+      setIsProviderLoading(false);
+      setSelectedProviderServiceId((current) => {
+        if (current && variants.some((service) => service.id === current)) {
+          return current;
+        }
+
+        return variants.find((service) => service.stock > 0)?.id ?? variants[0]?.id ?? "";
+      });
       return;
     }
 
-    setSelectedProviderServiceId(
-      variants.find((service) => service.stock > 0)?.id ?? variants[0].id,
-    );
-  }, [selectedProviderServiceId, selectedServiceGroup]);
+    if (!selectedCountryId) {
+      setProviderVariants([]);
+      setProviderError(null);
+      setIsProviderLoading(false);
+      setSelectedProviderServiceId("");
+      return;
+    }
+
+    let ignoreResult = false;
+    setProviderVariants([]);
+    setProviderError(null);
+    setIsProviderLoading(true);
+    setSelectedProviderServiceId("");
+
+    void requestProviderVariants(
+      selectedServer,
+      selectedCountryId,
+      selectedServiceGroup.serviceCode,
+    )
+      .then((variants) => {
+        if (ignoreResult) {
+          return;
+        }
+
+        setProviderVariants(variants);
+        setSelectedProviderServiceId(
+          variants.find((service) => service.stock > 0)?.id ?? variants[0]?.id ?? "",
+        );
+        setProviderError(
+          variants.length > 0
+            ? null
+            : "Provider layanan ini sedang kosong untuk negara yang dipilih.",
+        );
+      })
+      .catch((error) => {
+        if (ignoreResult) {
+          return;
+        }
+
+        setProviderVariants([]);
+        setSelectedProviderServiceId("");
+        setProviderError(
+          error instanceof Error ? error.message : "Gagal memuat provider layanan.",
+        );
+      })
+      .finally(() => {
+        if (!ignoreResult) {
+          setIsProviderLoading(false);
+        }
+      });
+
+    return () => {
+      ignoreResult = true;
+    };
+  }, [selectedCountryId, selectedServer, selectedServiceGroup]);
 
   useEffect(() => {
     if (!hasPendingOrderTimer) {
@@ -1506,11 +1630,7 @@ export function MemberConsole({
             return current;
           }
 
-          return (
-            nextCountries.find((country) => country.id === 6)?.id ??
-            nextCountries[0]?.id ??
-            null
-          );
+          return findPreferredCountryId(nextCountries);
         });
       } catch (error) {
         setAdminPricingCountries([]);
@@ -1636,7 +1756,7 @@ export function MemberConsole({
             return current;
           }
 
-          return result.find((country) => country.id === 6)?.id ?? result[0]?.id ?? null;
+          return findPreferredCountryId(result);
         });
       })
       .catch((error) => {
@@ -1781,11 +1901,7 @@ export function MemberConsole({
       setSummary(nextSummary);
       setCountries(initialCountries);
       setSelectedCountryId(
-        nextSummary.orders[0]?.countryId ??
-          initialCountryId ??
-          initialCountries.find((country) => country.id === 6)?.id ??
-          initialCountries[0]?.id ??
-          null,
+        findPreferredCountryId(initialCountries, initialCountryId),
       );
       setActiveDeposit(
         nextSummary.deposits.find((deposit) => deposit.status === "pending") ?? null,
@@ -1826,6 +1942,8 @@ export function MemberConsole({
       setSelectedCountryId(null);
       setSelectedServiceId("");
       setSelectedProviderServiceId("");
+      setProviderVariants([]);
+      setProviderError(null);
       setActiveDeposit(null);
       setActiveOrder(null);
       setAdminUsers([]);
@@ -1886,8 +2004,20 @@ export function MemberConsole({
   }
 
   async function handleOrderSubmit() {
+    if (requiresProviderSelection && isProviderLoading) {
+      const message = "Provider layanan sedang dimuat. Tunggu sebentar.";
+      setOrderError(message);
+      setToast({
+        type: "error",
+        message,
+      });
+      return;
+    }
+
     if (!selectedService || !selectedCountryId) {
-      const message = "Pilih negara dan layanan dulu sebelum membeli nomor.";
+      const message = requiresProviderSelection
+        ? "Pilih provider layanan dulu sebelum membeli nomor."
+        : "Pilih negara dan layanan dulu sebelum membeli nomor.";
       setOrderError(message);
       setToast({
         type: "error",
@@ -1915,6 +2045,9 @@ export function MemberConsole({
         serviceCode: selectedService.serviceCode,
         serverId: selectedServer,
         countryId: selectedCountryId,
+        providerServerId: selectedService.providerServerId,
+        providerCountryId: selectedService.providerCountryId,
+        providerServiceCode: selectedService.providerServiceCode,
         operator: "any",
       });
       setActiveOrder(order);
@@ -2950,12 +3083,18 @@ export function MemberConsole({
                         : "border-white/10 bg-white/4",
                     )}
                     onClick={() => {
+                      if (selectedServer === server.id) {
+                        return;
+                      }
+
                       setSelectedServer(server.id);
                       setCountries([]);
                       setCatalog(null);
                       setSelectedCountryId(null);
                       setSelectedServiceId("");
                       setSelectedProviderServiceId("");
+                      setProviderVariants([]);
+                      setProviderError(null);
                     }}
                     type="button"
                   >
@@ -2978,6 +3117,8 @@ export function MemberConsole({
                   setSelectedCountryId(Number(event.target.value));
                   setSelectedServiceId("");
                   setSelectedProviderServiceId("");
+                  setProviderVariants([]);
+                  setProviderError(null);
                 }}
                 value={selectedCountryId ?? ""}
               >
@@ -3032,11 +3173,17 @@ export function MemberConsole({
                     )}
                     onClick={() => {
                       setSelectedServiceId(service.id);
-                      setSelectedProviderServiceId(
-                        service.variants.find((variant) => variant.stock > 0)?.id ??
-                          service.variants[0]?.id ??
-                          "",
-                      );
+                      if (selectedServer === "bimasakti") {
+                        setSelectedProviderServiceId("");
+                        setProviderVariants([]);
+                        setProviderError(null);
+                      } else {
+                        setSelectedProviderServiceId(
+                          service.variants.find((variant) => variant.stock > 0)?.id ??
+                            service.variants[0]?.id ??
+                            "",
+                        );
+                      }
                     }}
                     type="button"
                   >
@@ -3073,6 +3220,23 @@ export function MemberConsole({
                   </p>
                 </div>
                 <div className="mt-3 space-y-2">
+                  {isProviderLoading ? (
+                    <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4 text-[12px] text-sky-100/65">
+                      Memuat provider layanan...
+                    </div>
+                  ) : null}
+                  {providerError ? (
+                    <div className="rounded-[16px] border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-[12px] text-rose-100">
+                      {providerError}
+                    </div>
+                  ) : null}
+                  {!isProviderLoading &&
+                  !providerError &&
+                  selectedProviderVariants.length === 0 ? (
+                    <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4 text-[12px] text-sky-100/65">
+                      Tidak ada provider tersedia untuk layanan ini.
+                    </div>
+                  ) : null}
                   {selectedProviderVariants.map((variant) => {
                     const active = selectedService?.id === variant.id;
 
@@ -3151,7 +3315,12 @@ export function MemberConsole({
                       ? "bg-[linear-gradient(135deg,#7af1ff,#358cff)] text-[#08101c]"
                       : "bg-white/8 text-sky-100/55",
                   )}
-                  disabled={isOrderLoading || summary.viewer.walletBalance < selectedService.price || isSelectedOutOfStock}
+                  disabled={
+                    isOrderLoading ||
+                    isProviderLoading ||
+                    summary.viewer.walletBalance < selectedService.price ||
+                    isSelectedOutOfStock
+                  }
                   onClick={() => {
                     void handleOrderSubmit();
                   }}

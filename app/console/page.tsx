@@ -14,7 +14,12 @@ export default async function ConsolePage() {
     ? await getCountries("bimasakti").catch(() => [])
     : [];
   const initialCountryId = initialViewer
-    ? initialCountries.find((country) => country.id === 6)?.id ??
+    ? initialCountries.find(
+        (country) => country.name.trim().toLowerCase() === "indonesia",
+      )?.id ??
+      initialCountries.find((country) => country.code.trim().toUpperCase() === "ID")
+        ?.id ??
+      initialCountries.find((country) => country.id === 88)?.id ??
       initialCountries[0]?.id ??
       null
     : null;

@@ -501,6 +501,31 @@ function hasCountryCode(country?: Pick<CountryOption, "code"> | null) {
   return Boolean(country?.code && /^[a-z]{2}$/i.test(country.code));
 }
 
+function findPreferredCountryId(
+  countries: CountryOption[],
+  fallbackId?: number | null,
+) {
+  const fallbackCountry =
+    typeof fallbackId === "number"
+      ? countries.find((country) => country.id === fallbackId)
+      : null;
+  const indonesiaByName = countries.find(
+    (country) => country.name.trim().toLowerCase() === "indonesia",
+  );
+  const indonesiaByCode = countries.find(
+    (country) => country.code.trim().toUpperCase() === "ID",
+  );
+
+  return (
+    indonesiaByName?.id ??
+    indonesiaByCode?.id ??
+    fallbackCountry?.id ??
+    countries.find((country) => country.id === 88)?.id ??
+    countries[0]?.id ??
+    null
+  );
+}
+
 function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
@@ -1058,11 +1083,7 @@ export function CatalogConsole({
           return current;
         }
 
-        if (nextCountries.some((country) => country.id === 6)) {
-          return 6;
-        }
-
-        return nextCountries[0]?.id ?? null;
+        return findPreferredCountryId(nextCountries);
       });
     } catch (error) {
       setCountries([]);
@@ -1599,8 +1620,15 @@ export function CatalogConsole({
                       : "border-white/10 bg-[#13315b]",
                   )}
                   onClick={() => {
+                    if (selectedServer === server.id) {
+                      return;
+                    }
+
                     playUiFeedback("select");
                     setSelectedServer(server.id);
+                    setSelectedCountryId(null);
+                    setSelectedServiceId("");
+                    setComparisonService(null);
                   }}
                   type="button"
                 >

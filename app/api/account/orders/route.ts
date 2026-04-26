@@ -8,6 +8,9 @@ type CreateOrderBody = {
   serviceCode?: string;
   serverId?: "bimasakti" | "mars";
   countryId?: number | string;
+  providerServerId?: string;
+  providerCountryId?: number | string;
+  providerServiceCode?: string;
   operator?: string;
 };
 
@@ -59,6 +62,14 @@ export async function POST(request: Request) {
       serviceCode: body.serviceCode,
       serverId: body.serverId,
       countryId,
+      providerServerId: body.providerServerId,
+      providerCountryId:
+        typeof body.providerCountryId === "number"
+          ? body.providerCountryId
+          : typeof body.providerCountryId === "string"
+            ? Number(body.providerCountryId)
+            : undefined,
+      providerServiceCode: body.providerServiceCode,
       operator: body.operator,
     });
 

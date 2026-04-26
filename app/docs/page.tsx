@@ -27,7 +27,12 @@ const envFields = [
   {
     name: "UPSTREAM_BASE_URL",
     required: "Ya",
-    description: "Base URL provider supply upstream Anda.",
+    description: "Base URL endpoint order, saldo, riwayat, dan status provider upstream.",
+  },
+  {
+    name: "UPSTREAM_WEB_BASE_URL",
+    required: "No",
+    description: "Base URL katalog web KirimKode. Default `https://kirimkode.com`.",
   },
   {
     name: "UPSTREAM_API_KEY",
@@ -43,11 +48,6 @@ const envFields = [
     name: "UPSTREAM_BALANCE_PATH",
     required: "No",
     description: "Path endpoint cek saldo upstream. Default `/balance`.",
-  },
-  {
-    name: "UPSTREAM_SERVICES_PATH",
-    required: "No",
-    description: "Path endpoint katalog layanan. Default `/services`.",
   },
   {
     name: "UPSTREAM_HISTORY_PATH",
@@ -82,12 +82,12 @@ const envFields = [
   {
     name: "UPSTREAM_SERVER_BIMASAKTI_CODE",
     required: "No",
-    description: "Kode upstream untuk provider Skyword. Default `api1`.",
+    description: "Kode katalog web untuk Skyword/Bimasakti. Default `unified`.",
   },
   {
     name: "UPSTREAM_SERVER_MARS_CODE",
     required: "No",
-    description: "Kode upstream untuk provider Blueverifiy. Default `api2`.",
+    description: "Kode katalog/order untuk Blueverifiy/Mars. Default `api1`.",
   },
   {
     name: "UPSTREAM_MARKUP_PERCENT",

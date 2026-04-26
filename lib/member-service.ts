@@ -31,7 +31,7 @@ import {
   normalizeOperatorForCountry,
 } from "@/lib/operators";
 import { hashPasswordForStorage } from "@/lib/auth";
-import { cancelOrder, createOrder, getBalance, getCatalog, getOrder } from "@/lib/provider";
+import { cancelOrder, createOrder, getBalance, getCatalog, getOrder, getServiceProviders } from "@/lib/provider";
 import { siteConfig } from "@/lib/site-config";
 import type { DashboardSummary, DepositRecord, Order } from "@/lib/types";
 
@@ -49,6 +49,9 @@ type PurchaseOrderInput = {
   serviceCode?: string;
   serverId: "bimasakti" | "mars";
   countryId: number;
+  providerServerId?: string;
+  providerCountryId?: number;
+  providerServiceCode?: string;
   operator?: string;
 };
 
@@ -335,11 +338,28 @@ export async function purchaseOtpWithWallet(input: PurchaseOrderInput) {
     serverId: input.serverId,
     countryId: input.countryId,
   });
-  const service = catalog.services.find(
+  let service = catalog.services.find(
     (item) =>
       item.id === input.serviceId ||
       (input.serviceCode ? item.serviceCode === input.serviceCode : false),
   );
+
+  if (input.providerServerId && input.serviceCode) {
+    const providers = await getServiceProviders({
+      serverId: input.serverId,
+      countryId: input.countryId,
+      serviceCode: input.serviceCode,
+    });
+    service =
+      providers.services.find(
+        (item) =>
+          item.id === input.serviceId ||
+          (item.providerServerId === input.providerServerId &&
+            (!input.providerCountryId || item.providerCountryId === input.providerCountryId) &&
+            (!input.providerServiceCode ||
+              item.providerServiceCode === input.providerServiceCode)),
+      ) ?? service;
+  }
 
   if (!service) {
     throw new Error("Layanan OTP tidak ditemukan atau sudah berubah.");

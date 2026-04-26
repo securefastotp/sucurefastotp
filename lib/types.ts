@@ -43,6 +43,16 @@ export type CatalogResponse = {
   warning?: string;
 };
 
+export type ProviderVariantResponse = {
+  updatedAt: string;
+  mode: ProviderMode;
+  serviceCode: string;
+  service: string;
+  services: Service[];
+  source?: "upstream" | "fallback";
+  warning?: string;
+};
+
 export type OrderStatus = "pending" | "otp_received" | "expired" | "cancelled";
 
 export type Order = {
