@@ -16,6 +16,7 @@ export async function GET(request: Request) {
       category: searchParams.get("category") ?? undefined,
       providerServerId: searchParams.get("providerServerId") ?? undefined,
       providerCountryId: searchParams.get("providerCountryId") ?? undefined,
+      operator: searchParams.get("operator") ?? undefined,
     });
 
     return NextResponse.json(catalog);

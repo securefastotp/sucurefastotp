@@ -42,7 +42,7 @@ const envFields = [
   {
     name: "UPSTREAM_API_KEY_HEADER",
     required: "No",
-    description: "Header auth upstream. Default `x-api-key`.",
+    description: "Header auth upstream. Default `X-API-Key`.",
   },
   {
     name: "UPSTREAM_BALANCE_PATH",
@@ -146,9 +146,9 @@ export default function DocsPage() {
             website Anda sendiri.
           </p>
           <p className="mt-3 max-w-3xl text-sm leading-7 text-ink/58">
-            Catatan: pada pengecekan tanggal 12 April 2026, auth KirimKode API
-            berhasil memakai header <code>x-api-key</code>. Endpoint yang
-            berhasil diuji: <code>GET /balance</code>,{" "}
+            Catatan: dokumentasi KirimKode memakai header{" "}
+            <code>X-API-Key</code>. Endpoint utama:{" "}
+            <code>GET /balance</code>, <code>GET /services</code>,{" "}
             <code>GET /orders</code>, <code>POST /order</code>,{" "}
             <code>GET /order/{"{id}"}/status</code>, dan{" "}
             <code>POST /order/{"{id}"}/cancel</code>.

@@ -1141,7 +1141,7 @@ export function CatalogConsole({
   }
 
   async function loadCatalog(serverId: ServerId, countryId: number | null) {
-    if (!countryId) {
+    if (countryId === null) {
       setCatalog(null);
       setSelectedServiceId("");
       setIsLoadingCatalog(false);
@@ -1404,7 +1404,7 @@ export function CatalogConsole({
   }, []);
 
   useEffect(() => {
-    if (!selectedService?.serviceCode || !selectedCountryId) {
+    if (!selectedService?.serviceCode || selectedCountryId === null) {
       setComparisonService(null);
       return;
     }

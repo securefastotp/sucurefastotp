@@ -337,6 +337,7 @@ export async function purchaseOtpWithWallet(input: PurchaseOrderInput) {
   const catalog = await getCatalog({
     serverId: input.serverId,
     countryId: input.countryId,
+    operator: input.operator,
   });
   let service = catalog.services.find(
     (item) =>
@@ -355,7 +356,9 @@ export async function purchaseOtpWithWallet(input: PurchaseOrderInput) {
         (item) =>
           item.id === input.serviceId ||
           (item.providerServerId === input.providerServerId &&
-            (!input.providerCountryId || item.providerCountryId === input.providerCountryId) &&
+            (input.providerCountryId === undefined ||
+              input.providerCountryId === null ||
+              item.providerCountryId === input.providerCountryId) &&
             (!input.providerServiceCode ||
               item.providerServiceCode === input.providerServiceCode)),
       ) ?? service;
@@ -370,7 +373,7 @@ export async function purchaseOtpWithWallet(input: PurchaseOrderInput) {
   }
 
   if (!isOperatorAllowedForCountry(service.countryId, input.operator)) {
-    throw new Error("Operator Indonesia hanya bisa dipakai untuk region Indonesia.");
+    throw new Error("Provider/operator nomor tidak valid.");
   }
 
   const operator = normalizeOperatorForCountry(service.countryId, input.operator);

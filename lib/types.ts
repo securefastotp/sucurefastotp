@@ -80,6 +80,28 @@ export type ProviderOptionsResponse = {
   warning?: string;
 };
 
+export type OperatorOption = {
+  id: string;
+  label: string;
+  serverId: string;
+  countryId: number;
+  upstreamServerId: string;
+  upstreamCountryId: number;
+};
+
+export type OperatorOptionsResponse = {
+  updatedAt: string;
+  mode: ProviderMode;
+  serverId: string;
+  countryId: number;
+  country: string;
+  upstreamServerId: string;
+  upstreamCountryId: number;
+  operators: OperatorOption[];
+  source?: "upstream" | "fallback";
+  warning?: string;
+};
+
 export type OrderStatus = "pending" | "otp_received" | "expired" | "cancelled";
 
 export type Order = {

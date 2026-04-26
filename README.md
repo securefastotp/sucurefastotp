@@ -35,7 +35,7 @@ UPSTREAM_PROVIDER_MODE=rest
 UPSTREAM_BASE_URL=https://api.kirimkode.com/v1
 UPSTREAM_WEB_BASE_URL=https://kirimkode.com
 UPSTREAM_API_KEY=isi_api_key_anda
-UPSTREAM_API_KEY_HEADER=x-api-key
+UPSTREAM_API_KEY_HEADER=X-API-Key
 UPSTREAM_BALANCE_PATH=/balance
 UPSTREAM_HISTORY_PATH=/orders
 UPSTREAM_ORDER_PATH=/order
@@ -74,6 +74,6 @@ MIDTRANS_QRIS_EXPIRY_MINUTES=15
 - Data akun member, session login, wallet, deposit, dan riwayat order member sekarang juga tersimpan di Neon Postgres.
 - Akun admin bisa dikunci ke email tertentu lewat `ADMIN_EMAIL`. Jika env itu belum diisi, akun pertama akan otomatis jadi admin.
 - Riwayat transaksi sekarang bisa mengambil snapshot payment dan status OTP terbaru dari database, bukan hanya memory browser.
-- Dari pengujian live 12 April 2026, KirimKode API menerima auth via header `x-api-key`, memakai `GET /balance`, `GET /orders`, `POST /order`, `GET /order/{id}/status`, dan `POST /order/{id}/cancel`.
+- Dari dokumentasi KirimKode, API menerima auth via header `X-API-Key`, memakai `GET /balance`, `GET /services`, `GET /orders`, `POST /order`, `GET /order/{id}/status`, dan `POST /order/{id}/cancel`.
 - Mode live sekarang hanya memakai katalog real dari endpoint `GET /services` KirimKode. Jika upstream kosong atau error, website akan menampilkan status asli upstream tanpa katalog buatan.
 - Harga jual sekarang mengikuti harga asli upstream tanpa markup tambahan.

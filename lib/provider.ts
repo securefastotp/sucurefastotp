@@ -9,6 +9,11 @@ import {
   listMockOrders,
   listMockServices,
 } from "@/lib/mock-data";
+import {
+  DEFAULT_OPERATOR,
+  getOperatorLabel,
+  normalizeOperator,
+} from "@/lib/operators";
 import { getPaymentGatewayStatus } from "@/lib/payments";
 import {
   getOrderFromDatabase,
@@ -27,6 +32,8 @@ import type {
   Balance,
   CatalogResponse,
   CountryOption,
+  OperatorOption,
+  OperatorOptionsResponse,
   Order,
   OrderHistoryResponse,
   ProviderOption,
@@ -43,6 +50,7 @@ type CatalogFilters = {
   category?: string;
   providerServerId?: string;
   providerCountryId?: number | string;
+  operator?: string;
 };
 
 type CreateOrderInput = {
@@ -202,7 +210,7 @@ export function getProviderConfig() {
     webBaseUrl:
       process.env.UPSTREAM_WEB_BASE_URL ?? "https://kirimkode.com",
     apiKey,
-    apiKeyHeader: process.env.UPSTREAM_API_KEY_HEADER ?? "x-api-key",
+    apiKeyHeader: process.env.UPSTREAM_API_KEY_HEADER ?? "X-API-Key",
     balancePath: process.env.UPSTREAM_BALANCE_PATH ?? "/balance",
     historyPath: process.env.UPSTREAM_HISTORY_PATH ?? "/orders",
     orderPath: process.env.UPSTREAM_ORDER_PATH ?? "/order",
@@ -1018,8 +1026,9 @@ async function fetchLiveServices(
   serverId: string,
   countryId: number,
   providerOverride?: {
-    providerServerId: string;
-    providerCountryId: number;
+    providerServerId?: string;
+    providerCountryId?: number;
+    operator?: string;
     displayCountry?: {
       id: number;
       name: string;
@@ -1034,6 +1043,7 @@ async function fetchLiveServices(
   const upstreamServer =
     providerOverride?.providerServerId ?? resolveWebServer(resolvedServerId);
   const upstreamCountryId = providerOverride?.providerCountryId ?? countryId;
+  const hasExplicitProvider = Boolean(providerOverride?.providerServerId);
   const providerMeta = providerOverride?.providerServerId
     ? getOtpProviderServerMeta(providerOverride.providerServerId)
     : getOtpProviderServerMeta(resolveUpstreamServer(resolvedServerId));
@@ -1041,15 +1051,18 @@ async function fetchLiveServices(
     buildPathWithQuery("/api/otp/layanan", {
       server: upstreamServer,
       negara: upstreamCountryId,
+      operator: providerOverride?.operator,
     }),
   );
   const entries = extractWebServiceEntries(payload, upstreamCountryId);
   const provider =
-    resolvedServerId === "mars"
+    resolvedServerId === "mars" || hasExplicitProvider
       ? {
           serverId: upstreamServer,
-          name: providerMeta?.name ?? getServerName(resolvedServerId),
-          icon: providerMeta?.icon,
+          name: hasExplicitProvider
+            ? providerMeta?.name ?? getServerName(resolvedServerId)
+            : getServerName(resolvedServerId),
+          icon: hasExplicitProvider ? providerMeta?.icon : undefined,
           countryId: upstreamCountryId,
           serviceCode: "",
         }
@@ -1066,6 +1079,61 @@ async function fetchLiveServices(
               serviceCode: entry[0],
             }
           : undefined,
+      }),
+    )
+    .filter((service): service is Service => Boolean(service));
+}
+
+async function fetchOfficialServices(
+  serverId: string,
+  countryId: number,
+  options?: {
+    providerServerId?: string;
+    providerCountryId?: number;
+    operator?: string;
+  },
+) {
+  const resolvedServerId = resolveServerId(serverId);
+  const country = await getWebCountryMeta(resolvedServerId, countryId);
+  const upstreamServer = options?.providerServerId ?? resolveWebServer(resolvedServerId);
+  const upstreamCountryId = options?.providerCountryId ?? countryId;
+  const hasExplicitProvider = Boolean(options?.providerServerId);
+  const providerMeta = options?.providerServerId
+    ? getOtpProviderServerMeta(options.providerServerId)
+    : getOtpProviderServerMeta(resolveUpstreamServer(resolvedServerId));
+  const payload = await fetchUpstreamOptional(
+    buildPathWithQuery("/services", {
+      server: upstreamServer,
+      country: upstreamCountryId,
+      operator:
+        options?.operator && options.operator !== DEFAULT_OPERATOR
+          ? options.operator
+          : undefined,
+    }),
+  );
+
+  if (!payload) {
+    return [];
+  }
+
+  const provider =
+    resolvedServerId === "mars" || hasExplicitProvider
+      ? {
+          serverId: upstreamServer,
+          name: hasExplicitProvider
+            ? providerMeta?.name ?? getServerName(resolvedServerId)
+            : getServerName(resolvedServerId),
+          icon: hasExplicitProvider ? providerMeta?.icon : undefined,
+          countryId: upstreamCountryId,
+        }
+      : undefined;
+
+  return extractOfficialServiceItems(payload)
+    .map((item) =>
+      normalizeOfficialService(item, {
+        serverId: resolvedServerId,
+        country,
+        provider,
       }),
     )
     .filter((service): service is Service => Boolean(service));
@@ -1212,6 +1280,47 @@ async function getProviderCountryMeta(
   return findMatchingProviderCountry(countries, targetCountry) ?? null;
 }
 
+function extractOperatorIds(payload: unknown, countryId: number) {
+  const record =
+    payload && typeof payload === "object" && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {};
+  const data =
+    record.data && typeof record.data === "object" && !Array.isArray(record.data)
+      ? (record.data as Record<string, unknown>)
+      : record;
+  const rawOperators = data[String(countryId)];
+
+  if (!Array.isArray(rawOperators)) {
+    return [DEFAULT_OPERATOR];
+  }
+
+  const operators = rawOperators
+    .map((operator) =>
+      typeof operator === "string" || typeof operator === "number"
+        ? normalizeOperator(String(operator))
+        : "",
+    )
+    .filter(Boolean);
+
+  return [...new Set([DEFAULT_OPERATOR, ...operators])];
+}
+
+async function fetchLiveOperators(upstreamServerId: string, upstreamCountryId: number) {
+  try {
+    const payload = await fetchKirimKodeWeb(
+      buildPathWithQuery("/api/otp/operator", {
+        server: upstreamServerId,
+        negara: upstreamCountryId,
+      }),
+    );
+
+    return extractOperatorIds(payload, upstreamCountryId);
+  } catch {
+    return [DEFAULT_OPERATOR];
+  }
+}
+
 function applyFilters(services: Service[], filters: CatalogFilters) {
   const q = filters.q?.trim().toLowerCase();
   const serverId = filters.serverId ? resolveServerId(filters.serverId) : null;
@@ -1233,7 +1342,7 @@ function applyFilters(services: Service[], filters: CatalogFilters) {
         .includes(q);
 
     const matchesServer = !serverId || service.serverId === serverId;
-    const matchesCountry = !countryId || service.countryId === countryId;
+    const matchesCountry = countryId === null || service.countryId === countryId;
     const matchesProviderServer =
       !providerServerId || service.providerServerId === providerServerId;
     const matchesProviderCountry =
@@ -1347,6 +1456,14 @@ async function fetchKirimKodeWeb(path: string) {
   return payload;
 }
 
+async function fetchUpstreamOptional(path: string) {
+  try {
+    return await fetchUpstream(path);
+  } catch {
+    return null;
+  }
+}
+
 function resolveWebServer(serverId?: string) {
   if (isDirectWebServer(serverId)) {
     return serverId;
@@ -1392,6 +1509,10 @@ function extractWebServiceEntries(payload: unknown, countryId: number) {
       );
     },
   );
+}
+
+function uniqueTags(tags: Array<string | undefined>) {
+  return [...new Set(tags.filter((tag): tag is string => Boolean(tag)))];
 }
 
 function normalizeWebService(
@@ -1450,11 +1571,90 @@ function normalizeWebService(
     stock,
     currency: getPricingConfig().currency,
     deliveryEtaSeconds: 20,
-    tags: [
+    tags: uniqueTags([
       "KirimKode Web",
       getServerName(context.serverId),
-      ...(context.provider?.name ? [context.provider.name] : []),
-    ],
+      context.provider?.name,
+    ]),
+  } satisfies Service;
+}
+
+function extractOfficialServiceItems(payload: unknown) {
+  const record =
+    payload && typeof payload === "object" && !Array.isArray(payload)
+      ? (payload as Record<string, unknown>)
+      : {};
+  const data = Array.isArray(record.data) ? record.data : [];
+
+  return data.filter(
+    (item): item is Record<string, unknown> =>
+      Boolean(item) && typeof item === "object" && !Array.isArray(item),
+  );
+}
+
+function normalizeOfficialService(
+  item: Record<string, unknown>,
+  context: {
+    serverId: string;
+    country: {
+      id: number;
+      name: string;
+      code: string;
+      flagEmoji?: string;
+    };
+    provider?: {
+      serverId: string;
+      name: string;
+      icon?: string;
+      countryId: number;
+      serviceCode?: string;
+    };
+  },
+): Service | null {
+  const serviceCode = pickString(item, ["code", "service", "serviceCode"], "")
+    .trim()
+    .toLowerCase();
+  const upstreamPrice = pickNumber(item, ["price", "harga"], 0);
+
+  if (!serviceCode || upstreamPrice <= 0) {
+    return null;
+  }
+
+  const stock = pickNumber(item, ["stock", "stok"], 0);
+  const serviceName = formatServiceName(
+    serviceCode,
+    pickString(item, ["name", "layanan"], ""),
+  );
+
+  return {
+    id: `${context.serverId}-${context.country.id}-${serviceCode}${
+      context.provider?.serverId ? `-${context.provider.serverId}` : ""
+    }`,
+    slug: `${context.serverId}-${context.country.id}-${serviceCode}${
+      context.provider?.serverId ? `-${context.provider.serverId}` : ""
+    }`,
+    serverId: context.serverId,
+    serviceCode,
+    service: serviceName,
+    providerServerId: context.provider?.serverId,
+    providerName: context.provider?.name,
+    providerIcon: context.provider?.icon,
+    providerCountryId: context.provider?.countryId,
+    providerServiceCode: context.provider?.serviceCode ?? serviceCode,
+    country: context.country.name,
+    countryId: context.country.id,
+    countryCode: context.country.code,
+    category: "OTP",
+    upstreamPrice,
+    price: computeRetailPrice(upstreamPrice),
+    stock,
+    currency: getPricingConfig().currency,
+    deliveryEtaSeconds: 20,
+    tags: uniqueTags([
+      "KirimKode API",
+      getServerName(context.serverId),
+      context.provider?.name,
+    ]),
   } satisfies Service;
 }
 
@@ -1770,7 +1970,17 @@ export async function getCatalog(filters: CatalogFilters = {}) {
     );
     const services = await (async () => {
       if (!requestedProviderServerId) {
-        return fetchLiveServices(serverId, countryId);
+        const officialServices = await fetchOfficialServices(serverId, countryId, {
+          operator: normalizeOperator(filters.operator),
+        });
+
+        if (officialServices.length > 0) {
+          return officialServices;
+        }
+
+        return fetchLiveServices(serverId, countryId, {
+          operator: normalizeOperator(filters.operator),
+        });
       }
 
       const baseCountry = await getWebCountryMeta(serverId, countryId);
@@ -1783,9 +1993,20 @@ export async function getCatalog(filters: CatalogFilters = {}) {
         throw new Error("Provider belum tersedia untuk negara yang dipilih.");
       }
 
+      const officialServices = await fetchOfficialServices(serverId, countryId, {
+        providerServerId: requestedProviderServerId,
+        providerCountryId,
+        operator: normalizeOperator(filters.operator),
+      });
+
+      if (officialServices.length > 0) {
+        return officialServices;
+      }
+
       return fetchLiveServices(serverId, countryId, {
         providerServerId: requestedProviderServerId,
         providerCountryId,
+        operator: normalizeOperator(filters.operator),
         displayCountry: baseCountry,
       });
     })();
@@ -2178,6 +2399,86 @@ export async function getProviderOptions(filters: {
         ? "Provider belum tersedia untuk negara yang dipilih."
         : undefined,
   });
+}
+
+function buildOperatorOptionsResponse(
+  operators: OperatorOption[],
+  mode: RuntimeStatus["providerMode"],
+  context: {
+    serverId: string;
+    countryId: number;
+    country: string;
+    upstreamServerId: string;
+    upstreamCountryId: number;
+  },
+  extras?: {
+    source?: "upstream" | "fallback";
+    warning?: string;
+  },
+): OperatorOptionsResponse {
+  return {
+    updatedAt: new Date().toISOString(),
+    mode,
+    serverId: context.serverId,
+    countryId: context.countryId,
+    country: context.country,
+    upstreamServerId: context.upstreamServerId,
+    upstreamCountryId: context.upstreamCountryId,
+    operators,
+    source: extras?.source,
+    warning: extras?.warning,
+  };
+}
+
+export async function getOperatorOptions(filters: {
+  serverId: string;
+  countryId: number | string;
+  providerServerId?: string;
+  providerCountryId?: number | string;
+}) {
+  const config = getProviderConfig();
+  const serverId = resolveServerId(filters.serverId);
+  const countryId = resolveCountryId(filters.countryId);
+  const baseCountry = await getWebCountryMeta(serverId, countryId);
+  const providerServerId = normalizeProviderServerId(filters.providerServerId);
+  const upstreamServerId = providerServerId ?? resolveWebServer(serverId);
+  const upstreamCountryId =
+    filters.providerCountryId !== undefined && filters.providerCountryId !== null
+      ? resolveCountryId(filters.providerCountryId)
+      : countryId;
+  const operatorIds =
+    config.mode === "mock"
+      ? serverId === "mars" && countryId === 6
+        ? [DEFAULT_OPERATOR, "axis", "byu", "indosat", "smartfren", "telkomsel", "three"]
+        : [DEFAULT_OPERATOR]
+      : await fetchLiveOperators(upstreamServerId, upstreamCountryId);
+  const operators = operatorIds.map((operator) => ({
+    id: operator,
+    label: getOperatorLabel(operator),
+    serverId,
+    countryId,
+    upstreamServerId,
+    upstreamCountryId,
+  })) satisfies OperatorOption[];
+
+  return buildOperatorOptionsResponse(
+    operators,
+    config.mode,
+    {
+      serverId,
+      countryId,
+      country: baseCountry.name,
+      upstreamServerId,
+      upstreamCountryId,
+    },
+    {
+      source: config.mode === "mock" ? "fallback" : "upstream",
+      warning:
+        operators.length === 0
+          ? "Provider/operator belum tersedia untuk pilihan ini."
+          : undefined,
+    },
+  );
 }
 
 export async function getCountries(serverId?: string): Promise<CountryOption[]> {

@@ -21,10 +21,10 @@ import type {
   CountryOption,
   DashboardSummary,
   DepositRecord,
+  OperatorOption,
+  OperatorOptionsResponse,
   Order,
   PricingSettings,
-  ProviderOption,
-  ProviderOptionsResponse,
   ProviderVariantResponse,
   Service,
   ServicePriceOverride,
@@ -49,7 +49,7 @@ type CountriesResponse = {
   countries: CountryOption[];
 };
 
-type ProviderOptionsPayload = ProviderOptionsResponse;
+type OperatorOptionsPayload = OperatorOptionsResponse;
 
 type ErrorResponse = {
   error?: string;
@@ -206,10 +206,7 @@ function normalizeProviderDisplayIcon(providerIcon?: string, providerServerId?: 
 
 function getProviderName(service: Service, selectedServer: ServerId) {
   if (selectedServer === "mars") {
-    return (
-      normalizeProviderDisplayName(service.providerName, service.providerServerId) ??
-      "Blueverifiy"
-    );
+    return "Blueverifiy";
   }
 
   return (
@@ -760,16 +757,27 @@ async function requestCountries(serverId: ServerId) {
 async function requestCatalog(
   serverId: ServerId,
   countryId: number,
-  provider?: ProviderOption | null,
+  provider?: {
+    providerServerId?: string;
+    providerCountryId?: number;
+  } | null,
+  operator?: string,
 ) {
   const params = new URLSearchParams({
     server: serverId,
     countryId: String(countryId),
   });
 
-  if (provider) {
+  if (provider?.providerServerId) {
     params.set("providerServerId", provider.providerServerId);
+  }
+
+  if (provider?.providerCountryId !== undefined) {
     params.set("providerCountryId", String(provider.providerCountryId));
+  }
+
+  if (operator) {
+    params.set("operator", operator);
   }
 
   const response = await fetch(
@@ -789,22 +797,39 @@ async function requestCatalog(
   return payload;
 }
 
-async function requestProviderOptions(serverId: ServerId, countryId: number) {
-  const response = await fetch(
-    `/api/catalog/provider-options?server=${serverId}&countryId=${countryId}`,
-    {
-      cache: "no-store",
-    },
-  );
-  const payload = (await response.json()) as ProviderOptionsPayload | ErrorResponse;
+async function requestOperatorOptions(
+  serverId: ServerId,
+  countryId: number,
+  provider?: {
+    providerServerId?: string;
+    providerCountryId?: number;
+  } | null,
+) {
+  const params = new URLSearchParams({
+    server: serverId,
+    countryId: String(countryId),
+  });
 
-  if (!response.ok || hasError(payload) || !("providers" in payload)) {
+  if (provider?.providerServerId) {
+    params.set("providerServerId", provider.providerServerId);
+  }
+
+  if (provider?.providerCountryId !== undefined) {
+    params.set("providerCountryId", String(provider.providerCountryId));
+  }
+
+  const response = await fetch(`/api/catalog/operators?${params.toString()}`, {
+    cache: "no-store",
+  });
+  const payload = (await response.json()) as OperatorOptionsPayload | ErrorResponse;
+
+  if (!response.ok || hasError(payload) || !("operators" in payload)) {
     throw new Error(
-      hasError(payload) ? payload.error : "Gagal memuat provider.",
+      hasError(payload) ? payload.error : "Gagal memuat provider/operator.",
     );
   }
 
-  return payload.providers;
+  return payload.operators;
 }
 
 async function requestProviderVariants(
@@ -1238,9 +1263,9 @@ export function MemberConsole({
   );
   const [selectedServiceId, setSelectedServiceId] = useState("");
   const [selectedProviderServiceId, setSelectedProviderServiceId] = useState("");
-  const [selectedProviderServerId, setSelectedProviderServerId] = useState("");
-  const [providerOptions, setProviderOptions] = useState<ProviderOption[]>([]);
   const [providerVariants, setProviderVariants] = useState<Service[]>([]);
+  const [operatorOptions, setOperatorOptions] = useState<OperatorOption[]>([]);
+  const [selectedOperator, setSelectedOperator] = useState("");
   const [serviceSearch, setServiceSearch] = useState("");
   const [buyHistorySearch, setBuyHistorySearch] = useState("");
   const [buyHistoryStatus, setBuyHistoryStatus] = useState<
@@ -1260,6 +1285,7 @@ export function MemberConsole({
   const [depositError, setDepositError] = useState<string | null>(null);
   const [orderError, setOrderError] = useState<string | null>(null);
   const [providerError, setProviderError] = useState<string | null>(null);
+  const [operatorError, setOperatorError] = useState<string | null>(null);
   const [settingsError, setSettingsError] = useState<string | null>(null);
   const [adminError, setAdminError] = useState<string | null>(null);
   const [adminPricingError, setAdminPricingError] = useState<string | null>(null);
@@ -1285,8 +1311,8 @@ export function MemberConsole({
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [isCountriesLoading, setIsCountriesLoading] = useState(false);
   const [isCatalogLoading, setIsCatalogLoading] = useState(false);
-  const [isProviderOptionsLoading, setIsProviderOptionsLoading] = useState(false);
   const [isProviderLoading, setIsProviderLoading] = useState(false);
+  const [isOperatorLoading, setIsOperatorLoading] = useState(false);
   const [isDepositLoading, setIsDepositLoading] = useState(false);
   const [isOrderLoading, setIsOrderLoading] = useState(false);
   const [isOrderCancelling, setIsOrderCancelling] = useState(false);
@@ -1355,12 +1381,11 @@ export function MemberConsole({
       ) ?? null,
     [selectedServiceId, serviceGroups],
   );
-  const selectedProviderOption = useMemo(
+  const selectedOperatorOption = useMemo(
     () =>
-      providerOptions.find(
-        (provider) => provider.providerServerId === selectedProviderServerId,
-      ) ?? null,
-    [providerOptions, selectedProviderServerId],
+      operatorOptions.find((operator) => operator.id === selectedOperator) ??
+      null,
+    [operatorOptions, selectedOperator],
   );
   const selectedService = useMemo(() => {
     const variants =
@@ -1381,6 +1406,23 @@ export function MemberConsole({
       : selectedServiceGroup?.variants ?? [];
   const requiresProviderSelection =
     selectedServer === "bimasakti" && Boolean(selectedServiceGroup);
+  const operatorProviderServerId =
+    selectedServer === "bimasakti"
+      ? selectedService?.providerServerId
+      : undefined;
+  const operatorProviderCountryId =
+    selectedServer === "bimasakti"
+      ? selectedService?.providerCountryId
+      : undefined;
+  const requiresOperatorBeforeCatalog =
+    selectedServer === "mars" && Boolean(selectedCountry);
+  const selectedCatalogOperatorId =
+    selectedServer === "mars" ? selectedOperatorOption?.id : undefined;
+  const requiresOperatorBeforeOrder =
+    requiresOperatorBeforeCatalog ||
+    Boolean(selectedServer === "bimasakti" && selectedService && operatorOptions.length > 1);
+  const isOperatorMissing =
+    requiresOperatorBeforeOrder && !selectedOperatorOption;
   const isSelectedOutOfStock = Boolean(
     selectedService && Number.isFinite(selectedService.stock) && selectedService.stock <= 0,
   );
@@ -1604,7 +1646,7 @@ export function MemberConsole({
       return;
     }
 
-    if (!selectedCountryId) {
+    if (selectedCountryId === null) {
       setProviderVariants([]);
       setProviderError(null);
       setIsProviderLoading(false);
@@ -1932,55 +1974,54 @@ export function MemberConsole({
   }, [viewer, selectedServer]);
 
   useEffect(() => {
-    if (!viewer || !selectedCountryId) {
-      setCatalog(null);
-      setSelectedServiceId("");
-      setSelectedProviderServerId("");
-      setProviderOptions([]);
-      setSelectedProviderServiceId("");
-      setProviderVariants([]);
-      setProviderError(null);
-      setIsCatalogLoading(false);
-      setIsProviderOptionsLoading(false);
-      setIsServiceListOpen(false);
-      return;
-    }
-
-    if (selectedServer !== "mars") {
-      setSelectedProviderServerId("");
-      setProviderOptions([]);
-      setIsProviderOptionsLoading(false);
+    if (
+      !viewer ||
+      selectedCountryId === null ||
+      (selectedServer === "bimasakti" && !operatorProviderServerId)
+    ) {
+      setOperatorOptions([]);
+      setSelectedOperator("");
+      setOperatorError(null);
+      setIsOperatorLoading(false);
       return;
     }
 
     let ignoreResult = false;
-    setCatalog(null);
-    setSelectedServiceId("");
-    setSelectedProviderServiceId("");
-    setProviderVariants([]);
-    setProviderError(null);
-    setIsCatalogLoading(false);
-    setIsProviderOptionsLoading(true);
-    setIsServiceListOpen(false);
+    const provider =
+      selectedServer === "bimasakti" && operatorProviderServerId
+        ? {
+            providerServerId: operatorProviderServerId,
+            providerCountryId: operatorProviderCountryId,
+          }
+        : null;
 
-    void requestProviderOptions(selectedServer, selectedCountryId)
+    setOperatorOptions([]);
+    setSelectedOperator("");
+    setOperatorError(null);
+    setIsOperatorLoading(true);
+
+    void requestOperatorOptions(selectedServer, selectedCountryId, provider)
       .then((result) => {
         if (ignoreResult) {
           return;
         }
 
-        setProviderOptions(result);
-        setSelectedProviderServerId((current) => {
-          if (current && result.some((provider) => provider.providerServerId === current)) {
+        setOperatorOptions(result);
+        setSelectedOperator((current) => {
+          if (current && result.some((operator) => operator.id === current)) {
             return current;
           }
 
-          return "";
+          if (selectedServer === "mars" && result.length > 1) {
+            return "";
+          }
+
+          return result.find((operator) => operator.id === "any")?.id ?? result[0]?.id ?? "";
         });
-        setProviderError(
+        setOperatorError(
           result.length > 0
             ? null
-            : "Provider belum tersedia untuk negara yang dipilih.",
+            : "Provider/operator belum tersedia untuk pilihan ini.",
         );
       })
       .catch((error) => {
@@ -1988,28 +2029,34 @@ export function MemberConsole({
           return;
         }
 
-        setProviderOptions([]);
-        setSelectedProviderServerId("");
-        setProviderError(
-          error instanceof Error ? error.message : "Gagal memuat provider.",
+        setOperatorOptions([]);
+        setSelectedOperator("");
+        setOperatorError(
+          error instanceof Error ? error.message : "Gagal memuat provider/operator.",
         );
       })
       .finally(() => {
         if (!ignoreResult) {
-          setIsProviderOptionsLoading(false);
+          setIsOperatorLoading(false);
         }
       });
 
     return () => {
       ignoreResult = true;
     };
-  }, [viewer, selectedServer, selectedCountryId]);
+  }, [
+    viewer,
+    selectedServer,
+    selectedCountryId,
+    operatorProviderServerId,
+    operatorProviderCountryId,
+  ]);
 
   useEffect(() => {
     if (
       !viewer ||
-      !selectedCountryId ||
-      (selectedServer === "mars" && !selectedProviderOption)
+      selectedCountryId === null ||
+      (selectedServer === "mars" && !selectedCatalogOperatorId)
     ) {
       setCatalog(null);
       setSelectedServiceId("");
@@ -2025,7 +2072,8 @@ export function MemberConsole({
     void requestCatalog(
       selectedServer,
       selectedCountryId,
-      selectedServer === "mars" ? selectedProviderOption : null,
+      null,
+      selectedCatalogOperatorId,
     )
       .then((result) => {
         if (ignoreResult) {
@@ -2056,7 +2104,7 @@ export function MemberConsole({
     return () => {
       ignoreResult = true;
     };
-  }, [viewer, selectedServer, selectedCountryId, selectedProviderOption]);
+  }, [viewer, selectedServer, selectedCountryId, selectedCatalogOperatorId]);
 
   useEffect(() => {
     if (!canAccessAdmin || activeTab !== "admin") {
@@ -2083,7 +2131,7 @@ export function MemberConsole({
   }, [activeTab, adminPricingServer, canAccessAdmin, loadAdminPricingCountries]);
 
   useEffect(() => {
-    if (!canAccessAdmin || activeTab !== "admin" || !adminPricingCountryId) {
+    if (!canAccessAdmin || activeTab !== "admin" || adminPricingCountryId === null) {
       return;
     }
 
@@ -2144,10 +2192,11 @@ export function MemberConsole({
       setSelectedCountryId(
         findPreferredCountryId(initialCountries, initialCountryId),
       );
-      setSelectedProviderServerId("");
-      setProviderOptions([]);
       setSelectedProviderServiceId("");
       setProviderVariants([]);
+      setOperatorOptions([]);
+      setSelectedOperator("");
+      setOperatorError(null);
       setActiveDeposit(
         nextSummary.deposits.find((deposit) => deposit.status === "pending") ?? null,
       );
@@ -2186,11 +2235,12 @@ export function MemberConsole({
       setCountries([]);
       setSelectedCountryId(null);
       setSelectedServiceId("");
-      setSelectedProviderServerId("");
-      setProviderOptions([]);
       setSelectedProviderServiceId("");
       setProviderVariants([]);
       setProviderError(null);
+      setOperatorOptions([]);
+      setSelectedOperator("");
+      setOperatorError(null);
       setIsServiceListOpen(false);
       setActiveDeposit(null);
       setActiveOrder(null);
@@ -2262,10 +2312,33 @@ export function MemberConsole({
       return;
     }
 
-    if (!selectedService || !selectedCountryId) {
+    if (isOperatorLoading) {
+      const message = "Provider/operator sedang dimuat. Tunggu sebentar.";
+      setOrderError(message);
+      setToast({
+        type: "error",
+        message,
+      });
+      return;
+    }
+
+    if (!selectedService || selectedCountryId === null) {
       const message = requiresProviderSelection
         ? "Pilih provider layanan dulu sebelum membeli nomor."
         : "Pilih negara dan layanan dulu sebelum membeli nomor.";
+      setOrderError(message);
+      setToast({
+        type: "error",
+        message,
+      });
+      return;
+    }
+
+    if (isOperatorMissing) {
+      const message =
+        selectedServer === "mars"
+          ? "Pilih provider/operator dulu sebelum membeli nomor."
+          : "Pilih operator nomor dulu sebelum membeli nomor.";
       setOrderError(message);
       setToast({
         type: "error",
@@ -2296,7 +2369,7 @@ export function MemberConsole({
         providerServerId: selectedService.providerServerId,
         providerCountryId: selectedService.providerCountryId,
         providerServiceCode: selectedService.providerServiceCode,
-        operator: "any",
+        operator: selectedOperatorOption?.id ?? "any",
       });
       setActiveOrder(order);
       await refreshSummary();
@@ -2675,13 +2748,18 @@ export function MemberConsole({
       setAdminProfitPercent(String(payload.config.profitPercent));
       const refreshTasks: Promise<unknown>[] = [loadAdminPricingState()];
 
-      if (adminPricingCountryId) {
+      if (adminPricingCountryId !== null) {
         refreshTasks.push(loadAdminPricingCatalog(adminPricingServer, adminPricingCountryId));
       }
 
-      if (selectedCountryId) {
+      if (selectedCountryId !== null) {
         refreshTasks.push(
-          requestCatalog(selectedServer, selectedCountryId).then((nextCatalog) => {
+          requestCatalog(
+            selectedServer,
+            selectedCountryId,
+            null,
+            selectedServer === "mars" ? selectedOperatorOption?.id : undefined,
+          ).then((nextCatalog) => {
             applyMemberCatalogResult(nextCatalog);
           }),
         );
@@ -2711,7 +2789,7 @@ export function MemberConsole({
   ) {
     event.preventDefault();
 
-    if (!selectedAdminPricingService || !adminPricingCountryId) {
+    if (!selectedAdminPricingService || adminPricingCountryId === null) {
       setAdminPricingError("Pilih layanan yang ingin diatur terlebih dahulu.");
       return;
     }
@@ -2742,9 +2820,14 @@ export function MemberConsole({
         loadAdminPricingCatalog(adminPricingServer, adminPricingCountryId),
       ];
 
-      if (selectedCountryId) {
+      if (selectedCountryId !== null) {
         refreshTasks.push(
-          requestCatalog(selectedServer, selectedCountryId).then((nextCatalog) => {
+          requestCatalog(
+            selectedServer,
+            selectedCountryId,
+            null,
+            selectedServer === "mars" ? selectedOperatorOption?.id : undefined,
+          ).then((nextCatalog) => {
             applyMemberCatalogResult(nextCatalog);
           }),
         );
@@ -2782,13 +2865,18 @@ export function MemberConsole({
       const payload = await requestAdminServiceOverrideDelete(selectedAdminPricingService.id);
       const refreshTasks: Promise<unknown>[] = [loadAdminPricingState()];
 
-      if (adminPricingCountryId) {
+      if (adminPricingCountryId !== null) {
         refreshTasks.push(loadAdminPricingCatalog(adminPricingServer, adminPricingCountryId));
       }
 
-      if (selectedCountryId) {
+      if (selectedCountryId !== null) {
         refreshTasks.push(
-          requestCatalog(selectedServer, selectedCountryId).then((nextCatalog) => {
+          requestCatalog(
+            selectedServer,
+            selectedCountryId,
+            null,
+            selectedServer === "mars" ? selectedOperatorOption?.id : undefined,
+          ).then((nextCatalog) => {
             applyMemberCatalogResult(nextCatalog);
           }),
         );
@@ -3340,11 +3428,12 @@ export function MemberConsole({
                       setCatalog(null);
                       setSelectedCountryId(null);
                       setSelectedServiceId("");
-                      setSelectedProviderServerId("");
-                      setProviderOptions([]);
                       setSelectedProviderServiceId("");
                       setProviderVariants([]);
                       setProviderError(null);
+                      setOperatorOptions([]);
+                      setSelectedOperator("");
+                      setOperatorError(null);
                       setIsServiceListOpen(false);
                     }}
                     type="button"
@@ -3367,11 +3456,12 @@ export function MemberConsole({
                 onChange={(event) => {
                   setSelectedCountryId(Number(event.target.value));
                   setSelectedServiceId("");
-                  setSelectedProviderServerId("");
-                  setProviderOptions([]);
                   setSelectedProviderServiceId("");
                   setProviderVariants([]);
                   setProviderError(null);
+                  setOperatorOptions([]);
+                  setSelectedOperator("");
+                  setOperatorError(null);
                   setIsServiceListOpen(false);
                 }}
                 value={selectedCountryId ?? ""}
@@ -3393,50 +3483,47 @@ export function MemberConsole({
                   icon={<GlobeIcon className="h-4.5 w-4.5" />}
                   title="Pilih Provider"
                   action={
-                    isProviderOptionsLoading ? (
+                    isOperatorLoading ? (
                       <span className="text-[11px] text-sky-100/60">Loading...</span>
                     ) : null
                   }
                 />
                 <div className="mt-4 space-y-2">
-                  {providerError ? (
+                  {operatorError ? (
                     <div className="rounded-[16px] border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-[12px] text-rose-100">
-                      {providerError}
+                      {operatorError}
                     </div>
                   ) : null}
-                  {isProviderOptionsLoading ? (
+                  {isOperatorLoading ? (
                     <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4 text-[12px] text-sky-100/65">
-                      Memuat provider...
+                      Memuat provider nomor...
                     </div>
                   ) : null}
-                  {!isProviderOptionsLoading &&
-                  !providerError &&
-                  providerOptions.length === 0 ? (
+                  {!isOperatorLoading &&
+                  !operatorError &&
+                  operatorOptions.length === 0 ? (
                     <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4 text-[12px] text-sky-100/65">
                       Provider belum tersedia untuk negara ini.
                     </div>
                   ) : null}
-                  {providerOptions.map((provider) => {
-                    const active =
-                      selectedProviderServerId === provider.providerServerId;
+                  {operatorOptions.map((operator) => {
+                    const active = selectedOperator === operator.id;
 
                     return (
                       <button
-                        key={provider.id}
+                        key={operator.id}
                         className={cn(
                           "flex min-h-14 w-full items-center justify-between gap-3 rounded-[16px] border px-3 py-3 text-left transition",
                           active
                             ? "border-cyan-300/45 bg-[linear-gradient(135deg,rgba(8,33,61,0.96),rgba(12,52,87,0.92))]"
                             : "border-white/10 bg-white/4",
-                          provider.totalStock <= 0 ? "cursor-not-allowed opacity-55" : "",
                         )}
-                        disabled={provider.totalStock <= 0}
                         onClick={() => {
-                          setSelectedProviderServerId(provider.providerServerId);
+                          setSelectedOperator(operator.id);
                           setSelectedServiceId("");
                           setSelectedProviderServiceId("");
                           setProviderVariants([]);
-                          setProviderError(null);
+                          setOperatorError(null);
                           setCatalog(null);
                           setIsServiceListOpen(false);
                         }}
@@ -3444,21 +3531,25 @@ export function MemberConsole({
                       >
                         <span className="flex min-w-0 items-center gap-3">
                           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-cyan-300/12 text-[13px] font-semibold text-cyan-100">
-                            {provider.icon ?? "P"}
+                            {operator.label.slice(0, 1).toUpperCase()}
                           </span>
                           <span className="min-w-0">
                             <span className="block truncate text-[13px] font-semibold text-white">
-                              {provider.name}
+                              {operator.label}
                             </span>
                             <span className="mt-0.5 block truncate text-[11px] text-sky-100/55">
-                              {getCountryLabel(selectedCountry)} - {provider.availableServices} layanan
+                              {getCountryLabel(selectedCountry)}
                             </span>
                           </span>
                         </span>
                         <span className="shrink-0 text-right">
-                          <StockSignal stock={provider.totalStock} />
-                          <span className="mt-1 block text-[11px] font-semibold text-cyan-100">
-                            {formatCurrency(provider.minPrice, provider.currency)}
+                          <span className={cn(
+                            "rounded-full border px-2 py-1 text-[10px] font-semibold",
+                            active
+                              ? "border-emerald-300/35 bg-emerald-400/12 text-emerald-100"
+                              : "border-white/10 bg-white/6 text-sky-100/62",
+                          )}>
+                            {active ? "Dipilih" : "Provider"}
                           </span>
                         </span>
                       </button>
@@ -3469,7 +3560,7 @@ export function MemberConsole({
             ) : null}
 
             {selectedCountry &&
-            (selectedServer === "bimasakti" || selectedProviderOption) ? (
+            (selectedServer === "bimasakti" || selectedOperatorOption) ? (
             <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
               <SectionTitle
                 icon={<CartIcon className="h-4.5 w-4.5" />}
@@ -3644,6 +3735,78 @@ export function MemberConsole({
               </div>
             ) : null}
 
+            {selectedServer === "bimasakti" &&
+            selectedService &&
+            (isOperatorLoading || operatorError || operatorOptions.length > 1) ? (
+              <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
+                <SectionTitle
+                  icon={<GlobeIcon className="h-4.5 w-4.5" />}
+                  title="Pilih Operator"
+                  action={
+                    isOperatorLoading ? (
+                      <span className="text-[11px] text-sky-100/60">Loading...</span>
+                    ) : null
+                  }
+                />
+                <div className="mt-4 space-y-2">
+                  {operatorError ? (
+                    <div className="rounded-[16px] border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-[12px] text-rose-100">
+                      {operatorError}
+                    </div>
+                  ) : null}
+                  {isOperatorLoading ? (
+                    <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4 text-[12px] text-sky-100/65">
+                      Memuat operator nomor...
+                    </div>
+                  ) : null}
+                  {!isOperatorLoading &&
+                  !operatorError &&
+                  operatorOptions.length === 0 ? (
+                    <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4 text-[12px] text-sky-100/65">
+                      Operator belum tersedia untuk provider ini.
+                    </div>
+                  ) : null}
+                  {operatorOptions.map((operator) => {
+                    const active = selectedOperator === operator.id;
+
+                    return (
+                      <button
+                        key={operator.id}
+                        className={cn(
+                          "flex min-h-12 w-full items-center justify-between gap-3 rounded-[16px] border px-3 py-3 text-left transition",
+                          active
+                            ? "border-cyan-300/45 bg-cyan-300/12"
+                            : "border-white/10 bg-white/4",
+                        )}
+                        onClick={() => {
+                          setSelectedOperator(operator.id);
+                          setOperatorError(null);
+                        }}
+                        type="button"
+                      >
+                        <span className="min-w-0">
+                          <span className="block truncate text-[13px] font-semibold text-white">
+                            {operator.label}
+                          </span>
+                          <span className="mt-0.5 block truncate text-[11px] text-sky-100/55">
+                            {getProviderName(selectedService, selectedServer)}
+                          </span>
+                        </span>
+                        <span className={cn(
+                          "rounded-full border px-2 py-1 text-[10px] font-semibold",
+                          active
+                            ? "border-emerald-300/35 bg-emerald-400/12 text-emerald-100"
+                            : "border-white/10 bg-white/6 text-sky-100/62",
+                        )}>
+                          {active ? "Dipilih" : "Operator"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : null}
+
             {selectedService ? (
               <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
                 <SectionTitle icon={<WalletIcon className="h-4.5 w-4.5" />} title="Detail Pesanan" />
@@ -3660,6 +3823,12 @@ export function MemberConsole({
                     <span>Provider</span>
                     <span className="text-white">{getProviderName(selectedService, selectedServer)}</span>
                   </div>
+                  {selectedOperatorOption ? (
+                    <div className="flex items-center justify-between gap-3">
+                      <span>Operator</span>
+                      <span className="text-white">{selectedOperatorOption.label}</span>
+                    </div>
+                  ) : null}
                   <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-2">
                     <span>Saldo Anda</span>
                     <span className="font-semibold text-cyan-100">{formatCurrency(summary.viewer.walletBalance, "IDR")}</span>
@@ -3680,6 +3849,8 @@ export function MemberConsole({
                   disabled={
                     isOrderLoading ||
                     isProviderLoading ||
+                    isOperatorLoading ||
+                    isOperatorMissing ||
                     summary.viewer.walletBalance < selectedService.price ||
                     isSelectedOutOfStock
                   }
@@ -3690,6 +3861,8 @@ export function MemberConsole({
                 >
                   {isOrderLoading ? (
                     <Spinner className="text-[#08101c]" label="Memproses order..." />
+                  ) : isOperatorMissing ? (
+                    selectedServer === "mars" ? "Pilih provider dulu" : "Pilih operator dulu"
                   ) : summary.viewer.walletBalance < selectedService.price ? (
                     "Saldo tidak cukup"
                   ) : isSelectedOutOfStock ? (

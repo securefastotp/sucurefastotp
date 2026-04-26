@@ -51,7 +51,7 @@ export async function POST(request: Request) {
 
   if (!isOperatorAllowedForCountry(countryId, body.operator)) {
     return NextResponse.json(
-      { error: "Operator Indonesia hanya bisa dipakai untuk region Indonesia." },
+      { error: "Provider/operator nomor tidak valid." },
       { status: 400 },
     );
   }
