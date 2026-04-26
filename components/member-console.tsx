@@ -23,6 +23,8 @@ import type {
   DepositRecord,
   Order,
   PricingSettings,
+  ProviderOption,
+  ProviderOptionsResponse,
   ProviderVariantResponse,
   Service,
   ServicePriceOverride,
@@ -46,6 +48,8 @@ type SummaryResponse = {
 type CountriesResponse = {
   countries: CountryOption[];
 };
+
+type ProviderOptionsPayload = ProviderOptionsResponse;
 
 type ErrorResponse = {
   error?: string;
@@ -182,9 +186,30 @@ function normalizeProviderDisplayName(providerName?: string, providerServerId?: 
   return providerName;
 }
 
+function normalizeProviderDisplayIcon(providerIcon?: string, providerServerId?: string) {
+  const normalizedServer = providerServerId?.trim().toLowerCase() ?? "";
+
+  if (normalizedServer === "api1") {
+    return "S";
+  }
+
+  if (normalizedServer === "api2") {
+    return "J";
+  }
+
+  if (normalizedServer === "api3") {
+    return "Z";
+  }
+
+  return providerIcon;
+}
+
 function getProviderName(service: Service, selectedServer: ServerId) {
   if (selectedServer === "mars") {
-    return service.providerName ?? "Blueverifiy";
+    return (
+      normalizeProviderDisplayName(service.providerName, service.providerServerId) ??
+      "Blueverifiy"
+    );
   }
 
   return (
@@ -193,24 +218,8 @@ function getProviderName(service: Service, selectedServer: ServerId) {
   );
 }
 
-function getProviderIcon(service: Service, selectedServer: ServerId) {
-  if (selectedServer === "mars") {
-    return service.providerIcon ?? "B";
-  }
-
-  if (service.providerServerId === "api1") {
-    return "S";
-  }
-
-  if (service.providerServerId === "api3") {
-    return "Z";
-  }
-
-  if (service.providerIcon) {
-    return service.providerIcon;
-  }
-
-  return "P";
+function getProviderIcon(service: Service) {
+  return normalizeProviderDisplayIcon(service.providerIcon, service.providerServerId) ?? "P";
 }
 
 const SUPPORT_LINKS = [
@@ -748,9 +757,23 @@ async function requestCountries(serverId: ServerId) {
   return payload.countries;
 }
 
-async function requestCatalog(serverId: ServerId, countryId: number) {
+async function requestCatalog(
+  serverId: ServerId,
+  countryId: number,
+  provider?: ProviderOption | null,
+) {
+  const params = new URLSearchParams({
+    server: serverId,
+    countryId: String(countryId),
+  });
+
+  if (provider) {
+    params.set("providerServerId", provider.providerServerId);
+    params.set("providerCountryId", String(provider.providerCountryId));
+  }
+
   const response = await fetch(
-    `/api/catalog?server=${serverId}&countryId=${countryId}`,
+    `/api/catalog?${params.toString()}`,
     {
       cache: "no-store",
     },
@@ -764,6 +787,24 @@ async function requestCatalog(serverId: ServerId, countryId: number) {
   }
 
   return payload;
+}
+
+async function requestProviderOptions(serverId: ServerId, countryId: number) {
+  const response = await fetch(
+    `/api/catalog/provider-options?server=${serverId}&countryId=${countryId}`,
+    {
+      cache: "no-store",
+    },
+  );
+  const payload = (await response.json()) as ProviderOptionsPayload | ErrorResponse;
+
+  if (!response.ok || hasError(payload) || !("providers" in payload)) {
+    throw new Error(
+      hasError(payload) ? payload.error : "Gagal memuat provider.",
+    );
+  }
+
+  return payload.providers;
 }
 
 async function requestProviderVariants(
@@ -1197,6 +1238,8 @@ export function MemberConsole({
   );
   const [selectedServiceId, setSelectedServiceId] = useState("");
   const [selectedProviderServiceId, setSelectedProviderServiceId] = useState("");
+  const [selectedProviderServerId, setSelectedProviderServerId] = useState("");
+  const [providerOptions, setProviderOptions] = useState<ProviderOption[]>([]);
   const [providerVariants, setProviderVariants] = useState<Service[]>([]);
   const [serviceSearch, setServiceSearch] = useState("");
   const [buyHistorySearch, setBuyHistorySearch] = useState("");
@@ -1242,6 +1285,7 @@ export function MemberConsole({
   const [isSummaryLoading, setIsSummaryLoading] = useState(false);
   const [isCountriesLoading, setIsCountriesLoading] = useState(false);
   const [isCatalogLoading, setIsCatalogLoading] = useState(false);
+  const [isProviderOptionsLoading, setIsProviderOptionsLoading] = useState(false);
   const [isProviderLoading, setIsProviderLoading] = useState(false);
   const [isDepositLoading, setIsDepositLoading] = useState(false);
   const [isOrderLoading, setIsOrderLoading] = useState(false);
@@ -1310,6 +1354,13 @@ export function MemberConsole({
           service.variants.some((variant) => variant.id === selectedServiceId),
       ) ?? null,
     [selectedServiceId, serviceGroups],
+  );
+  const selectedProviderOption = useMemo(
+    () =>
+      providerOptions.find(
+        (provider) => provider.providerServerId === selectedProviderServerId,
+      ) ?? null,
+    [providerOptions, selectedProviderServerId],
   );
   const selectedService = useMemo(() => {
     const variants =
@@ -1884,9 +1935,86 @@ export function MemberConsole({
     if (!viewer || !selectedCountryId) {
       setCatalog(null);
       setSelectedServiceId("");
+      setSelectedProviderServerId("");
+      setProviderOptions([]);
       setSelectedProviderServiceId("");
       setProviderVariants([]);
       setProviderError(null);
+      setIsCatalogLoading(false);
+      setIsProviderOptionsLoading(false);
+      setIsServiceListOpen(false);
+      return;
+    }
+
+    if (selectedServer !== "mars") {
+      setSelectedProviderServerId("");
+      setProviderOptions([]);
+      setIsProviderOptionsLoading(false);
+      return;
+    }
+
+    let ignoreResult = false;
+    setCatalog(null);
+    setSelectedServiceId("");
+    setSelectedProviderServiceId("");
+    setProviderVariants([]);
+    setProviderError(null);
+    setIsCatalogLoading(false);
+    setIsProviderOptionsLoading(true);
+    setIsServiceListOpen(false);
+
+    void requestProviderOptions(selectedServer, selectedCountryId)
+      .then((result) => {
+        if (ignoreResult) {
+          return;
+        }
+
+        setProviderOptions(result);
+        setSelectedProviderServerId((current) => {
+          if (current && result.some((provider) => provider.providerServerId === current)) {
+            return current;
+          }
+
+          return "";
+        });
+        setProviderError(
+          result.length > 0
+            ? null
+            : "Provider belum tersedia untuk negara yang dipilih.",
+        );
+      })
+      .catch((error) => {
+        if (ignoreResult) {
+          return;
+        }
+
+        setProviderOptions([]);
+        setSelectedProviderServerId("");
+        setProviderError(
+          error instanceof Error ? error.message : "Gagal memuat provider.",
+        );
+      })
+      .finally(() => {
+        if (!ignoreResult) {
+          setIsProviderOptionsLoading(false);
+        }
+      });
+
+    return () => {
+      ignoreResult = true;
+    };
+  }, [viewer, selectedServer, selectedCountryId]);
+
+  useEffect(() => {
+    if (
+      !viewer ||
+      !selectedCountryId ||
+      (selectedServer === "mars" && !selectedProviderOption)
+    ) {
+      setCatalog(null);
+      setSelectedServiceId("");
+      setSelectedProviderServiceId("");
+      setProviderVariants([]);
       setIsCatalogLoading(false);
       setIsServiceListOpen(false);
       return;
@@ -1894,7 +2022,11 @@ export function MemberConsole({
 
     let ignoreResult = false;
     setIsCatalogLoading(true);
-    void requestCatalog(selectedServer, selectedCountryId)
+    void requestCatalog(
+      selectedServer,
+      selectedCountryId,
+      selectedServer === "mars" ? selectedProviderOption : null,
+    )
       .then((result) => {
         if (ignoreResult) {
           return;
@@ -1924,7 +2056,7 @@ export function MemberConsole({
     return () => {
       ignoreResult = true;
     };
-  }, [viewer, selectedServer, selectedCountryId]);
+  }, [viewer, selectedServer, selectedCountryId, selectedProviderOption]);
 
   useEffect(() => {
     if (!canAccessAdmin || activeTab !== "admin") {
@@ -2012,6 +2144,10 @@ export function MemberConsole({
       setSelectedCountryId(
         findPreferredCountryId(initialCountries, initialCountryId),
       );
+      setSelectedProviderServerId("");
+      setProviderOptions([]);
+      setSelectedProviderServiceId("");
+      setProviderVariants([]);
       setActiveDeposit(
         nextSummary.deposits.find((deposit) => deposit.status === "pending") ?? null,
       );
@@ -2050,6 +2186,8 @@ export function MemberConsole({
       setCountries([]);
       setSelectedCountryId(null);
       setSelectedServiceId("");
+      setSelectedProviderServerId("");
+      setProviderOptions([]);
       setSelectedProviderServiceId("");
       setProviderVariants([]);
       setProviderError(null);
@@ -3202,6 +3340,8 @@ export function MemberConsole({
                       setCatalog(null);
                       setSelectedCountryId(null);
                       setSelectedServiceId("");
+                      setSelectedProviderServerId("");
+                      setProviderOptions([]);
                       setSelectedProviderServiceId("");
                       setProviderVariants([]);
                       setProviderError(null);
@@ -3227,6 +3367,8 @@ export function MemberConsole({
                 onChange={(event) => {
                   setSelectedCountryId(Number(event.target.value));
                   setSelectedServiceId("");
+                  setSelectedProviderServerId("");
+                  setProviderOptions([]);
                   setSelectedProviderServiceId("");
                   setProviderVariants([]);
                   setProviderError(null);
@@ -3249,36 +3391,85 @@ export function MemberConsole({
               <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
                 <SectionTitle
                   icon={<GlobeIcon className="h-4.5 w-4.5" />}
-                  title="Provider"
+                  title="Pilih Provider"
+                  action={
+                    isProviderOptionsLoading ? (
+                      <span className="text-[11px] text-sky-100/60">Loading...</span>
+                    ) : null
+                  }
                 />
-                <button
-                  className="mt-4 flex min-h-14 w-full items-center justify-between gap-3 rounded-[16px] border border-cyan-300/18 bg-[linear-gradient(135deg,rgba(8,33,61,0.96),rgba(12,52,87,0.92))] px-3 py-3 text-left"
-                  type="button"
-                >
-                  <span className="flex min-w-0 items-center gap-3">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-cyan-300/12 text-[13px] font-semibold text-cyan-100">
-                      B
-                    </span>
-                    <span className="min-w-0">
-                      <span className="block truncate text-[13px] font-semibold text-white">
-                        Blueverifiy
-                      </span>
-                      <span className="mt-0.5 block truncate text-[11px] text-sky-100/55">
-                        {getCountryLabel(selectedCountry)}
-                      </span>
-                    </span>
-                  </span>
-                  <StockSignal
-                    stock={(catalog?.services ?? []).reduce(
-                      (sum, service) => sum + Math.max(0, service.stock),
-                      0,
-                    )}
-                  />
-                </button>
+                <div className="mt-4 space-y-2">
+                  {providerError ? (
+                    <div className="rounded-[16px] border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-[12px] text-rose-100">
+                      {providerError}
+                    </div>
+                  ) : null}
+                  {isProviderOptionsLoading ? (
+                    <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4 text-[12px] text-sky-100/65">
+                      Memuat provider...
+                    </div>
+                  ) : null}
+                  {!isProviderOptionsLoading &&
+                  !providerError &&
+                  providerOptions.length === 0 ? (
+                    <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4 text-[12px] text-sky-100/65">
+                      Provider belum tersedia untuk negara ini.
+                    </div>
+                  ) : null}
+                  {providerOptions.map((provider) => {
+                    const active =
+                      selectedProviderServerId === provider.providerServerId;
+
+                    return (
+                      <button
+                        key={provider.id}
+                        className={cn(
+                          "flex min-h-14 w-full items-center justify-between gap-3 rounded-[16px] border px-3 py-3 text-left transition",
+                          active
+                            ? "border-cyan-300/45 bg-[linear-gradient(135deg,rgba(8,33,61,0.96),rgba(12,52,87,0.92))]"
+                            : "border-white/10 bg-white/4",
+                          provider.totalStock <= 0 ? "cursor-not-allowed opacity-55" : "",
+                        )}
+                        disabled={provider.totalStock <= 0}
+                        onClick={() => {
+                          setSelectedProviderServerId(provider.providerServerId);
+                          setSelectedServiceId("");
+                          setSelectedProviderServiceId("");
+                          setProviderVariants([]);
+                          setProviderError(null);
+                          setCatalog(null);
+                          setIsServiceListOpen(false);
+                        }}
+                        type="button"
+                      >
+                        <span className="flex min-w-0 items-center gap-3">
+                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-cyan-300/12 text-[13px] font-semibold text-cyan-100">
+                            {provider.icon ?? "P"}
+                          </span>
+                          <span className="min-w-0">
+                            <span className="block truncate text-[13px] font-semibold text-white">
+                              {provider.name}
+                            </span>
+                            <span className="mt-0.5 block truncate text-[11px] text-sky-100/55">
+                              {getCountryLabel(selectedCountry)} - {provider.availableServices} layanan
+                            </span>
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-right">
+                          <StockSignal stock={provider.totalStock} />
+                          <span className="mt-1 block text-[11px] font-semibold text-cyan-100">
+                            {formatCurrency(provider.minPrice, provider.currency)}
+                          </span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             ) : null}
 
-            {selectedCountry ? (
+            {selectedCountry &&
+            (selectedServer === "bimasakti" || selectedProviderOption) ? (
             <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
               <SectionTitle
                 icon={<CartIcon className="h-4.5 w-4.5" />}
@@ -3304,9 +3495,7 @@ export function MemberConsole({
                   <span className="mt-1 block text-[11px] text-sky-100/55">
                     {selectedServiceGroup
                       ? selectedServiceGroup.serviceCode.toUpperCase()
-                      : selectedServer === "mars"
-                        ? "Pilih provider lalu buka daftar layanan"
-                        : "Tekan untuk membuka daftar layanan"}
+                      : "Tekan untuk membuka daftar layanan"}
                   </span>
                 </span>
                 <span className="flex shrink-0 items-center gap-2">
@@ -3431,7 +3620,7 @@ export function MemberConsole({
                       >
                         <div className="flex min-w-0 items-center gap-3">
                           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] bg-white/8 text-[15px] text-white">
-                            {getProviderIcon(variant, selectedServer)}
+                            {getProviderIcon(variant)}
                           </span>
                           <div className="min-w-0">
                             <p className="truncate text-[13px] font-semibold text-white">

@@ -152,10 +152,24 @@ export function listMockServices(filters?: {
       : [
           {
             code: "api1",
-            name: "Blueverifiy",
-            icon: undefined,
+            name: "Senja",
+            icon: "S",
             stockRatio: serverMeta.stockRatio,
             priceRatio: 1,
+          },
+          {
+            code: "api2",
+            name: "Jupiter",
+            icon: "J",
+            stockRatio: 0.64,
+            priceRatio: 1.05,
+          },
+          {
+            code: "api3",
+            name: "Zynn",
+            icon: "Z",
+            stockRatio: 0.52,
+            priceRatio: 1.28,
           },
         ];
 

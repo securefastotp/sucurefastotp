@@ -29,6 +29,8 @@ import type {
   CountryOption,
   Order,
   OrderHistoryResponse,
+  ProviderOption,
+  ProviderOptionsResponse,
   ProviderVariantResponse,
   RuntimeStatus,
   Service,
@@ -39,6 +41,8 @@ type CatalogFilters = {
   serverId?: string;
   countryId?: number | string;
   category?: string;
+  providerServerId?: string;
+  providerCountryId?: number | string;
 };
 
 type CreateOrderInput = {
@@ -128,6 +132,27 @@ const serviceNameMap: Record<string, string> = {
   gg: "Google",
   sp: "Shopee",
 };
+
+const otpProviderServers = [
+  {
+    serverId: "api1",
+    name: "Senja",
+    icon: "S",
+    sortWeight: 1,
+  },
+  {
+    serverId: "api2",
+    name: "Jupiter",
+    icon: "J",
+    sortWeight: 2,
+  },
+  {
+    serverId: "api3",
+    name: "Zynn",
+    icon: "Z",
+    sortWeight: 3,
+  },
+] as const;
 
 const upstreamCache = upstreamCatalogCache as UpstreamCatalogCache;
 
@@ -227,6 +252,29 @@ function resolveUpstreamServer(serverId?: string) {
     : config.bimasaktiCode;
 }
 
+function isDirectWebServer(
+  serverId?: string,
+): serverId is "api1" | "api2" | "api3" | "unified" {
+  return (
+    serverId === "api1" ||
+    serverId === "api2" ||
+    serverId === "api3" ||
+    serverId === "unified"
+  );
+}
+
+function normalizeProviderServerId(serverId?: string) {
+  const normalized = serverId?.trim().toLowerCase();
+
+  return otpProviderServers.some((provider) => provider.serverId === normalized)
+    ? normalized
+    : null;
+}
+
+function getOtpProviderServerMeta(serverId: string) {
+  return otpProviderServers.find((provider) => provider.serverId === serverId);
+}
+
 function getServerName(serverId?: string) {
   return resolveServerId(serverId) === "mars" ? "Blueverifiy" : "Skyword";
 }
@@ -243,19 +291,14 @@ function getSkywordProviderDisplayName(providerServerId: string, upstreamName: s
     return "Zynn";
   }
 
-  return upstreamName || providerServerId.toUpperCase();
+  return (
+    getOtpProviderServerMeta(normalizedServer)?.name ??
+    (upstreamName || providerServerId.toUpperCase())
+  );
 }
 
 function getSkywordProviderDisplayIcon(providerServerId: string, upstreamIcon?: string) {
-  if (providerServerId === "api1") {
-    return "S";
-  }
-
-  if (providerServerId === "api3") {
-    return "Z";
-  }
-
-  return upstreamIcon;
+  return getOtpProviderServerMeta(providerServerId)?.icon ?? upstreamIcon;
 }
 
 function resolveCountryId(countryId?: number | string) {
@@ -971,22 +1014,43 @@ function formatServiceName(serviceCode: string, fallback?: string) {
   return serviceNameMap[serviceCode] ?? serviceCode.toUpperCase();
 }
 
-async function fetchLiveServices(serverId: string, countryId: number) {
+async function fetchLiveServices(
+  serverId: string,
+  countryId: number,
+  providerOverride?: {
+    providerServerId: string;
+    providerCountryId: number;
+    displayCountry?: {
+      id: number;
+      name: string;
+      code: string;
+      flagEmoji?: string;
+    };
+  },
+) {
   const resolvedServerId = resolveServerId(serverId);
-  const country = await getWebCountryMeta(resolvedServerId, countryId);
+  const country =
+    providerOverride?.displayCountry ?? (await getWebCountryMeta(resolvedServerId, countryId));
+  const upstreamServer =
+    providerOverride?.providerServerId ?? resolveWebServer(resolvedServerId);
+  const upstreamCountryId = providerOverride?.providerCountryId ?? countryId;
+  const providerMeta = providerOverride?.providerServerId
+    ? getOtpProviderServerMeta(providerOverride.providerServerId)
+    : getOtpProviderServerMeta(resolveUpstreamServer(resolvedServerId));
   const payload = await fetchKirimKodeWeb(
     buildPathWithQuery("/api/otp/layanan", {
-      server: resolveWebServer(resolvedServerId),
-      negara: countryId,
+      server: upstreamServer,
+      negara: upstreamCountryId,
     }),
   );
-  const entries = extractWebServiceEntries(payload, countryId);
+  const entries = extractWebServiceEntries(payload, upstreamCountryId);
   const provider =
     resolvedServerId === "mars"
       ? {
-          serverId: resolveUpstreamServer(resolvedServerId),
-          name: getServerName(resolvedServerId),
-          countryId,
+          serverId: upstreamServer,
+          name: providerMeta?.name ?? getServerName(resolvedServerId),
+          icon: providerMeta?.icon,
+          countryId: upstreamCountryId,
           serviceCode: "",
         }
       : undefined;
@@ -1007,10 +1071,10 @@ async function fetchLiveServices(serverId: string, countryId: number) {
     .filter((service): service is Service => Boolean(service));
 }
 
-async function fetchWebCountries(serverId: string) {
+async function fetchWebCountriesFromServer(webServerId: string, logicalServerId: string) {
   const payload = await fetchKirimKodeWeb(
     buildPathWithQuery("/api/otp/negara", {
-      server: resolveWebServer(serverId),
+      server: webServerId,
     }),
   );
   const record =
@@ -1041,11 +1105,15 @@ async function fetchWebCountries(serverId: string) {
         code,
         flagEmoji: countryCodeToFlagEmoji(code),
         availableServices: 0,
-        serverId: resolveServerId(serverId),
+        serverId: resolveServerId(logicalServerId),
       } satisfies CountryOption;
     })
     .filter((country): country is CountryOption => country !== null)
     .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+async function fetchWebCountries(serverId: string) {
+  return fetchWebCountriesFromServer(resolveWebServer(serverId), serverId);
 }
 
 function countryNameToCode(name: string) {
@@ -1094,10 +1162,68 @@ async function getWebCountryMeta(serverId: string, countryId: number) {
   return getCountryMeta(countryId);
 }
 
+function findMatchingProviderCountry(
+  countries: CountryOption[],
+  targetCountry: {
+    name: string;
+    code?: string;
+  },
+) {
+  const targetCode = targetCountry.code?.trim().toUpperCase();
+  const normalizedTargetName = normalizeCountryLookupName(targetCountry.name);
+
+  return (
+    (targetCode
+      ? countries.find((country) => country.code.toUpperCase() === targetCode)
+      : undefined) ??
+    countries.find(
+      (country) => normalizeCountryLookupName(country.name) === normalizedTargetName,
+    )
+  );
+}
+
+async function getProviderCountryMeta(
+  providerServerId: string,
+  targetCountry: {
+    id: number;
+    name: string;
+    code: string;
+    flagEmoji?: string;
+  },
+) {
+  const cacheKey = `web-country:${providerServerId}`;
+  const cached = countryCacheStore.get(cacheKey);
+  const countries =
+    cached && cached.expiresAt > Date.now()
+      ? cached.countries
+      : await fetchWebCountriesFromServer(providerServerId, "mars");
+
+  if (!cached || cached.expiresAt <= Date.now()) {
+    countryCacheStore.set(cacheKey, {
+      countries,
+      expiresAt:
+        Date.now() +
+        (Number.isFinite(getProviderConfig().countryCacheTtlMs)
+          ? getProviderConfig().countryCacheTtlMs
+          : 1800000),
+    });
+  }
+
+  return findMatchingProviderCountry(countries, targetCountry) ?? null;
+}
+
 function applyFilters(services: Service[], filters: CatalogFilters) {
   const q = filters.q?.trim().toLowerCase();
   const serverId = filters.serverId ? resolveServerId(filters.serverId) : null;
-  const countryId = filters.countryId ? resolveCountryId(filters.countryId) : null;
+  const countryId =
+    filters.countryId !== undefined && filters.countryId !== null && filters.countryId !== ""
+      ? resolveCountryId(filters.countryId)
+      : null;
+  const providerServerId = normalizeProviderServerId(filters.providerServerId);
+  const providerCountryId =
+    filters.providerCountryId !== undefined && filters.providerCountryId !== null
+      ? resolveCountryId(filters.providerCountryId)
+      : null;
 
   return services.filter((service) => {
     const matchesQuery =
@@ -1108,10 +1234,22 @@ function applyFilters(services: Service[], filters: CatalogFilters) {
 
     const matchesServer = !serverId || service.serverId === serverId;
     const matchesCountry = !countryId || service.countryId === countryId;
+    const matchesProviderServer =
+      !providerServerId || service.providerServerId === providerServerId;
+    const matchesProviderCountry =
+      providerCountryId === null ||
+      service.providerCountryId === providerCountryId;
     const matchesCategory =
       !filters.category || service.category === filters.category;
 
-    return matchesQuery && matchesServer && matchesCountry && matchesCategory;
+    return (
+      matchesQuery &&
+      matchesServer &&
+      matchesCountry &&
+      matchesProviderServer &&
+      matchesProviderCountry &&
+      matchesCategory
+    );
   });
 }
 
@@ -1210,6 +1348,10 @@ async function fetchKirimKodeWeb(path: string) {
 }
 
 function resolveWebServer(serverId?: string) {
+  if (isDirectWebServer(serverId)) {
+    return serverId;
+  }
+
   return resolveServerId(serverId) === "mars"
     ? getProviderConfig().marsCode
     : getProviderConfig().bimasaktiCode;
@@ -1615,6 +1757,10 @@ export async function getCatalog(filters: CatalogFilters = {}) {
   try {
     const serverId = resolveServerId(filters.serverId);
     const countryId = resolveCountryId(filters.countryId);
+    const requestedProviderServerId =
+      serverId === "mars"
+        ? normalizeProviderServerId(filters.providerServerId)
+        : null;
     const pricingRules = await getPricingRulesForCatalog(serverId, countryId);
     const cachedServices = applyFilters(
       getCachedCatalog(serverId, countryId).map((service) =>
@@ -1622,12 +1768,37 @@ export async function getCatalog(filters: CatalogFilters = {}) {
       ),
       filters,
     );
-    const services = (await fetchLiveServices(serverId, countryId)).map((service) =>
+    const services = await (async () => {
+      if (!requestedProviderServerId) {
+        return fetchLiveServices(serverId, countryId);
+      }
+
+      const baseCountry = await getWebCountryMeta(serverId, countryId);
+      const providerCountryId =
+        filters.providerCountryId !== undefined && filters.providerCountryId !== null
+        ? resolveCountryId(filters.providerCountryId)
+        : (await getProviderCountryMeta(requestedProviderServerId, baseCountry))?.id;
+
+      if (providerCountryId === undefined || providerCountryId === null) {
+        throw new Error("Provider belum tersedia untuk negara yang dipilih.");
+      }
+
+      return fetchLiveServices(serverId, countryId, {
+        providerServerId: requestedProviderServerId,
+        providerCountryId,
+        displayCountry: baseCountry,
+      });
+    })();
+    const pricedServices = services.map((service) =>
       applyPricingToService(service, pricingRules),
     );
-    const filteredServices = applyFilters(services, filters);
+    const filteredServices = applyFilters(pricedServices, filters);
 
-    if (filteredServices.length === 0 && cachedServices.length > 0) {
+    if (
+      filteredServices.length === 0 &&
+      cachedServices.length > 0 &&
+      (!requestedProviderServerId || requestedProviderServerId === "api1")
+    ) {
       return buildCatalogResponse(cachedServices, "rest", {
         source: "fallback",
         warning:
@@ -1643,6 +1814,10 @@ export async function getCatalog(filters: CatalogFilters = {}) {
           : undefined,
     });
   } catch (error) {
+    const requestedProviderServerId =
+      resolveServerId(filters.serverId) === "mars"
+        ? normalizeProviderServerId(filters.providerServerId)
+        : null;
     const cachedServices = applyFilters(
       getCachedCatalog(
         resolveServerId(filters.serverId),
@@ -1651,7 +1826,10 @@ export async function getCatalog(filters: CatalogFilters = {}) {
       filters,
     );
 
-    if (cachedServices.length > 0) {
+    if (
+      cachedServices.length > 0 &&
+      (!requestedProviderServerId || requestedProviderServerId === "api1")
+    ) {
       return buildCatalogResponse(cachedServices, "rest", {
         source: "fallback",
         warning:
@@ -1835,6 +2013,171 @@ export async function getServiceProviders(filters: {
         : "Gagal memuat provider layanan KirimKode.",
     );
   }
+}
+
+function buildProviderOptionsResponse(
+  providers: ProviderOption[],
+  mode: RuntimeStatus["providerMode"],
+  serverId: string,
+  country: {
+    id: number;
+    name: string;
+  },
+  extras?: {
+    source?: "upstream" | "fallback";
+    warning?: string;
+  },
+): ProviderOptionsResponse {
+  return {
+    updatedAt: new Date().toISOString(),
+    mode,
+    serverId,
+    countryId: country.id,
+    country: country.name,
+    providers,
+    source: extras?.source,
+    warning: extras?.warning,
+  };
+}
+
+export async function getProviderOptions(filters: {
+  serverId: string;
+  countryId: number | string;
+}) {
+  const config = getProviderConfig();
+  const serverId = resolveServerId(filters.serverId);
+  const countryId = resolveCountryId(filters.countryId);
+
+  if (config.mode === "mock") {
+    const services = listMockServices({ serverId, countryId });
+    const grouped = new Map<string, Service[]>();
+
+    for (const service of services) {
+      if (!service.providerServerId) {
+        continue;
+      }
+
+      grouped.set(service.providerServerId, [
+        ...(grouped.get(service.providerServerId) ?? []),
+        service,
+      ]);
+    }
+
+    const providers = [...grouped.entries()].map(([providerServerId, providerServices]) => {
+      const firstService = providerServices[0];
+      const totalStock = providerServices.reduce(
+        (sum, service) => sum + Math.max(0, service.stock),
+        0,
+      );
+      const minPrice = providerServices.reduce(
+        (best, service) => (service.price < best ? service.price : best),
+        providerServices[0]?.price ?? 0,
+      );
+      const meta = getOtpProviderServerMeta(providerServerId);
+
+      return {
+        id: `${serverId}-${countryId}-${providerServerId}`,
+        serverId,
+        providerServerId,
+        name: firstService?.providerName ?? meta?.name ?? providerServerId.toUpperCase(),
+        icon: firstService?.providerIcon ?? meta?.icon,
+        country: firstService?.country ?? defaultCountry.name,
+        countryId,
+        countryCode: firstService?.countryCode ?? defaultCountry.code,
+        providerCountryId: firstService?.providerCountryId ?? countryId,
+        availableServices: providerServices.length,
+        totalStock,
+        minPrice,
+        currency: firstService?.currency ?? getPricingConfig().currency,
+      } satisfies ProviderOption;
+    });
+
+    return buildProviderOptionsResponse(providers, "mock", serverId, {
+      id: countryId,
+      name: providers[0]?.country ?? defaultCountry.name,
+    }, { source: "fallback" });
+  }
+
+  if (serverId !== "mars") {
+    const country = await getWebCountryMeta(serverId, countryId);
+
+    return buildProviderOptionsResponse([], "rest", serverId, country, {
+      source: "upstream",
+    });
+  }
+
+  const baseCountry = await getWebCountryMeta(serverId, countryId);
+  const pricingRules = await getPricingRulesForCatalog(serverId, countryId);
+  const providers = (
+    await Promise.all(
+      otpProviderServers.map(async (providerMeta): Promise<ProviderOption | null> => {
+        try {
+          const providerCountry = await getProviderCountryMeta(
+            providerMeta.serverId,
+            baseCountry,
+          );
+
+          if (!providerCountry) {
+            return null;
+          }
+
+          const services = (await fetchLiveServices(serverId, countryId, {
+            providerServerId: providerMeta.serverId,
+            providerCountryId: providerCountry.id,
+            displayCountry: baseCountry,
+          })).map((service) => applyPricingToService(service, pricingRules));
+          const totalStock = services.reduce(
+            (sum, service) => sum + Math.max(0, service.stock),
+            0,
+          );
+          const minPrice = services.reduce(
+            (best, service) => (service.price < best ? service.price : best),
+            services[0]?.price ?? 0,
+          );
+
+          return {
+            id: `${serverId}-${baseCountry.id}-${providerMeta.serverId}`,
+            serverId,
+            providerServerId: providerMeta.serverId,
+            name: providerMeta.name,
+            icon: providerMeta.icon,
+            country: baseCountry.name,
+            countryId: baseCountry.id,
+            countryCode: baseCountry.code,
+            providerCountryId: providerCountry.id,
+            availableServices: services.length,
+            totalStock,
+            minPrice,
+            currency: getPricingConfig().currency,
+          } satisfies ProviderOption;
+        } catch {
+          return null;
+        }
+      }),
+    )
+  )
+    .filter((provider): provider is ProviderOption => provider !== null)
+    .sort((left, right) => {
+      const stockRank =
+        Number(right.totalStock > 0) - Number(left.totalStock > 0);
+
+      if (stockRank !== 0) {
+        return stockRank;
+      }
+
+      const leftMeta = getOtpProviderServerMeta(left.providerServerId);
+      const rightMeta = getOtpProviderServerMeta(right.providerServerId);
+
+      return (leftMeta?.sortWeight ?? 99) - (rightMeta?.sortWeight ?? 99);
+    });
+
+  return buildProviderOptionsResponse(providers, "rest", serverId, baseCountry, {
+    source: "upstream",
+    warning:
+      providers.length === 0
+        ? "Provider belum tersedia untuk negara yang dipilih."
+        : undefined,
+  });
 }
 
 export async function getCountries(serverId?: string): Promise<CountryOption[]> {

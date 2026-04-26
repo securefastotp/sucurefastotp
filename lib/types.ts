@@ -53,6 +53,33 @@ export type ProviderVariantResponse = {
   warning?: string;
 };
 
+export type ProviderOption = {
+  id: string;
+  serverId: string;
+  providerServerId: string;
+  name: string;
+  icon?: string;
+  country: string;
+  countryId: number;
+  countryCode: string;
+  providerCountryId: number;
+  availableServices: number;
+  totalStock: number;
+  minPrice: number;
+  currency: string;
+};
+
+export type ProviderOptionsResponse = {
+  updatedAt: string;
+  mode: ProviderMode;
+  serverId: string;
+  countryId: number;
+  country: string;
+  providers: ProviderOption[];
+  source?: "upstream" | "fallback";
+  warning?: string;
+};
+
 export type OrderStatus = "pending" | "otp_received" | "expired" | "cancelled";
 
 export type Order = {
