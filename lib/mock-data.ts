@@ -136,15 +136,15 @@ export function listMockServices(filters?: {
       ? [
           {
             code: "api1",
-            name: "Mars",
-            icon: "🔴",
+            name: "Senja",
+            icon: "S",
             stockRatio: 1,
             priceRatio: 1,
           },
           {
             code: "api3",
-            name: "Saturn",
-            icon: "🟣",
+            name: "Zynn",
+            icon: "Z",
             stockRatio: 0.58,
             priceRatio: 1.32,
           },

@@ -167,20 +167,50 @@ function buildServiceGroups(services: Service[], serverId: ServerId) {
     });
 }
 
+function normalizeProviderDisplayName(providerName?: string, providerServerId?: string) {
+  const normalizedName = providerName?.trim().toLowerCase() ?? "";
+  const normalizedServer = providerServerId?.trim().toLowerCase() ?? "";
+
+  if (normalizedServer === "api1" || normalizedName === "mars") {
+    return "Senja";
+  }
+
+  if (normalizedServer === "api3" || normalizedName === "saturn") {
+    return "Zynn";
+  }
+
+  return providerName;
+}
+
 function getProviderName(service: Service, selectedServer: ServerId) {
-  return service.providerName ?? (selectedServer === "mars" ? "Blueverifiy" : "Skyword");
+  if (selectedServer === "mars") {
+    return service.providerName ?? "Blueverifiy";
+  }
+
+  return (
+    normalizeProviderDisplayName(service.providerName, service.providerServerId) ??
+    "Skyword"
+  );
 }
 
 function getProviderIcon(service: Service, selectedServer: ServerId) {
+  if (selectedServer === "mars") {
+    return service.providerIcon ?? "B";
+  }
+
+  if (service.providerServerId === "api1") {
+    return "S";
+  }
+
+  if (service.providerServerId === "api3") {
+    return "Z";
+  }
+
   if (service.providerIcon) {
     return service.providerIcon;
   }
 
-  if (service.providerServerId === "api3") {
-    return "S";
-  }
-
-  return selectedServer === "mars" ? "B" : "M";
+  return "P";
 }
 
 const SUPPORT_LINKS = [
@@ -251,6 +281,75 @@ function findPreferredCountryId(
 
 function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
+}
+
+function ChevronIcon({
+  className,
+  open,
+}: {
+  className?: string;
+  open?: boolean;
+}) {
+  return (
+    <svg
+      aria-hidden="true"
+      className={cn("transition-transform", open ? "rotate-180" : "", className)}
+      fill="none"
+      viewBox="0 0 24 24"
+    >
+      <path
+        d="m7 10 5 5 5-5"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </svg>
+  );
+}
+
+function StockSignal({
+  stock,
+  className,
+}: {
+  stock: number;
+  className?: string;
+}) {
+  const hasStock = Number.isFinite(stock) && stock > 0;
+
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-semibold",
+        hasStock
+          ? "border-emerald-300/35 bg-emerald-400/12 text-emerald-100"
+          : "border-rose-300/30 bg-rose-500/12 text-rose-100",
+        className,
+      )}
+    >
+      <span className="inline-flex h-3.5 items-end gap-[2px]">
+        <span
+          className={cn(
+            "h-1.5 w-1 rounded-full",
+            hasStock ? "bg-emerald-300" : "bg-rose-300",
+          )}
+        />
+        <span
+          className={cn(
+            "w-1 rounded-full",
+            hasStock ? "h-2.5 bg-emerald-300" : "h-1.5 bg-rose-300/45",
+          )}
+        />
+        <span
+          className={cn(
+            "w-1 rounded-full",
+            hasStock ? "h-3.5 bg-emerald-300" : "h-1.5 bg-rose-300/45",
+          )}
+        />
+      </span>
+      {hasStock ? `Stok ${stock}` : "Kosong"}
+    </span>
+  );
 }
 
 function resolveOrderStatusLabel(status: Order["status"]) {
@@ -1096,12 +1195,8 @@ export function MemberConsole({
   const [selectedCountryId, setSelectedCountryId] = useState<number | null>(
     initialCountryId,
   );
-  const [selectedServiceId, setSelectedServiceId] = useState(
-    initialCatalog?.services[0]?.id ?? "",
-  );
-  const [selectedProviderServiceId, setSelectedProviderServiceId] = useState(
-    initialCatalog?.services[0]?.id ?? "",
-  );
+  const [selectedServiceId, setSelectedServiceId] = useState("");
+  const [selectedProviderServiceId, setSelectedProviderServiceId] = useState("");
   const [providerVariants, setProviderVariants] = useState<Service[]>([]);
   const [serviceSearch, setServiceSearch] = useState("");
   const [buyHistorySearch, setBuyHistorySearch] = useState("");
@@ -1112,6 +1207,7 @@ export function MemberConsole({
     "dashboard" | "deposit" | "buy" | "history" | "settings" | "admin"
   >("dashboard");
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isServiceListOpen, setIsServiceListOpen] = useState(false);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [authName, setAuthName] = useState("");
   const [authEmail, setAuthEmail] = useState("");
@@ -1198,6 +1294,10 @@ export function MemberConsole({
   const deferredAdminSearch = useDeferredValue(adminSearch);
   const deferredAdminPricingSearch = useDeferredValue(adminPricingSearch);
   const canAccessAdmin = viewer?.role === "admin";
+  const selectedCountry = useMemo(
+    () => countries.find((country) => country.id === selectedCountryId) ?? null,
+    [countries, selectedCountryId],
+  );
   const serviceGroups = useMemo(
     () => buildServiceGroups(catalog?.services ?? [], selectedServer),
     [catalog?.services, selectedServer],
@@ -1564,19 +1664,20 @@ export function MemberConsole({
 
   function applyMemberCatalogResult(nextCatalog: CatalogResponse) {
     setCatalog(nextCatalog);
+    setIsServiceListOpen(false);
     setSelectedProviderServiceId((current) => {
       if (current && nextCatalog.services.some((service) => service.id === current)) {
         return current;
       }
 
-      return nextCatalog.services.find((service) => service.stock > 0)?.id ?? nextCatalog.services[0]?.id ?? "";
+      return "";
     });
     setSelectedServiceId((current) => {
       if (current && nextCatalog.services.some((service) => service.id === current)) {
         return current;
       }
 
-      return nextCatalog.services.find((service) => service.stock > 0)?.id ?? nextCatalog.services[0]?.id ?? "";
+      return "";
     });
   }
 
@@ -1781,6 +1882,13 @@ export function MemberConsole({
 
   useEffect(() => {
     if (!viewer || !selectedCountryId) {
+      setCatalog(null);
+      setSelectedServiceId("");
+      setSelectedProviderServiceId("");
+      setProviderVariants([]);
+      setProviderError(null);
+      setIsCatalogLoading(false);
+      setIsServiceListOpen(false);
       return;
     }
 
@@ -1802,6 +1910,7 @@ export function MemberConsole({
         setCatalog(null);
         setSelectedServiceId("");
         setSelectedProviderServiceId("");
+        setIsServiceListOpen(false);
         setOrderError(
           error instanceof Error ? error.message : "Gagal memuat katalog layanan.",
         );
@@ -1944,6 +2053,7 @@ export function MemberConsole({
       setSelectedProviderServiceId("");
       setProviderVariants([]);
       setProviderError(null);
+      setIsServiceListOpen(false);
       setActiveDeposit(null);
       setActiveOrder(null);
       setAdminUsers([]);
@@ -3095,6 +3205,7 @@ export function MemberConsole({
                       setSelectedProviderServiceId("");
                       setProviderVariants([]);
                       setProviderError(null);
+                      setIsServiceListOpen(false);
                     }}
                     type="button"
                   >
@@ -3119,6 +3230,7 @@ export function MemberConsole({
                   setSelectedProviderServiceId("");
                   setProviderVariants([]);
                   setProviderError(null);
+                  setIsServiceListOpen(false);
                 }}
                 value={selectedCountryId ?? ""}
               >
@@ -3133,34 +3245,88 @@ export function MemberConsole({
               </select>
             </div>
 
-            {selectedServer === "mars" ? (
+            {selectedServer === "mars" && selectedCountry ? (
               <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
                 <SectionTitle
                   icon={<GlobeIcon className="h-4.5 w-4.5" />}
                   title="Provider"
                 />
                 <button
-                  className="mt-4 flex h-12 w-full items-center justify-between rounded-[16px] border border-white/10 bg-[#07111f] px-4 text-[13px] font-medium text-white"
+                  className="mt-4 flex min-h-14 w-full items-center justify-between gap-3 rounded-[16px] border border-cyan-300/18 bg-[linear-gradient(135deg,rgba(8,33,61,0.96),rgba(12,52,87,0.92))] px-3 py-3 text-left"
                   type="button"
                 >
-                  <span>Semua Provider</span>
-                  <span className="text-sky-100/45">any</span>
+                  <span className="flex min-w-0 items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-cyan-300/12 text-[13px] font-semibold text-cyan-100">
+                      B
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-[13px] font-semibold text-white">
+                        Blueverifiy
+                      </span>
+                      <span className="mt-0.5 block truncate text-[11px] text-sky-100/55">
+                        {getCountryLabel(selectedCountry)}
+                      </span>
+                    </span>
+                  </span>
+                  <StockSignal
+                    stock={(catalog?.services ?? []).reduce(
+                      (sum, service) => sum + Math.max(0, service.stock),
+                      0,
+                    )}
+                  />
                 </button>
               </div>
             ) : null}
 
+            {selectedCountry ? (
             <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
               <SectionTitle
                 icon={<CartIcon className="h-4.5 w-4.5" />}
                 title="Pilih Layanan"
                 action={isCatalogLoading ? <span className="text-[11px] text-sky-100/60">Loading...</span> : null}
               />
-              <input
-                className="mt-4 w-full rounded-[16px] border border-white/10 bg-[#07111f] px-4 py-3 text-[14px] text-white outline-none transition focus:border-sky-300/60"
-                onChange={(event) => setServiceSearch(event.target.value)}
-                placeholder="Search service..."
-                value={serviceSearch}
-              />
+              <button
+                className={cn(
+                  "mt-4 flex min-h-[52px] w-full items-center justify-between gap-3 rounded-[16px] border px-4 py-3 text-left transition",
+                  isServiceListOpen
+                    ? "border-sky-300/55 bg-sky-300/12"
+                    : "border-white/10 bg-[#07111f]",
+                  isCatalogLoading ? "opacity-65" : "",
+                )}
+                disabled={isCatalogLoading}
+                onClick={() => setIsServiceListOpen((current) => !current)}
+                type="button"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-[14px] font-medium text-white">
+                    {selectedServiceGroup?.service ?? "Pilih layanan"}
+                  </span>
+                  <span className="mt-1 block text-[11px] text-sky-100/55">
+                    {selectedServiceGroup
+                      ? selectedServiceGroup.serviceCode.toUpperCase()
+                      : selectedServer === "mars"
+                        ? "Pilih provider lalu buka daftar layanan"
+                        : "Tekan untuk membuka daftar layanan"}
+                  </span>
+                </span>
+                <span className="flex shrink-0 items-center gap-2">
+                  {selectedServiceGroup ? (
+                    <StockSignal stock={selectedServiceGroup.stock} />
+                  ) : null}
+                  <ChevronIcon
+                    className="h-4 w-4 text-sky-100/70"
+                    open={isServiceListOpen}
+                  />
+                </span>
+              </button>
+              {isServiceListOpen ? (
+                <div className="mt-3">
+                  <input
+                    className="w-full rounded-[16px] border border-white/10 bg-[#07111f] px-4 py-3 text-[14px] text-white outline-none transition focus:border-sky-300/60"
+                    onChange={(event) => setServiceSearch(event.target.value)}
+                    placeholder="Search service..."
+                    value={serviceSearch}
+                  />
               <div className="mt-3 max-h-[290px] overflow-y-auto rounded-[18px] border border-white/10 bg-white/4">
                 {filteredServices.map((service) => (
                   <button
@@ -3173,6 +3339,8 @@ export function MemberConsole({
                     )}
                     onClick={() => {
                       setSelectedServiceId(service.id);
+                      setIsServiceListOpen(false);
+                      setServiceSearch("");
                       if (selectedServer === "bimasakti") {
                         setSelectedProviderServiceId("");
                         setProviderVariants([]);
@@ -3190,11 +3358,14 @@ export function MemberConsole({
                     <div className="min-w-0">
                       <p className="truncate text-[14px] font-medium text-white">{service.service}</p>
                       <p className="mt-1 text-[11px] text-sky-100/60">
-                        {service.serviceCode.toUpperCase()} | {service.stock <= 0 ? "stok habis" : `stok ${service.stock}`}
+                        {service.serviceCode.toUpperCase()}
                       </p>
                     </div>
-                    <span className="shrink-0 text-[14px] font-semibold text-cyan-100">
-                      {formatCurrency(service.price, service.currency)}
+                    <span className="flex shrink-0 items-center gap-2 text-right">
+                      <StockSignal stock={service.stock} />
+                      <span className="text-[14px] font-semibold text-cyan-100">
+                        {formatCurrency(service.price, service.currency)}
+                      </span>
                     </span>
                   </button>
                 ))}
@@ -3204,7 +3375,10 @@ export function MemberConsole({
                   </div>
                 ) : null}
               </div>
+                </div>
+              ) : null}
             </div>
+            ) : null}
 
             {requiresProviderSelection && selectedServiceGroup ? (
               <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
@@ -3218,6 +3392,7 @@ export function MemberConsole({
                   <p className="text-right text-[14px] font-semibold text-white">
                     {selectedServiceGroup.service}
                   </p>
+                  <StockSignal stock={selectedServiceGroup.stock} />
                 </div>
                 <div className="mt-3 space-y-2">
                   {isProviderLoading ? (
@@ -3271,9 +3446,7 @@ export function MemberConsole({
                           <p className="text-[13px] font-semibold text-cyan-100">
                             {formatCurrency(variant.price, variant.currency)}
                           </p>
-                          <p className="mt-1 text-[11px] text-sky-100/58">
-                            stok: {variant.stock}
-                          </p>
+                          <StockSignal className="mt-1" stock={variant.stock} />
                         </div>
                       </button>
                     );

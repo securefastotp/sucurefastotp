@@ -231,6 +231,33 @@ function getServerName(serverId?: string) {
   return resolveServerId(serverId) === "mars" ? "Blueverifiy" : "Skyword";
 }
 
+function getSkywordProviderDisplayName(providerServerId: string, upstreamName: string) {
+  const normalizedServer = providerServerId.trim().toLowerCase();
+  const normalizedName = upstreamName.trim().toLowerCase();
+
+  if (normalizedServer === "api1" || normalizedName === "mars") {
+    return "Senja";
+  }
+
+  if (normalizedServer === "api3" || normalizedName === "saturn") {
+    return "Zynn";
+  }
+
+  return upstreamName || providerServerId.toUpperCase();
+}
+
+function getSkywordProviderDisplayIcon(providerServerId: string, upstreamIcon?: string) {
+  if (providerServerId === "api1") {
+    return "S";
+  }
+
+  if (providerServerId === "api3") {
+    return "Z";
+  }
+
+  return upstreamIcon;
+}
+
 function resolveCountryId(countryId?: number | string) {
   if (typeof countryId === "number" && Number.isFinite(countryId)) {
     return countryId;
@@ -286,6 +313,375 @@ const countryHintMap: Record<
   61: { name: "Pakistan", code: "PK" },
   88: { name: "Indonesia", code: "ID" },
 };
+
+function normalizeCountryLookupName(name: string) {
+  return name
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/&/g, " and ")
+    .replace(/[^a-z0-9]+/gi, " ")
+    .trim()
+    .toLowerCase();
+}
+
+const countryNameAliases = new Map<string, string>(
+  [
+    ["afganistan", "AF"],
+    ["america", "US"],
+    ["bolivia", "BO"],
+    ["bosnia", "BA"],
+    ["brunei", "BN"],
+    ["cad", "TD"],
+    ["cape verde", "CV"],
+    ["chili", "CL"],
+    ["cina", "CN"],
+    ["congo", "CG"],
+    ["czech republic", "CZ"],
+    ["democratic republic of the congo", "CD"],
+    ["dr congo", "CD"],
+    ["east timor", "TL"],
+    ["england", "GB"],
+    ["guinea khatulistiwa", "GQ"],
+    ["guyana perancis", "GF"],
+    ["hongkong", "HK"],
+    ["inggris", "GB"],
+    ["iran", "IR"],
+    ["ivory coast", "CI"],
+    ["kongo", "CG"],
+    ["kongo dr", "CD"],
+    ["kosovo", "XK"],
+    ["laos", "LA"],
+    ["macau", "MO"],
+    ["makau", "MO"],
+    ["moldova", "MD"],
+    ["north korea", "KP"],
+    ["palestina", "PS"],
+    ["palestine", "PS"],
+    ["pantai gading", "CI"],
+    ["papua", "PG"],
+    ["russia", "RU"],
+    ["rusia", "RU"],
+    ["saint kitts", "KN"],
+    ["saint kitts and nevis", "KN"],
+    ["saint vincent", "VC"],
+    ["saint vincent grenadines", "VC"],
+    ["sao tome dan prinsip", "ST"],
+    ["slowakia", "SK"],
+    ["south korea", "KR"],
+    ["syria", "SY"],
+    ["taiwan", "TW"],
+    ["tanzania", "TZ"],
+    ["the netherlands", "NL"],
+    ["turkey", "TR"],
+    ["u k", "GB"],
+    ["uk", "GB"],
+    ["united states virtual", "US"],
+    ["united states of america", "US"],
+    ["usa", "US"],
+    ["venezuela", "VE"],
+    ["vietnam", "VN"],
+  ].map(([name, code]) => [normalizeCountryLookupName(name), code]),
+);
+
+const fallbackRegionCodes = [
+  "AD",
+  "AE",
+  "AF",
+  "AG",
+  "AI",
+  "AL",
+  "AM",
+  "AO",
+  "AQ",
+  "AR",
+  "AS",
+  "AT",
+  "AU",
+  "AW",
+  "AX",
+  "AZ",
+  "BA",
+  "BB",
+  "BD",
+  "BE",
+  "BF",
+  "BG",
+  "BH",
+  "BI",
+  "BJ",
+  "BL",
+  "BM",
+  "BN",
+  "BO",
+  "BQ",
+  "BR",
+  "BS",
+  "BT",
+  "BV",
+  "BW",
+  "BY",
+  "BZ",
+  "CA",
+  "CC",
+  "CD",
+  "CF",
+  "CG",
+  "CH",
+  "CI",
+  "CK",
+  "CL",
+  "CM",
+  "CN",
+  "CO",
+  "CR",
+  "CU",
+  "CV",
+  "CW",
+  "CX",
+  "CY",
+  "CZ",
+  "DE",
+  "DJ",
+  "DK",
+  "DM",
+  "DO",
+  "DZ",
+  "EC",
+  "EE",
+  "EG",
+  "EH",
+  "ER",
+  "ES",
+  "ET",
+  "FI",
+  "FJ",
+  "FK",
+  "FM",
+  "FO",
+  "FR",
+  "GA",
+  "GB",
+  "GD",
+  "GE",
+  "GF",
+  "GG",
+  "GH",
+  "GI",
+  "GL",
+  "GM",
+  "GN",
+  "GP",
+  "GQ",
+  "GR",
+  "GS",
+  "GT",
+  "GU",
+  "GW",
+  "GY",
+  "HK",
+  "HM",
+  "HN",
+  "HR",
+  "HT",
+  "HU",
+  "ID",
+  "IE",
+  "IL",
+  "IM",
+  "IN",
+  "IO",
+  "IQ",
+  "IR",
+  "IS",
+  "IT",
+  "JE",
+  "JM",
+  "JO",
+  "JP",
+  "KE",
+  "KG",
+  "KH",
+  "KI",
+  "KM",
+  "KN",
+  "KP",
+  "KR",
+  "KW",
+  "KY",
+  "KZ",
+  "LA",
+  "LB",
+  "LC",
+  "LI",
+  "LK",
+  "LR",
+  "LS",
+  "LT",
+  "LU",
+  "LV",
+  "LY",
+  "MA",
+  "MC",
+  "MD",
+  "ME",
+  "MF",
+  "MG",
+  "MH",
+  "MK",
+  "ML",
+  "MM",
+  "MN",
+  "MO",
+  "MP",
+  "MQ",
+  "MR",
+  "MS",
+  "MT",
+  "MU",
+  "MV",
+  "MW",
+  "MX",
+  "MY",
+  "MZ",
+  "NA",
+  "NC",
+  "NE",
+  "NF",
+  "NG",
+  "NI",
+  "NL",
+  "NO",
+  "NP",
+  "NR",
+  "NU",
+  "NZ",
+  "OM",
+  "PA",
+  "PE",
+  "PF",
+  "PG",
+  "PH",
+  "PK",
+  "PL",
+  "PM",
+  "PN",
+  "PR",
+  "PS",
+  "PT",
+  "PW",
+  "PY",
+  "QA",
+  "RE",
+  "RO",
+  "RS",
+  "RU",
+  "RW",
+  "SA",
+  "SB",
+  "SC",
+  "SD",
+  "SE",
+  "SG",
+  "SH",
+  "SI",
+  "SJ",
+  "SK",
+  "SL",
+  "SM",
+  "SN",
+  "SO",
+  "SR",
+  "SS",
+  "ST",
+  "SV",
+  "SX",
+  "SY",
+  "SZ",
+  "TC",
+  "TD",
+  "TF",
+  "TG",
+  "TH",
+  "TJ",
+  "TK",
+  "TL",
+  "TM",
+  "TN",
+  "TO",
+  "TR",
+  "TT",
+  "TV",
+  "TW",
+  "TZ",
+  "UA",
+  "UG",
+  "UM",
+  "US",
+  "UY",
+  "UZ",
+  "VA",
+  "VC",
+  "VE",
+  "VG",
+  "VI",
+  "VN",
+  "VU",
+  "WF",
+  "WS",
+  "XK",
+  "YE",
+  "YT",
+  "ZA",
+  "ZM",
+  "ZW",
+];
+
+let countryNameCodeMap: Map<string, string> | null = null;
+
+function getCountryNameCodeMap() {
+  if (countryNameCodeMap) {
+    return countryNameCodeMap;
+  }
+
+  const supportedValuesOf = (
+    Intl as typeof Intl & {
+      supportedValuesOf?: (key: string) => string[];
+    }
+  ).supportedValuesOf;
+  const supportedRegionCodes = (() => {
+    try {
+      return supportedValuesOf?.("region").filter((code) => /^[A-Z]{2}$/.test(code));
+    } catch {
+      return null;
+    }
+  })();
+  const regionCodes =
+    supportedRegionCodes && supportedRegionCodes.length > 0
+      ? supportedRegionCodes
+      : fallbackRegionCodes;
+  const map = new Map(countryNameAliases);
+
+  for (const code of regionCodes) {
+    map.set(normalizeCountryLookupName(code), code);
+
+    for (const locale of ["en", "id"]) {
+      try {
+        const displayName = new Intl.DisplayNames([locale], {
+          type: "region",
+        }).of(code);
+
+        if (displayName) {
+          map.set(normalizeCountryLookupName(displayName), code);
+        }
+      } catch {
+        // Keep country flags best-effort if a runtime lacks DisplayNames data.
+      }
+    }
+  }
+
+  countryNameCodeMap = map;
+  return map;
+}
 
 function getCountryMeta(countryId?: number | string) {
   const resolvedId = resolveCountryId(countryId);
@@ -653,16 +1049,16 @@ async function fetchWebCountries(serverId: string) {
 }
 
 function countryNameToCode(name: string) {
-  const normalized = name.trim().toLowerCase();
+  const normalized = normalizeCountryLookupName(name);
   const known = Object.values(countryHintMap).find(
-    (country) => country.name.toLowerCase() === normalized,
+    (country) => normalizeCountryLookupName(country.name) === normalized,
   );
 
   if (known?.code && /^[a-z]{2}$/i.test(known.code)) {
     return known.code;
   }
 
-  return "";
+  return getCountryNameCodeMap().get(normalized) ?? "";
 }
 
 async function getWebCountryMeta(serverId: string, countryId: number) {
@@ -1372,9 +1768,14 @@ export async function getServiceProviders(filters: {
         );
         const providerServiceCode =
           pickString(provider, ["actualCode", "serviceCode"], "") || serviceCode;
-        const providerName =
-          pickString(provider, ["name"], "") || providerServerId.toUpperCase();
-        const providerIcon = pickString(provider, ["icon"], "") || undefined;
+        const providerName = getSkywordProviderDisplayName(
+          providerServerId,
+          pickString(provider, ["name"], ""),
+        );
+        const providerIcon = getSkywordProviderDisplayIcon(
+          providerServerId,
+          pickString(provider, ["icon"], "") || undefined,
+        );
 
         return {
           id: `${serverId}-${country.id}-${serviceCode}-${providerServerId}`,

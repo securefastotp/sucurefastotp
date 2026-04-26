@@ -530,6 +530,50 @@ function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
+function StockSignal({
+  stock,
+  className,
+}: {
+  stock: number;
+  className?: string;
+}) {
+  const hasStock = Number.isFinite(stock) && stock > 0;
+
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-semibold",
+        hasStock
+          ? "border-emerald-300/35 bg-emerald-400/12 text-emerald-100"
+          : "border-rose-300/30 bg-rose-500/12 text-rose-100",
+        className,
+      )}
+    >
+      <span className="inline-flex h-3.5 items-end gap-[2px]">
+        <span
+          className={cn(
+            "h-1.5 w-1 rounded-full",
+            hasStock ? "bg-emerald-300" : "bg-rose-300",
+          )}
+        />
+        <span
+          className={cn(
+            "w-1 rounded-full",
+            hasStock ? "h-2.5 bg-emerald-300" : "h-1.5 bg-rose-300/45",
+          )}
+        />
+        <span
+          className={cn(
+            "w-1 rounded-full",
+            hasStock ? "h-3.5 bg-emerald-300" : "h-1.5 bg-rose-300/45",
+          )}
+        />
+      </span>
+      {hasStock ? `Stok ${stock}` : "Kosong"}
+    </span>
+  );
+}
+
 const ACTIVE_PAYMENT_STORAGE_KEY = "rahmat-otp-active-payment";
 const TRANSACTIONS_STORAGE_KEY = "rahmat-otp-transactions";
 
@@ -1805,7 +1849,6 @@ export function CatalogConsole({
                   >
                     <div className="flex min-w-0 items-center gap-2.5">
                       <ServiceStarIcon className="h-4 w-4 shrink-0 text-sky-100/58" />
-                      <span className="h-2.5 w-2.5 shrink-0 rounded-full bg-[#39ddb0]" />
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <p className="truncate text-[12.5px] font-medium text-white">
@@ -1818,7 +1861,7 @@ export function CatalogConsole({
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-3 text-right">
-                      <p className="text-[10px] text-sky-100/55">{service.stock}</p>
+                      <StockSignal stock={service.stock} />
                       <p className="text-[12.5px] font-medium text-[#16f0a9]">
                         {formatCurrency(service.price, service.currency)}
                       </p>
@@ -1894,7 +1937,7 @@ export function CatalogConsole({
                             : "-"}
                         </p>
                         <p className="mt-1 text-[11px] text-sky-50/55">
-                          {service ? `stok: ${service.stock}` : "tidak tersedia"}
+                          {service ? <StockSignal stock={service.stock} /> : "tidak tersedia"}
                         </p>
                       </div>
                     </button>
@@ -2200,8 +2243,8 @@ export function CatalogConsole({
               di halaman ini tanpa buka tab baru.
             </p>
             <div className="mt-3 grid gap-2 text-[11px] text-sky-50/62">
-              <p>Provider 1: Skyword → api1</p>
-              <p>Provider 2: Blueverifiy → api2</p>
+              <p>Provider 1: Skyword - unified</p>
+              <p>Provider 2: Blueverifiy - api1</p>
               <p>Harga: mengikuti harga asli KirimKode</p>
               <p>Riwayat transaksi: saat ini tersimpan di store aplikasi dan siap dipindah ke Vercel DB.</p>
             </div>
