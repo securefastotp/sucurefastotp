@@ -2073,7 +2073,6 @@ export function MemberConsole({
       selectedServer,
       selectedCountryId,
       null,
-      selectedCatalogOperatorId,
     )
       .then((result) => {
         if (ignoreResult) {
@@ -2758,7 +2757,6 @@ export function MemberConsole({
             selectedServer,
             selectedCountryId,
             null,
-            selectedServer === "mars" ? selectedOperatorOption?.id : undefined,
           ).then((nextCatalog) => {
             applyMemberCatalogResult(nextCatalog);
           }),
@@ -2826,7 +2824,6 @@ export function MemberConsole({
             selectedServer,
             selectedCountryId,
             null,
-            selectedServer === "mars" ? selectedOperatorOption?.id : undefined,
           ).then((nextCatalog) => {
             applyMemberCatalogResult(nextCatalog);
           }),
@@ -2875,7 +2872,6 @@ export function MemberConsole({
             selectedServer,
             selectedCountryId,
             null,
-            selectedServer === "mars" ? selectedOperatorOption?.id : undefined,
           ).then((nextCatalog) => {
             applyMemberCatalogResult(nextCatalog);
           }),

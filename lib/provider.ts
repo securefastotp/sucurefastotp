@@ -829,6 +829,34 @@ function buildCatalogResponse(
   };
 }
 
+function getServiceMergeKey(service: Service) {
+  return [
+    service.serverId,
+    service.countryId,
+    service.serviceCode.toLowerCase(),
+    service.providerServerId ?? "",
+    service.providerCountryId ?? "",
+    service.providerServiceCode ?? "",
+  ].join("::");
+}
+
+function mergeCompleteServices(
+  primaryServices: Service[],
+  supplementalServices: Service[],
+) {
+  const merged = new Map<string, Service>();
+
+  for (const service of supplementalServices) {
+    merged.set(getServiceMergeKey(service), service);
+  }
+
+  for (const service of primaryServices) {
+    merged.set(getServiceMergeKey(service), service);
+  }
+
+  return [...merged.values()];
+}
+
 function normalizeCachedService(
   service: Service,
   context: {
@@ -1028,7 +1056,6 @@ async function fetchLiveServices(
   providerOverride?: {
     providerServerId?: string;
     providerCountryId?: number;
-    operator?: string;
     displayCountry?: {
       id: number;
       name: string;
@@ -1051,7 +1078,6 @@ async function fetchLiveServices(
     buildPathWithQuery("/api/otp/layanan", {
       server: upstreamServer,
       negara: upstreamCountryId,
-      operator: providerOverride?.operator,
     }),
   );
   const entries = extractWebServiceEntries(payload, upstreamCountryId);
@@ -1090,7 +1116,6 @@ async function fetchOfficialServices(
   options?: {
     providerServerId?: string;
     providerCountryId?: number;
-    operator?: string;
   },
 ) {
   const resolvedServerId = resolveServerId(serverId);
@@ -1105,10 +1130,6 @@ async function fetchOfficialServices(
     buildPathWithQuery("/services", {
       server: upstreamServer,
       country: upstreamCountryId,
-      operator:
-        options?.operator && options.operator !== DEFAULT_OPERATOR
-          ? options.operator
-          : undefined,
     }),
   );
 
@@ -1970,17 +1991,16 @@ export async function getCatalog(filters: CatalogFilters = {}) {
     );
     const services = await (async () => {
       if (!requestedProviderServerId) {
-        const officialServices = await fetchOfficialServices(serverId, countryId, {
-          operator: normalizeOperator(filters.operator),
-        });
+        const officialServices = await fetchOfficialServices(serverId, countryId);
+        const liveServices = await fetchLiveServices(serverId, countryId).catch(
+          () => [],
+        );
 
-        if (officialServices.length > 0) {
-          return officialServices;
+        if (officialServices.length > 0 || liveServices.length > 0) {
+          return mergeCompleteServices(officialServices, liveServices);
         }
 
-        return fetchLiveServices(serverId, countryId, {
-          operator: normalizeOperator(filters.operator),
-        });
+        return [];
       }
 
       const baseCountry = await getWebCountryMeta(serverId, countryId);
@@ -1996,19 +2016,18 @@ export async function getCatalog(filters: CatalogFilters = {}) {
       const officialServices = await fetchOfficialServices(serverId, countryId, {
         providerServerId: requestedProviderServerId,
         providerCountryId,
-        operator: normalizeOperator(filters.operator),
       });
-
-      if (officialServices.length > 0) {
-        return officialServices;
-      }
-
-      return fetchLiveServices(serverId, countryId, {
+      const liveServices = await fetchLiveServices(serverId, countryId, {
         providerServerId: requestedProviderServerId,
         providerCountryId,
-        operator: normalizeOperator(filters.operator),
         displayCountry: baseCountry,
-      });
+      }).catch(() => []);
+
+      if (officialServices.length > 0 || liveServices.length > 0) {
+        return mergeCompleteServices(officialServices, liveServices);
+      }
+
+      return [];
     })();
     const pricedServices = services.map((service) =>
       applyPricingToService(service, pricingRules),

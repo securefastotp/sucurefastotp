@@ -337,7 +337,6 @@ export async function purchaseOtpWithWallet(input: PurchaseOrderInput) {
   const catalog = await getCatalog({
     serverId: input.serverId,
     countryId: input.countryId,
-    operator: input.operator,
   });
   let service = catalog.services.find(
     (item) =>
