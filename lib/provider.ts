@@ -150,8 +150,8 @@ const otpProviderServers = [
   },
   {
     serverId: "api2",
-    name: "Jupiter",
-    icon: "J",
+    name: "Zayan",
+    icon: "Y",
     sortWeight: 2,
   },
   {
@@ -297,6 +297,10 @@ function getSkywordProviderDisplayName(providerServerId: string, upstreamName: s
 
   if (normalizedServer === "api3" || normalizedName === "saturn") {
     return "Zynn";
+  }
+
+  if (normalizedServer === "api2" || normalizedName === "jupiter") {
+    return "Zayan";
   }
 
   return (

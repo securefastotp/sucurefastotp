@@ -6,6 +6,7 @@ import {
   useEffect,
   useEffectEvent,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import {
@@ -40,6 +41,9 @@ type MemberConsoleProps = {
 };
 
 type ServerId = "bimasakti" | "mars";
+type UiLanguage = "id" | "en";
+type UiTheme = "dark" | "light";
+type BuyPicker = "country" | "service" | "mars-operator" | "provider" | "operator" | null;
 
 type SummaryResponse = {
   summary: DashboardSummary;
@@ -84,13 +88,92 @@ const serverOptions = [
     id: "bimasakti" as const,
     name: "Skyword",
     description: "Server utama, stok terbanyak",
+    stormTone: "sky" as const,
   },
   {
     id: "mars" as const,
     name: "Blueverifiy",
     description: "Server cadangan, lebih stabil",
+    stormTone: "violet" as const,
   },
 ];
+
+const uiText = {
+  id: {
+    dashboard: "Dashboard",
+    deposit: "Deposit",
+    buyNumber: "Beli Nomor",
+    history: "Riwayat",
+    settings: "Pengaturan",
+    admin: "Admin",
+    selectServer: "Pilih Server",
+    selectCountry: "Pilih Negara",
+    selectProvider: "Pilih Provider",
+    selectService: "Pilih Layanan",
+    selectOperator: "Pilih Operator",
+    searchCountry: "Cari negara...",
+    searchProvider: "Cari provider...",
+    searchService: "Cari layanan...",
+    searchOperator: "Cari operator...",
+    emptyCountry: "Negara belum tersedia.",
+    emptyProvider: "Provider belum tersedia.",
+    emptyService: "Layanan belum tersedia.",
+    emptyOperator: "Operator belum tersedia.",
+    orderDetail: "Detail Pesanan",
+    service: "Layanan",
+    price: "Harga",
+    provider: "Provider",
+    balance: "Saldo Anda",
+    buy: "Beli Nomor",
+    chooseProviderFirst: "Pilih provider dulu",
+    chooseOperatorFirst: "Pilih operator dulu",
+    insufficientBalance: "Saldo tidak cukup",
+    outOfStock: "Stok habis",
+    processingOrder: "Memproses order...",
+    soundOn: "Nada OTP aktif.",
+    soundOff: "Nada OTP dimatikan.",
+    lightOn: "Mode terang aktif.",
+    darkOn: "Mode gelap aktif.",
+    languageOn: "Bahasa Indonesia aktif.",
+  },
+  en: {
+    dashboard: "Dashboard",
+    deposit: "Deposit",
+    buyNumber: "Buy Number",
+    history: "History",
+    settings: "Settings",
+    admin: "Admin",
+    selectServer: "Select Server",
+    selectCountry: "Select Country",
+    selectProvider: "Select Provider",
+    selectService: "Select Service",
+    selectOperator: "Select Operator",
+    searchCountry: "Search country...",
+    searchProvider: "Search provider...",
+    searchService: "Search service...",
+    searchOperator: "Search operator...",
+    emptyCountry: "No country available.",
+    emptyProvider: "No provider available.",
+    emptyService: "No service available.",
+    emptyOperator: "No operator available.",
+    orderDetail: "Order Detail",
+    service: "Service",
+    price: "Price",
+    provider: "Provider",
+    balance: "Your Balance",
+    buy: "Buy Number",
+    chooseProviderFirst: "Choose provider first",
+    chooseOperatorFirst: "Choose operator first",
+    insufficientBalance: "Insufficient balance",
+    outOfStock: "Out of stock",
+    processingOrder: "Processing order...",
+    soundOn: "OTP ringtone enabled.",
+    soundOff: "OTP ringtone muted.",
+    lightOn: "Light mode enabled.",
+    darkOn: "Dark mode enabled.",
+    languageOn: "English language enabled.",
+  },
+} as const;
 
 type ServiceGroup = Service & {
   variants: Service[];
@@ -183,6 +266,10 @@ function normalizeProviderDisplayName(providerName?: string, providerServerId?: 
     return "Zynn";
   }
 
+  if (normalizedServer === "api2" || normalizedName === "jupiter") {
+    return "Zayan";
+  }
+
   return providerName;
 }
 
@@ -194,7 +281,7 @@ function normalizeProviderDisplayIcon(providerIcon?: string, providerServerId?: 
   }
 
   if (normalizedServer === "api2") {
-    return "J";
+    return "Y";
   }
 
   if (normalizedServer === "api3") {
@@ -217,6 +304,22 @@ function getProviderName(service: Service, selectedServer: ServerId) {
 
 function getProviderIcon(service: Service) {
   return normalizeProviderDisplayIcon(service.providerIcon, service.providerServerId) ?? "P";
+}
+
+function getProviderTone(providerServerId?: string): "sky" | "violet" | "emerald" | "amber" {
+  if (providerServerId === "api1") {
+    return "emerald";
+  }
+
+  if (providerServerId === "api2") {
+    return "amber";
+  }
+
+  if (providerServerId === "api3") {
+    return "violet";
+  }
+
+  return "sky";
 }
 
 const SUPPORT_LINKS = [
@@ -511,6 +614,89 @@ function SunIcon({ className }: { className?: string }) {
   );
 }
 
+function MoonIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
+      <path
+        d="M18.5 15.3A7.5 7.5 0 0 1 8.7 5.5a7.8 7.8 0 1 0 9.8 9.8Z"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="1.8"
+      />
+    </svg>
+  );
+}
+
+function LanguageIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
+      <path d="M4 6h9M8.5 4v2M10 6c-.7 3.4-2.4 5.9-5 7.5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+      <path d="M6.3 9.2c1.1 1.8 2.7 3.3 4.7 4.3" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+      <path d="M14 20l3.2-8 3.3 8M15.2 17h4.1" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function SearchIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
+      <circle cx="10.8" cy="10.8" r="6.2" stroke="currentColor" strokeWidth="1.8" />
+      <path d="m16 16 4 4" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8" />
+    </svg>
+  );
+}
+
+function StarOutlineIcon({ className }: { className?: string }) {
+  return (
+    <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
+      <path d="m12 4.2 2.2 4.5 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5-3.6-3.5 5-.7L12 4.2Z" stroke="currentColor" strokeLinejoin="round" strokeWidth="1.6" />
+    </svg>
+  );
+}
+
+function PremiumStormIcon({
+  className,
+  label,
+  tone = "sky",
+}: {
+  className?: string;
+  label?: string;
+  tone?: "sky" | "violet" | "emerald" | "amber";
+}) {
+  const toneClass =
+    tone === "violet"
+      ? "from-violet-300 via-sky-400 to-cyan-300"
+      : tone === "emerald"
+        ? "from-emerald-200 via-cyan-300 to-blue-400"
+        : tone === "amber"
+          ? "from-amber-200 via-cyan-300 to-blue-500"
+          : "from-cyan-200 via-sky-400 to-blue-500";
+
+  return (
+    <span
+      className={cn(
+        "premium-storm-icon relative isolate flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[15px] border border-white/18 bg-gradient-to-br text-[13px] font-black text-white shadow-[0_14px_32px_-18px_rgba(56,189,248,0.95)]",
+        toneClass,
+        className,
+      )}
+    >
+      <span className="premium-storm-halo" />
+      <svg
+        aria-hidden="true"
+        className="premium-storm-bolt absolute h-7 w-7 text-white"
+        fill="none"
+        viewBox="0 0 24 24"
+      >
+        <path
+          d="M13.5 2.8 5.8 13h5.6l-1 8.2 7.8-10.8h-5.8l1.1-7.6Z"
+          fill="currentColor"
+        />
+      </svg>
+      {label ? <span className="relative z-10 mt-4 text-[10px] tracking-[0.08em]">{label}</span> : null}
+    </span>
+  );
+}
+
 function CheckCircleIcon({ className }: { className?: string }) {
   return (
     <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24">
@@ -720,6 +906,195 @@ function SectionTitle({
         <p className="text-[14px] font-medium text-white">{title}</p>
       </div>
       {action}
+    </div>
+  );
+}
+
+type PickerOption = {
+  id: string;
+  label: string;
+  sublabel?: string;
+  code?: string;
+  stock?: number;
+  price?: number;
+  currency?: string;
+  icon?: React.ReactNode;
+  disabled?: boolean;
+  rightLabel?: string;
+};
+
+function SearchablePicker({
+  disabled,
+  emptyLabel,
+  loading,
+  onOpenChange,
+  onSearchChange,
+  onSelect,
+  open,
+  options,
+  placeholder,
+  search,
+  searchPlaceholder,
+  value,
+}: {
+  disabled?: boolean;
+  emptyLabel: string;
+  loading?: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSearchChange: (value: string) => void;
+  onSelect: (id: string) => void;
+  open: boolean;
+  options: PickerOption[];
+  placeholder: string;
+  search: string;
+  searchPlaceholder: string;
+  value?: string;
+}) {
+  const selectedOption = options.find((option) => option.id === value) ?? null;
+  const normalizedSearch = search.trim().toLowerCase();
+  const visibleOptions = normalizedSearch
+    ? options.filter((option) =>
+        `${option.label} ${option.sublabel ?? ""} ${option.code ?? ""}`
+          .toLowerCase()
+          .includes(normalizedSearch),
+      )
+    : options;
+
+  return (
+    <div className="relative">
+      <button
+        className={cn(
+          "flex min-h-[58px] w-full items-center justify-between gap-3 rounded-[18px] border px-4 py-3 text-left transition",
+          open
+            ? "border-emerald-300/55 bg-[#07111f]"
+            : "border-slate-500/42 bg-[#091326]",
+          disabled ? "cursor-not-allowed opacity-65" : "",
+        )}
+        disabled={disabled}
+        onClick={() => onOpenChange(!open)}
+        type="button"
+      >
+        <span className="flex min-w-0 items-center gap-3">
+          {selectedOption?.icon ? (
+            selectedOption.icon
+          ) : (
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] border border-white/10 bg-white/5 text-sky-100/74">
+              <StarOutlineIcon className="h-4.5 w-4.5" />
+            </span>
+          )}
+          <span className="min-w-0">
+            <span className="block truncate text-[14px] font-semibold text-white">
+              {selectedOption?.label ?? placeholder}
+            </span>
+            {selectedOption?.code || selectedOption?.sublabel ? (
+              <span className="mt-0.5 block truncate text-[10px] font-semibold uppercase tracking-[0.08em] text-sky-100/52">
+                {selectedOption.code ?? selectedOption.sublabel}
+              </span>
+            ) : null}
+          </span>
+        </span>
+        <span className="flex shrink-0 items-center gap-2">
+          {selectedOption?.stock !== undefined ? (
+            <StockSignal stock={selectedOption.stock} />
+          ) : null}
+          <ChevronIcon
+            className="h-4 w-4 text-sky-100/70"
+            open={open}
+          />
+        </span>
+      </button>
+
+      {open ? (
+        <div className="mt-2 overflow-hidden rounded-[20px] border border-slate-500/35 bg-[#101b2d] shadow-[0_24px_70px_-40px_rgba(2,8,23,0.95)]">
+          <div className="border-b border-white/8 p-3">
+            <label className="flex h-12 items-center gap-2 rounded-[14px] border border-emerald-300/45 bg-[#07111f] px-3 text-sky-100/70 focus-within:border-emerald-300">
+              <SearchIcon className="h-4.5 w-4.5 shrink-0" />
+              <input
+                className="min-w-0 flex-1 bg-transparent text-[14px] text-white outline-none placeholder:text-sky-100/45"
+                onChange={(event) => onSearchChange(event.target.value)}
+                placeholder={searchPlaceholder}
+                value={search}
+              />
+            </label>
+          </div>
+          <div className="max-h-[312px] overflow-y-auto">
+            {loading ? (
+              <div className="px-4 py-6 text-center text-[12px] text-sky-100/58">
+                <Spinner label="Loading..." />
+              </div>
+            ) : null}
+            {!loading && visibleOptions.length === 0 ? (
+              <div className="px-4 py-6 text-center text-[12px] text-sky-100/58">
+                {emptyLabel}
+              </div>
+            ) : null}
+            {visibleOptions.map((option) => {
+              const active = option.id === value;
+              const hasStock = option.stock === undefined || option.stock > 0;
+
+              return (
+                <button
+                  key={option.id}
+                  className={cn(
+                    "flex min-h-[54px] w-full items-center justify-between gap-3 border-b border-white/6 px-4 py-3 text-left transition last:border-b-0",
+                    active ? "bg-sky-300/10" : "hover:bg-white/5",
+                    option.disabled ? "cursor-not-allowed opacity-50" : "",
+                  )}
+                  disabled={option.disabled}
+                  onClick={() => {
+                    onSelect(option.id);
+                    onOpenChange(false);
+                  }}
+                  type="button"
+                >
+                  <span className="flex min-w-0 items-center gap-3">
+                    {option.icon ?? (
+                      <StarOutlineIcon className="h-4.5 w-4.5 shrink-0 text-sky-100/60" />
+                    )}
+                    <span
+                      className={cn(
+                        "h-2 w-2 shrink-0 rounded-full",
+                        hasStock ? "bg-emerald-300" : "bg-rose-300",
+                      )}
+                    />
+                    <span className="min-w-0">
+                      <span className="truncate text-[14px] font-semibold text-slate-100">
+                        {option.label}
+                      </span>
+                      {option.code ? (
+                        <span className="ml-2 align-middle text-[10px] font-semibold uppercase tracking-[0.08em] text-sky-100/44">
+                          {option.code}
+                        </span>
+                      ) : null}
+                      {option.sublabel ? (
+                        <span className="mt-0.5 block truncate text-[10px] text-sky-100/46">
+                          {option.sublabel}
+                        </span>
+                      ) : null}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    {option.stock !== undefined ? (
+                      <span className="block text-[11px] tabular-nums text-sky-100/58">
+                        {option.stock}
+                      </span>
+                    ) : null}
+                    {option.price !== undefined ? (
+                      <span className="block text-[14px] font-black text-emerald-300">
+                        {formatCurrency(option.price, option.currency ?? "IDR")}
+                      </span>
+                    ) : option.rightLabel ? (
+                      <span className="block text-[11px] font-semibold text-emerald-200">
+                        {option.rightLabel}
+                      </span>
+                    ) : null}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1267,6 +1642,9 @@ export function MemberConsole({
   const [operatorOptions, setOperatorOptions] = useState<OperatorOption[]>([]);
   const [selectedOperator, setSelectedOperator] = useState("");
   const [serviceSearch, setServiceSearch] = useState("");
+  const [countrySearch, setCountrySearch] = useState("");
+  const [providerSearch, setProviderSearch] = useState("");
+  const [operatorSearch, setOperatorSearch] = useState("");
   const [buyHistorySearch, setBuyHistorySearch] = useState("");
   const [buyHistoryStatus, setBuyHistoryStatus] = useState<
     "all" | Order["status"]
@@ -1275,7 +1653,10 @@ export function MemberConsole({
     "dashboard" | "deposit" | "buy" | "history" | "settings" | "admin"
   >("dashboard");
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isServiceListOpen, setIsServiceListOpen] = useState(false);
+  const [openBuyPicker, setOpenBuyPicker] = useState<BuyPicker>(null);
+  const [uiLanguage, setUiLanguage] = useState<UiLanguage>("id");
+  const [uiTheme, setUiTheme] = useState<UiTheme>("dark");
+  const [otpSoundEnabled, setOtpSoundEnabled] = useState(true);
   const [authMode, setAuthMode] = useState<"login" | "register">("login");
   const [authName, setAuthName] = useState("");
   const [authEmail, setAuthEmail] = useState("");
@@ -1358,8 +1739,9 @@ export function MemberConsole({
   } | null>(null);
   const [adminBalanceError, setAdminBalanceError] = useState<string | null>(null);
   const [nowTimestamp, setNowTimestamp] = useState(() => Date.now());
+  const notifiedOtpOrdersRef = useRef(new Set<string>());
 
-  const deferredSearch = useDeferredValue(serviceSearch);
+  const text = uiText[uiLanguage];
   const deferredBuyHistorySearch = useDeferredValue(buyHistorySearch);
   const deferredAdminSearch = useDeferredValue(adminSearch);
   const deferredAdminPricingSearch = useDeferredValue(adminPricingSearch);
@@ -1400,10 +1782,13 @@ export function MemberConsole({
       null
     );
   }, [providerVariants, selectedProviderServiceId, selectedServer, selectedServiceGroup]);
-  const selectedProviderVariants =
-    selectedServer === "bimasakti"
-      ? providerVariants
-      : selectedServiceGroup?.variants ?? [];
+  const selectedProviderVariants = useMemo(
+    () =>
+      selectedServer === "bimasakti"
+        ? providerVariants
+        : selectedServiceGroup?.variants ?? [],
+    [providerVariants, selectedServer, selectedServiceGroup?.variants],
+  );
   const requiresProviderSelection =
     selectedServer === "bimasakti" && Boolean(selectedServiceGroup);
   const operatorProviderServerId =
@@ -1426,17 +1811,80 @@ export function MemberConsole({
   const isSelectedOutOfStock = Boolean(
     selectedService && Number.isFinite(selectedService.stock) && selectedService.stock <= 0,
   );
-  const filteredServices = useMemo(() => {
-    const query = deferredSearch.trim().toLowerCase();
-
-    if (!query) {
-      return serviceGroups;
-    }
-
-    return serviceGroups.filter((service) =>
-      `${service.service} ${service.serviceCode}`.toLowerCase().includes(query),
-    );
-  }, [deferredSearch, serviceGroups]);
+  const countryPickerOptions = useMemo(
+    () =>
+      countries.map((country) => ({
+        id: String(country.id),
+        label: getCountryLabel(country),
+        code: country.code,
+        rightLabel:
+          country.availableServices !== undefined
+            ? `${country.availableServices} svc`
+            : undefined,
+        icon: (
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] border border-white/10 bg-white/6 text-[18px]">
+            {country.flagEmoji ?? toFlagEmoji(country.code) ?? "ID"}
+          </span>
+        ),
+      })),
+    [countries],
+  );
+  const servicePickerOptions = useMemo(
+    () =>
+      serviceGroups.map((service) => ({
+        id: service.id,
+        label: service.service,
+        code: service.serviceCode.toUpperCase(),
+        stock: service.stock,
+        price: service.price,
+        currency: service.currency,
+        disabled: service.stock <= 0,
+      })),
+    [serviceGroups],
+  );
+  const providerPickerOptions = useMemo(
+    () =>
+      selectedProviderVariants.map((variant) => ({
+        id: variant.id,
+        label: getProviderName(variant, selectedServer),
+        code: variant.providerServiceCode?.toUpperCase() ?? variant.serviceCode.toUpperCase(),
+        sublabel: selectedServiceGroup?.service,
+        stock: variant.stock,
+        price: variant.price,
+        currency: variant.currency,
+        disabled: variant.stock <= 0,
+        icon: (
+          <PremiumStormIcon
+            label={getProviderIcon(variant)}
+            tone={getProviderTone(variant.providerServerId)}
+          />
+        ),
+      })),
+    [selectedProviderVariants, selectedServer, selectedServiceGroup?.service],
+  );
+  const operatorPickerOptions = useMemo(
+    () =>
+      operatorOptions.map((operator) => ({
+        id: operator.id,
+        label: operator.label,
+        code: operator.id.toUpperCase(),
+        sublabel:
+          selectedServer === "mars"
+            ? selectedCountry
+              ? getCountryLabel(selectedCountry)
+              : undefined
+            : selectedService
+              ? getProviderName(selectedService, selectedServer)
+              : undefined,
+        icon: (
+          <PremiumStormIcon
+            label={operator.label.slice(0, 1).toUpperCase()}
+            tone={selectedServer === "mars" ? "violet" : "sky"}
+          />
+        ),
+      })),
+    [operatorOptions, selectedCountry, selectedServer, selectedService],
+  );
   const buyHistoryOrders = useMemo(() => {
     const query = deferredBuyHistorySearch.trim().toLowerCase();
 
@@ -1757,7 +2205,7 @@ export function MemberConsole({
 
   function applyMemberCatalogResult(nextCatalog: CatalogResponse) {
     setCatalog(nextCatalog);
-    setIsServiceListOpen(false);
+    setOpenBuyPicker(null);
     setSelectedProviderServiceId((current) => {
       if (current && nextCatalog.services.some((service) => service.id === current)) {
         return current;
@@ -1864,6 +2312,58 @@ export function MemberConsole({
     [canAccessAdmin],
   );
 
+  function playOtpTone(force = false) {
+    if ((!otpSoundEnabled && !force) || typeof window === "undefined") {
+      return;
+    }
+
+    const AudioContextCtor =
+      window.AudioContext ??
+      (window as typeof window & { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+
+    if (!AudioContextCtor) {
+      return;
+    }
+
+    const audioContext = new AudioContextCtor();
+    const startAt = audioContext.currentTime;
+    const notes = [880, 1175, 1480];
+
+    notes.forEach((frequency, index) => {
+      const oscillator = audioContext.createOscillator();
+      const gain = audioContext.createGain();
+      const noteStart = startAt + index * 0.16;
+
+      oscillator.type = "triangle";
+      oscillator.frequency.setValueAtTime(frequency, noteStart);
+      gain.gain.setValueAtTime(0.0001, noteStart);
+      gain.gain.exponentialRampToValueAtTime(0.18, noteStart + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.0001, noteStart + 0.14);
+      oscillator.connect(gain);
+      gain.connect(audioContext.destination);
+      oscillator.start(noteStart);
+      oscillator.stop(noteStart + 0.16);
+    });
+
+    window.setTimeout(() => {
+      void audioContext.close().catch(() => undefined);
+    }, 900);
+  }
+
+  function notifyOtpSound(order: Order) {
+    if (order.status !== "otp_received" || !order.otpCode) {
+      return;
+    }
+
+    if (notifiedOtpOrdersRef.current.has(order.id)) {
+      return;
+    }
+
+    notifiedOtpOrdersRef.current.add(order.id);
+    playOtpTone();
+  }
+
   const syncDeposit = useEffectEvent(async (depositId: string) => {
     try {
       const deposit = await requestDepositStatus(depositId);
@@ -1891,6 +2391,7 @@ export function MemberConsole({
       if (order.status !== "pending") {
         await refreshSummary();
         if (order.status === "otp_received") {
+          notifyOtpSound(order);
           setToast({
             type: "success",
             message: "OTP berhasil diterima dan siap dipakai.",
@@ -2063,7 +2564,7 @@ export function MemberConsole({
       setSelectedProviderServiceId("");
       setProviderVariants([]);
       setIsCatalogLoading(false);
-      setIsServiceListOpen(false);
+      setOpenBuyPicker(null);
       return;
     }
 
@@ -2089,7 +2590,7 @@ export function MemberConsole({
         setCatalog(null);
         setSelectedServiceId("");
         setSelectedProviderServiceId("");
-        setIsServiceListOpen(false);
+        setOpenBuyPicker(null);
         setOrderError(
           error instanceof Error ? error.message : "Gagal memuat katalog layanan.",
         );
@@ -2240,7 +2741,7 @@ export function MemberConsole({
       setOperatorOptions([]);
       setSelectedOperator("");
       setOperatorError(null);
-      setIsServiceListOpen(false);
+      setOpenBuyPicker(null);
       setActiveDeposit(null);
       setActiveOrder(null);
       setAdminUsers([]);
@@ -2463,6 +2964,7 @@ export function MemberConsole({
       if (order.status !== "pending") {
         await refreshSummary();
         if (order.status === "otp_received") {
+          notifyOtpSound(order);
           setToast({
             type: "success",
             message: "OTP berhasil diterima dan siap dipakai.",
@@ -3034,7 +3536,14 @@ export function MemberConsole({
   }
 
   return (
-    <div className="min-h-[100dvh] bg-[#0a1325] text-white">
+    <div
+      className={cn(
+        "min-h-[100dvh] text-white",
+        uiTheme === "light"
+          ? "member-light bg-[#eaf6ff]"
+          : "bg-[#0a1325]",
+      )}
+    >
       {toast ? (
         <div
           className={cn(
@@ -3075,24 +3584,65 @@ export function MemberConsole({
 
             <button
               className="hidden h-9 shrink-0 items-center rounded-[12px] border border-slate-500/24 bg-white/4 px-2.5 text-[12px] font-semibold text-slate-300 min-[340px]:inline-flex"
+              onClick={() => {
+                setUiLanguage((current) => {
+                  const next = current === "id" ? "en" : "id";
+                  setToast({
+                    type: "info",
+                    message: uiText[next].languageOn,
+                  });
+                  return next;
+                });
+              }}
               type="button"
             >
-              <span className="text-emerald-300">ID</span>
+              <LanguageIcon className="mr-1.5 h-4 w-4 text-emerald-300" />
+              <span className={cn(uiLanguage === "id" ? "text-emerald-300" : "text-slate-400")}>ID</span>
               <span className="mx-1.5 text-slate-500">/</span>
-              EN
+              <span className={cn(uiLanguage === "en" ? "text-emerald-300" : "text-slate-400")}>EN</span>
             </button>
 
             <button
               aria-label="Tema"
               className="ml-auto flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] text-slate-400 transition hover:bg-white/6"
+              onClick={() => {
+                setUiTheme((current) => {
+                  const next = current === "dark" ? "light" : "dark";
+                  setToast({
+                    type: "info",
+                    message: next === "light" ? text.lightOn : text.darkOn,
+                  });
+                  return next;
+                });
+              }}
               type="button"
             >
-              <SunIcon className="h-[18px] w-[18px]" />
+              {uiTheme === "dark" ? (
+                <SunIcon className="h-[18px] w-[18px]" />
+              ) : (
+                <MoonIcon className="h-[18px] w-[18px]" />
+              )}
             </button>
 
             <button
               aria-label="Notifikasi"
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] text-slate-400 transition hover:bg-white/6"
+              className={cn(
+                "flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] transition hover:bg-white/6",
+                otpSoundEnabled ? "text-emerald-300" : "text-slate-500",
+              )}
+              onClick={() => {
+                setOtpSoundEnabled((current) => {
+                  const next = !current;
+                  setToast({
+                    type: "info",
+                    message: next ? text.soundOn : text.soundOff,
+                  });
+                  return next;
+                });
+                if (!otpSoundEnabled) {
+                  window.setTimeout(() => playOtpTone(true), 20);
+                }
+              }}
               type="button"
             >
               <BellIcon className="h-[18px] w-[18px]" />
@@ -3140,13 +3690,13 @@ export function MemberConsole({
               </div>
               <div className="mt-4 grid gap-1.5">
                 {[
-                  { id: "dashboard", label: "Dashboard", icon: <ServerIcon className="h-4 w-4" /> },
-                  { id: "deposit", label: "Deposit", icon: <WalletIcon className="h-4 w-4" /> },
-                  { id: "buy", label: "Beli Nomor", icon: <CartIcon className="h-4 w-4" /> },
-                  { id: "history", label: "Riwayat", icon: <ClockIcon className="h-4 w-4" /> },
-                  { id: "settings", label: "Pengaturan", icon: <SettingsIcon className="h-4 w-4" /> },
+                  { id: "dashboard", label: text.dashboard, icon: <ServerIcon className="h-4 w-4" /> },
+                  { id: "deposit", label: text.deposit, icon: <WalletIcon className="h-4 w-4" /> },
+                  { id: "buy", label: text.buyNumber, icon: <CartIcon className="h-4 w-4" /> },
+                  { id: "history", label: text.history, icon: <ClockIcon className="h-4 w-4" /> },
+                  { id: "settings", label: text.settings, icon: <SettingsIcon className="h-4 w-4" /> },
                   ...(canAccessAdmin
-                    ? [{ id: "admin", label: "Admin", icon: <ShieldIcon className="h-4 w-4" /> }]
+                    ? [{ id: "admin", label: text.admin, icon: <ShieldIcon className="h-4 w-4" /> }]
                     : []),
                 ].map((item) => (
                   <button
@@ -3193,7 +3743,7 @@ export function MemberConsole({
           <div className="space-y-4 pt-2">
             <div className="px-0.5">
               <h1 className="text-[28px] font-semibold leading-tight text-slate-100">
-                Dashboard
+                {text.dashboard}
               </h1>
               <p className="mt-1.5 text-[14px] leading-6 text-slate-400">
                 Selamat datang kembali, {firstName}!
@@ -3204,7 +3754,7 @@ export function MemberConsole({
                 type="button"
               >
                 <CartIcon className="h-4 w-4" />
-                Beli Nomor
+                {text.buyNumber}
               </button>
             </div>
 
@@ -3403,13 +3953,13 @@ export function MemberConsole({
         {activeTab === "buy" ? (
           <div className="space-y-4">
             <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
-              <SectionTitle icon={<ServerIcon className="h-4.5 w-4.5" />} title="Pilih Server" />
+              <SectionTitle icon={<ServerIcon className="h-4.5 w-4.5" />} title={text.selectServer} />
               <div className="mt-4 space-y-2.5">
                 {serverOptions.map((server) => (
                   <button
                     key={server.id}
                     className={cn(
-                      "w-full rounded-[18px] border px-4 py-3 text-left transition",
+                      "lux-premium-card flex w-full items-center gap-3 rounded-[18px] border px-3 py-3 text-left transition",
                       selectedServer === server.id
                         ? "border-sky-300/55 bg-sky-300/12"
                         : "border-white/10 bg-white/4",
@@ -3430,12 +3980,25 @@ export function MemberConsole({
                       setOperatorOptions([]);
                       setSelectedOperator("");
                       setOperatorError(null);
-                      setIsServiceListOpen(false);
+                      setCountrySearch("");
+                      setServiceSearch("");
+                      setProviderSearch("");
+                      setOperatorSearch("");
+                      setOpenBuyPicker(null);
                     }}
                     type="button"
                   >
-                    <p className="text-[13px] font-semibold text-white">{server.name}</p>
-                    <p className="mt-1 text-[10px] text-sky-100/62">{server.description}</p>
+                    <PremiumStormIcon tone={server.stormTone} label={server.id === "bimasakti" ? "SK" : "BV"} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[14px] font-semibold text-white">{server.name}</span>
+                      <span className="mt-0.5 block truncate text-[10px] font-semibold uppercase tracking-[0.14em] text-sky-100/52">
+                        {server.id === "bimasakti" ? "Storm primary" : "Lightning reserve"}
+                      </span>
+                    </span>
+                    <span className={cn(
+                      "h-2.5 w-2.5 rounded-full",
+                      selectedServer === server.id ? "bg-emerald-300 shadow-[0_0_16px_rgba(52,211,153,0.9)]" : "bg-slate-500",
+                    )} />
                   </button>
                 ))}
               </div>
@@ -3444,13 +4007,17 @@ export function MemberConsole({
             <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
               <SectionTitle
                 icon={<GlobeIcon className="h-4.5 w-4.5" />}
-                title="Pilih Negara"
+                title={text.selectCountry}
                 action={isCountriesLoading ? <span className="text-[11px] text-sky-100/60">Loading...</span> : null}
               />
-              <select
-                className="mt-4 w-full rounded-[16px] border border-white/10 bg-[#07111f] px-4 py-3 text-[14px] text-white outline-none transition focus:border-sky-300/60"
-                onChange={(event) => {
-                  setSelectedCountryId(Number(event.target.value));
+              <div className="mt-4">
+                <SearchablePicker
+                  emptyLabel={text.emptyCountry}
+                  loading={isCountriesLoading}
+                  onOpenChange={(open) => setOpenBuyPicker(open ? "country" : null)}
+                  onSearchChange={setCountrySearch}
+                  onSelect={(id) => {
+                  setSelectedCountryId(Number(id));
                   setSelectedServiceId("");
                   setSelectedProviderServiceId("");
                   setProviderVariants([]);
@@ -3458,26 +4025,26 @@ export function MemberConsole({
                   setOperatorOptions([]);
                   setSelectedOperator("");
                   setOperatorError(null);
-                  setIsServiceListOpen(false);
+                  setServiceSearch("");
+                  setProviderSearch("");
+                  setOperatorSearch("");
+                  setOpenBuyPicker(null);
                 }}
-                value={selectedCountryId ?? ""}
-              >
-                <option value="" disabled>
-                  Pilih negara
-                </option>
-                {countries.map((country) => (
-                  <option key={`${country.serverId}-${country.id}`} value={country.id}>
-                    {getCountryLabel(country)}
-                  </option>
-                ))}
-              </select>
+                  open={openBuyPicker === "country"}
+                  options={countryPickerOptions}
+                  placeholder={text.selectCountry}
+                  search={countrySearch}
+                  searchPlaceholder={text.searchCountry}
+                  value={selectedCountryId === null ? undefined : String(selectedCountryId)}
+                />
+              </div>
             </div>
 
             {selectedServer === "mars" && selectedCountry ? (
               <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
                 <SectionTitle
                   icon={<GlobeIcon className="h-4.5 w-4.5" />}
-                  title="Pilih Provider"
+                  title={text.selectProvider}
                   action={
                     isOperatorLoading ? (
                       <span className="text-[11px] text-sky-100/60">Loading...</span>
@@ -3490,67 +4057,28 @@ export function MemberConsole({
                       {operatorError}
                     </div>
                   ) : null}
-                  {isOperatorLoading ? (
-                    <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4 text-[12px] text-sky-100/65">
-                      Memuat provider nomor...
-                    </div>
-                  ) : null}
-                  {!isOperatorLoading &&
-                  !operatorError &&
-                  operatorOptions.length === 0 ? (
-                    <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4 text-[12px] text-sky-100/65">
-                      Provider belum tersedia untuk negara ini.
-                    </div>
-                  ) : null}
-                  {operatorOptions.map((operator) => {
-                    const active = selectedOperator === operator.id;
-
-                    return (
-                      <button
-                        key={operator.id}
-                        className={cn(
-                          "flex min-h-14 w-full items-center justify-between gap-3 rounded-[16px] border px-3 py-3 text-left transition",
-                          active
-                            ? "border-cyan-300/45 bg-[linear-gradient(135deg,rgba(8,33,61,0.96),rgba(12,52,87,0.92))]"
-                            : "border-white/10 bg-white/4",
-                        )}
-                        onClick={() => {
-                          setSelectedOperator(operator.id);
-                          setSelectedServiceId("");
-                          setSelectedProviderServiceId("");
-                          setProviderVariants([]);
-                          setOperatorError(null);
-                          setCatalog(null);
-                          setIsServiceListOpen(false);
-                        }}
-                        type="button"
-                      >
-                        <span className="flex min-w-0 items-center gap-3">
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-cyan-300/12 text-[13px] font-semibold text-cyan-100">
-                            {operator.label.slice(0, 1).toUpperCase()}
-                          </span>
-                          <span className="min-w-0">
-                            <span className="block truncate text-[13px] font-semibold text-white">
-                              {operator.label}
-                            </span>
-                            <span className="mt-0.5 block truncate text-[11px] text-sky-100/55">
-                              {getCountryLabel(selectedCountry)}
-                            </span>
-                          </span>
-                        </span>
-                        <span className="shrink-0 text-right">
-                          <span className={cn(
-                            "rounded-full border px-2 py-1 text-[10px] font-semibold",
-                            active
-                              ? "border-emerald-300/35 bg-emerald-400/12 text-emerald-100"
-                              : "border-white/10 bg-white/6 text-sky-100/62",
-                          )}>
-                            {active ? "Dipilih" : "Provider"}
-                          </span>
-                        </span>
-                      </button>
-                    );
-                  })}
+                  <SearchablePicker
+                    emptyLabel={text.emptyProvider}
+                    loading={isOperatorLoading}
+                    onOpenChange={(open) => setOpenBuyPicker(open ? "mars-operator" : null)}
+                    onSearchChange={setOperatorSearch}
+                    onSelect={(id) => {
+                      setSelectedOperator(id);
+                      setSelectedServiceId("");
+                      setSelectedProviderServiceId("");
+                      setProviderVariants([]);
+                      setOperatorError(null);
+                      setCatalog(null);
+                      setServiceSearch("");
+                      setOpenBuyPicker(null);
+                    }}
+                    open={openBuyPicker === "mars-operator"}
+                    options={operatorPickerOptions}
+                    placeholder={text.selectProvider}
+                    search={operatorSearch}
+                    searchPlaceholder={text.searchProvider}
+                    value={selectedOperator}
+                  />
                 </div>
               </div>
             ) : null}
@@ -3560,173 +4088,79 @@ export function MemberConsole({
             <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
               <SectionTitle
                 icon={<CartIcon className="h-4.5 w-4.5" />}
-                title="Pilih Layanan"
+                title={text.selectService}
                 action={isCatalogLoading ? <span className="text-[11px] text-sky-100/60">Loading...</span> : null}
               />
-              <button
-                className={cn(
-                  "mt-4 flex min-h-[52px] w-full items-center justify-between gap-3 rounded-[16px] border px-4 py-3 text-left transition",
-                  isServiceListOpen
-                    ? "border-sky-300/55 bg-sky-300/12"
-                    : "border-white/10 bg-[#07111f]",
-                  isCatalogLoading ? "opacity-65" : "",
-                )}
-                disabled={isCatalogLoading}
-                onClick={() => setIsServiceListOpen((current) => !current)}
-                type="button"
-              >
-                <span className="min-w-0">
-                  <span className="block truncate text-[14px] font-medium text-white">
-                    {selectedServiceGroup?.service ?? "Pilih layanan"}
-                  </span>
-                  <span className="mt-1 block text-[11px] text-sky-100/55">
-                    {selectedServiceGroup
-                      ? selectedServiceGroup.serviceCode.toUpperCase()
-                      : "Tekan untuk membuka daftar layanan"}
-                  </span>
-                </span>
-                <span className="flex shrink-0 items-center gap-2">
-                  {selectedServiceGroup ? (
-                    <StockSignal stock={selectedServiceGroup.stock} />
-                  ) : null}
-                  <ChevronIcon
-                    className="h-4 w-4 text-sky-100/70"
-                    open={isServiceListOpen}
-                  />
-                </span>
-              </button>
-              {isServiceListOpen ? (
-                <div className="mt-3">
-                  <input
-                    className="w-full rounded-[16px] border border-white/10 bg-[#07111f] px-4 py-3 text-[14px] text-white outline-none transition focus:border-sky-300/60"
-                    onChange={(event) => setServiceSearch(event.target.value)}
-                    placeholder="Search service..."
-                    value={serviceSearch}
-                  />
-              <div className="mt-3 max-h-[290px] overflow-y-auto rounded-[18px] border border-white/10 bg-white/4">
-                {filteredServices.map((service) => (
-                  <button
-                    key={service.id}
-                    disabled={service.stock <= 0}
-                    className={cn(
-                      "flex w-full items-center justify-between gap-3 border-b border-white/6 px-4 py-3 text-left last:border-b-0",
-                      selectedServiceGroup?.id === service.id ? "bg-sky-300/10" : "",
-                      service.stock <= 0 ? "cursor-not-allowed opacity-60" : "",
-                    )}
-                    onClick={() => {
-                      setSelectedServiceId(service.id);
-                      setIsServiceListOpen(false);
-                      setServiceSearch("");
-                      if (selectedServer === "bimasakti") {
-                        setSelectedProviderServiceId("");
-                        setProviderVariants([]);
-                        setProviderError(null);
-                      } else {
-                        setSelectedProviderServiceId(
-                          service.variants.find((variant) => variant.stock > 0)?.id ??
-                            service.variants[0]?.id ??
-                            "",
-                        );
-                      }
-                    }}
-                    type="button"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-[14px] font-medium text-white">{service.service}</p>
-                      <p className="mt-1 text-[11px] text-sky-100/60">
-                        {service.serviceCode.toUpperCase()}
-                      </p>
-                    </div>
-                    <span className="flex shrink-0 items-center gap-2 text-right">
-                      <StockSignal stock={service.stock} />
-                      <span className="text-[14px] font-semibold text-cyan-100">
-                        {formatCurrency(service.price, service.currency)}
-                      </span>
-                    </span>
-                  </button>
-                ))}
-                {!filteredServices.length && !isCatalogLoading ? (
-                  <div className="px-4 py-6 text-center text-[12px] text-sky-100/56">
-                    Layanan belum tersedia untuk pilihan ini.
-                  </div>
-                ) : null}
+              <div className="mt-4">
+                <SearchablePicker
+                  disabled={isCatalogLoading}
+                  emptyLabel={text.emptyService}
+                  loading={isCatalogLoading}
+                  onOpenChange={(open) => setOpenBuyPicker(open ? "service" : null)}
+                  onSearchChange={setServiceSearch}
+                  onSelect={(id) => {
+                    const service = serviceGroups.find((item) => item.id === id);
+
+                    if (!service) {
+                      return;
+                    }
+
+                    setSelectedServiceId(service.id);
+                    setOpenBuyPicker(null);
+                    setServiceSearch("");
+                    if (selectedServer === "bimasakti") {
+                      setSelectedProviderServiceId("");
+                      setProviderVariants([]);
+                      setProviderError(null);
+                    } else {
+                      setSelectedProviderServiceId(
+                        service.variants.find((variant) => variant.stock > 0)?.id ??
+                          service.variants[0]?.id ??
+                          "",
+                      );
+                    }
+                  }}
+                  open={openBuyPicker === "service"}
+                  options={servicePickerOptions}
+                  placeholder={text.selectService}
+                  search={serviceSearch}
+                  searchPlaceholder={text.searchService}
+                  value={selectedServiceGroup?.id}
+                />
               </div>
-                </div>
-              ) : null}
             </div>
             ) : null}
 
             {requiresProviderSelection && selectedServiceGroup ? (
               <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-[11px] text-sky-100/58">Layanan</p>
-                    <p className="mt-2 text-[10px] font-semibold uppercase text-sky-100/50">
-                      Pilih Provider:
-                    </p>
-                  </div>
-                  <p className="text-right text-[14px] font-semibold text-white">
-                    {selectedServiceGroup.service}
-                  </p>
-                  <StockSignal stock={selectedServiceGroup.stock} />
-                </div>
+                <SectionTitle
+                  icon={<PremiumStormIcon className="h-9 w-9" label="P" tone="sky" />}
+                  title={text.selectProvider}
+                  action={<StockSignal stock={selectedServiceGroup.stock} />}
+                />
                 <div className="mt-3 space-y-2">
-                  {isProviderLoading ? (
-                    <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4 text-[12px] text-sky-100/65">
-                      Memuat provider layanan...
-                    </div>
-                  ) : null}
                   {providerError ? (
                     <div className="rounded-[16px] border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-[12px] text-rose-100">
                       {providerError}
                     </div>
                   ) : null}
-                  {!isProviderLoading &&
-                  !providerError &&
-                  selectedProviderVariants.length === 0 ? (
-                    <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4 text-[12px] text-sky-100/65">
-                      Tidak ada provider tersedia untuk layanan ini.
-                    </div>
-                  ) : null}
-                  {selectedProviderVariants.map((variant) => {
-                    const active = selectedService?.id === variant.id;
-
-                    return (
-                      <button
-                        key={variant.id}
-                        className={cn(
-                          "flex w-full items-center justify-between gap-3 rounded-[16px] border px-3 py-3 text-left transition",
-                          active
-                            ? "border-sky-300/55 bg-sky-300/12"
-                            : "border-white/10 bg-white/4",
-                          variant.stock <= 0 ? "cursor-not-allowed opacity-55" : "",
-                        )}
-                        disabled={variant.stock <= 0}
-                        onClick={() => setSelectedProviderServiceId(variant.id)}
-                        type="button"
-                      >
-                        <div className="flex min-w-0 items-center gap-3">
-                          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[14px] bg-white/8 text-[15px] text-white">
-                            {getProviderIcon(variant)}
-                          </span>
-                          <div className="min-w-0">
-                            <p className="truncate text-[13px] font-semibold text-white">
-                              {variant.service}
-                            </p>
-                            <p className="mt-0.5 text-[11px] text-sky-100/58">
-                              {getProviderName(variant, selectedServer)}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="shrink-0 text-right">
-                          <p className="text-[13px] font-semibold text-cyan-100">
-                            {formatCurrency(variant.price, variant.currency)}
-                          </p>
-                          <StockSignal className="mt-1" stock={variant.stock} />
-                        </div>
-                      </button>
-                    );
-                  })}
+                  <SearchablePicker
+                    emptyLabel={text.emptyProvider}
+                    loading={isProviderLoading}
+                    onOpenChange={(open) => setOpenBuyPicker(open ? "provider" : null)}
+                    onSearchChange={setProviderSearch}
+                    onSelect={(id) => {
+                      setSelectedProviderServiceId(id);
+                      setProviderSearch("");
+                      setOpenBuyPicker(null);
+                    }}
+                    open={openBuyPicker === "provider"}
+                    options={providerPickerOptions}
+                    placeholder={text.selectProvider}
+                    search={providerSearch}
+                    searchPlaceholder={text.searchProvider}
+                    value={selectedService?.id}
+                  />
                 </div>
               </div>
             ) : null}
@@ -3737,7 +4171,7 @@ export function MemberConsole({
               <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
                 <SectionTitle
                   icon={<GlobeIcon className="h-4.5 w-4.5" />}
-                  title="Pilih Operator"
+                  title={text.selectOperator}
                   action={
                     isOperatorLoading ? (
                       <span className="text-[11px] text-sky-100/60">Loading...</span>
@@ -3750,83 +4184,46 @@ export function MemberConsole({
                       {operatorError}
                     </div>
                   ) : null}
-                  {isOperatorLoading ? (
-                    <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4 text-[12px] text-sky-100/65">
-                      Memuat operator nomor...
-                    </div>
-                  ) : null}
-                  {!isOperatorLoading &&
-                  !operatorError &&
-                  operatorOptions.length === 0 ? (
-                    <div className="rounded-[16px] border border-white/10 bg-white/5 px-4 py-4 text-[12px] text-sky-100/65">
-                      Operator belum tersedia untuk provider ini.
-                    </div>
-                  ) : null}
-                  {operatorOptions.map((operator) => {
-                    const active = selectedOperator === operator.id;
-
-                    return (
-                      <button
-                        key={operator.id}
-                        className={cn(
-                          "flex min-h-12 w-full items-center justify-between gap-3 rounded-[16px] border px-3 py-3 text-left transition",
-                          active
-                            ? "border-cyan-300/45 bg-cyan-300/12"
-                            : "border-white/10 bg-white/4",
-                        )}
-                        onClick={() => {
-                          setSelectedOperator(operator.id);
-                          setOperatorError(null);
-                        }}
-                        type="button"
-                      >
-                        <span className="min-w-0">
-                          <span className="block truncate text-[13px] font-semibold text-white">
-                            {operator.label}
-                          </span>
-                          <span className="mt-0.5 block truncate text-[11px] text-sky-100/55">
-                            {getProviderName(selectedService, selectedServer)}
-                          </span>
-                        </span>
-                        <span className={cn(
-                          "rounded-full border px-2 py-1 text-[10px] font-semibold",
-                          active
-                            ? "border-emerald-300/35 bg-emerald-400/12 text-emerald-100"
-                            : "border-white/10 bg-white/6 text-sky-100/62",
-                        )}>
-                          {active ? "Dipilih" : "Operator"}
-                        </span>
-                      </button>
-                    );
-                  })}
+                  <SearchablePicker
+                    emptyLabel={text.emptyOperator}
+                    loading={isOperatorLoading}
+                    onOpenChange={(open) => setOpenBuyPicker(open ? "operator" : null)}
+                    onSearchChange={setOperatorSearch}
+                    onSelect={(id) => {
+                      setSelectedOperator(id);
+                      setOperatorError(null);
+                      setOperatorSearch("");
+                      setOpenBuyPicker(null);
+                    }}
+                    open={openBuyPicker === "operator"}
+                    options={operatorPickerOptions}
+                    placeholder={text.selectOperator}
+                    search={operatorSearch}
+                    searchPlaceholder={text.searchOperator}
+                    value={selectedOperator}
+                  />
                 </div>
               </div>
             ) : null}
 
             {selectedService ? (
               <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
-                <SectionTitle icon={<WalletIcon className="h-4.5 w-4.5" />} title="Detail Pesanan" />
+                <SectionTitle icon={<WalletIcon className="h-4.5 w-4.5" />} title={text.orderDetail} />
                 <div className="mt-4 space-y-2 text-[12px] text-sky-100/72">
                   <div className="flex items-center justify-between gap-3">
-                    <span>Layanan</span>
+                    <span>{text.service}</span>
                     <span className="text-white">{selectedService.service}</span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <span>Harga</span>
+                    <span>{text.price}</span>
                     <span className="text-white">{formatCurrency(selectedService.price, selectedService.currency)}</span>
                   </div>
                   <div className="flex items-center justify-between gap-3">
-                    <span>Provider</span>
+                    <span>{text.provider}</span>
                     <span className="text-white">{getProviderName(selectedService, selectedServer)}</span>
                   </div>
-                  {selectedOperatorOption ? (
-                    <div className="flex items-center justify-between gap-3">
-                      <span>Operator</span>
-                      <span className="text-white">{selectedOperatorOption.label}</span>
-                    </div>
-                  ) : null}
                   <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-2">
-                    <span>Saldo Anda</span>
+                    <span>{text.balance}</span>
                     <span className="font-semibold text-cyan-100">{formatCurrency(summary.viewer.walletBalance, "IDR")}</span>
                   </div>
                 </div>
@@ -3856,15 +4253,15 @@ export function MemberConsole({
                   type="button"
                 >
                   {isOrderLoading ? (
-                    <Spinner className="text-[#08101c]" label="Memproses order..." />
+                    <Spinner className="text-[#08101c]" label={text.processingOrder} />
                   ) : isOperatorMissing ? (
-                    selectedServer === "mars" ? "Pilih provider dulu" : "Pilih operator dulu"
+                    selectedServer === "mars" ? text.chooseProviderFirst : text.chooseOperatorFirst
                   ) : summary.viewer.walletBalance < selectedService.price ? (
-                    "Saldo tidak cukup"
+                    text.insufficientBalance
                   ) : isSelectedOutOfStock ? (
-                    "Stok habis"
+                    text.outOfStock
                   ) : (
-                    "Beli Nomor"
+                    text.buy
                   )}
                 </button>
               </div>

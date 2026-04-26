@@ -171,6 +171,33 @@ a {
   }
 }
 
+@keyframes premium-storm-drift {
+  0%, 100% {
+    transform: translate3d(-10%, -8%, 0) rotate(-8deg) scale(1);
+  }
+
+  50% {
+    transform: translate3d(10%, 8%, 0) rotate(8deg) scale(1.08);
+  }
+}
+
+@keyframes premium-storm-flash {
+  0%, 100% {
+    opacity: 0.82;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  48% {
+    opacity: 1;
+    transform: translate3d(0, -2px, 0) scale(1.08);
+  }
+
+  52% {
+    opacity: 0.62;
+    transform: translate3d(1px, 1px, 0) scale(0.98);
+  }
+}
+
 @layer components {
   .section-shell {
     @apply mx-auto w-full max-w-7xl px-4 sm:px-8;
@@ -393,5 +420,63 @@ a {
 
   .provider-svg-icon-saturn {
     animation: provider-saturn-float 6.2s ease-in-out infinite;
+  }
+
+  .premium-storm-icon {
+    animation: lux-float 4.6s ease-in-out infinite;
+  }
+
+  .premium-storm-halo {
+    position: absolute;
+    inset: -30%;
+    border-radius: inherit;
+    background:
+      radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.76), transparent 24%),
+      conic-gradient(from 160deg, rgba(255, 255, 255, 0.1), rgba(103, 232, 249, 0.72), rgba(59, 130, 246, 0.62), rgba(168, 85, 247, 0.46), rgba(255, 255, 255, 0.1));
+    filter: blur(6px);
+    opacity: 0.72;
+    animation: premium-storm-drift 5.8s ease-in-out infinite;
+  }
+
+  .premium-storm-bolt {
+    filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.95)) drop-shadow(0 0 20px rgba(56, 189, 248, 0.72));
+    animation: premium-storm-flash 2.8s ease-in-out infinite;
+  }
+
+  .member-light {
+    color: #102033;
+  }
+
+  .member-light [class*="bg-[#0b1426]"],
+  .member-light [class*="bg-[#101b2d]"] {
+    background: #f7fbff !important;
+  }
+
+  .member-light [class*="bg-[#0a1525]"],
+  .member-light [class*="bg-[#07111f]"],
+  .member-light [class*="bg-[#091326]"] {
+    background: #ffffff !important;
+  }
+
+  .member-light [class*="border-white/10"],
+  .member-light [class*="border-slate-500"] {
+    border-color: rgba(54, 86, 124, 0.18) !important;
+  }
+
+  .member-light .text-white,
+  .member-light .text-slate-100 {
+    color: #102033 !important;
+  }
+
+  .member-light [class*="text-sky-100"],
+  .member-light .text-slate-300,
+  .member-light .text-slate-400 {
+    color: rgba(38, 69, 107, 0.72) !important;
+  }
+
+  .member-light [class*="bg-white/4"],
+  .member-light [class*="bg-white/5"],
+  .member-light [class*="bg-white/6"] {
+    background: rgba(24, 91, 138, 0.06) !important;
   }
 }

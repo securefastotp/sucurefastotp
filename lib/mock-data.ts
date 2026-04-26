@@ -159,8 +159,8 @@ export function listMockServices(filters?: {
           },
           {
             code: "api2",
-            name: "Jupiter",
-            icon: "J",
+            name: "Zayan",
+            icon: "Y",
             stockRatio: 0.64,
             priceRatio: 1.05,
           },
