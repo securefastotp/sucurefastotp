@@ -2257,21 +2257,6 @@ export async function getServiceProviders(filters: {
     );
   }
 
-  if (serverId !== "bimasakti") {
-    const catalog = await getCatalog({ serverId, countryId });
-    const services = catalog.services.filter(
-      (service) => service.serviceCode.toLowerCase() === serviceCode,
-    );
-
-    return buildProviderVariantResponse(
-      services,
-      "rest",
-      serviceCode,
-      services[0]?.service ?? formatServiceName(serviceCode),
-      { source: catalog.source, warning: catalog.warning },
-    );
-  }
-
   try {
     const country = await getWebCountryMeta(serverId, countryId);
     const payload = await fetchKirimKodeWeb(

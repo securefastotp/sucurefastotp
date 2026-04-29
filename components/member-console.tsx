@@ -1766,10 +1766,7 @@ export function MemberConsole({
     [operatorOptions, selectedOperator],
   );
   const selectedService = useMemo(() => {
-    const variants =
-      selectedServer === "bimasakti"
-        ? providerVariants
-        : selectedServiceGroup?.variants ?? [];
+    const variants = providerVariants;
 
     return (
       variants.find((service) => service.id === selectedProviderServiceId) ??
@@ -1777,19 +1774,17 @@ export function MemberConsole({
       variants[0] ??
       null
     );
-  }, [providerVariants, selectedProviderServiceId, selectedServer, selectedServiceGroup]);
+  }, [providerVariants, selectedProviderServiceId]);
   const selectedProviderVariants = useMemo(
-    () =>
-      selectedServer === "bimasakti"
-        ? providerVariants
-        : selectedServiceGroup?.variants ?? [],
-    [providerVariants, selectedServer, selectedServiceGroup?.variants],
+    () => providerVariants,
+    [providerVariants],
   );
   const requiresProviderSelection = Boolean(selectedServiceGroup);
   const operatorProviderServerId = selectedService?.providerServerId;
   const operatorProviderCountryId = selectedService?.providerCountryId;
+  const shouldShowOperatorPicker = false;
   const requiresOperatorBeforeOrder =
-    Boolean(selectedService && operatorOptions.length > 1);
+    shouldShowOperatorPicker && Boolean(selectedService && operatorOptions.length > 1);
   const isOperatorMissing =
     requiresOperatorBeforeOrder && !selectedOperatorOption;
   const isSelectedOutOfStock = Boolean(
@@ -2059,22 +2054,6 @@ export function MemberConsole({
       setProviderError(null);
       setIsProviderLoading(false);
       setSelectedProviderServiceId("");
-      return;
-    }
-
-    if (selectedServer !== "bimasakti") {
-      const variants = selectedServiceGroup.variants;
-
-      setProviderVariants([]);
-      setProviderError(null);
-      setIsProviderLoading(false);
-      setSelectedProviderServiceId((current) => {
-        if (current && variants.some((service) => service.id === current)) {
-          return current;
-        }
-
-        return variants.find((service) => service.stock > 0)?.id ?? variants[0]?.id ?? "";
-      });
       return;
     }
 
@@ -2797,7 +2776,7 @@ export function MemberConsole({
       return;
     }
 
-    if (isOperatorLoading) {
+    if (shouldShowOperatorPicker && isOperatorLoading) {
       const message = "Provider/operator sedang dimuat. Tunggu sebentar.";
       setOrderError(message);
       setToast({
@@ -2819,7 +2798,7 @@ export function MemberConsole({
       return;
     }
 
-    if (isOperatorMissing) {
+    if (shouldShowOperatorPicker && isOperatorMissing) {
       const message = "Pilih operator nomor dulu sebelum membeli nomor.";
       setOrderError(message);
       setToast({
@@ -2851,7 +2830,7 @@ export function MemberConsole({
         providerServerId: selectedService.providerServerId,
         providerCountryId: selectedService.providerCountryId,
         providerServiceCode: selectedService.providerServiceCode,
-        operator: selectedOperatorOption?.id ?? "any",
+        operator: "any",
       });
       setActiveOrder(order);
       await refreshSummary();
@@ -4110,6 +4089,7 @@ export function MemberConsole({
             ) : null}
 
             {selectedService &&
+            shouldShowOperatorPicker &&
             (isOperatorLoading || operatorError || operatorOptions.length > 1) ? (
               <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
                 <SectionTitle
@@ -4185,8 +4165,8 @@ export function MemberConsole({
                   disabled={
                     isOrderLoading ||
                     isProviderLoading ||
-                    isOperatorLoading ||
-                    isOperatorMissing ||
+                    (shouldShowOperatorPicker && isOperatorLoading) ||
+                    (shouldShowOperatorPicker && isOperatorMissing) ||
                     summary.viewer.walletBalance < selectedService.price ||
                     isSelectedOutOfStock
                   }
