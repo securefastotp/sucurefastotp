@@ -1892,59 +1892,104 @@ function normalizeHistory(payload: unknown): OrderHistoryResponse {
   };
 }
 
-async function resolveProviderRefFromHistory(context: OrderContext) {
-  try {
-    const history = await getHistory();
-    const currentCreatedAt = new Date(context.createdAt).getTime();
-    const directMatch = history.orders.find(
-      (order) =>
-        order.id === context.localOrderId ||
-        order.providerRef === context.localOrderId,
-    );
-    const fallbackMatch = history.orders.find((order) => {
-      const samePhone = order.phoneNumber === context.phoneNumber;
-      const sameService =
-        order.serviceCode.toLowerCase() === context.serviceCode.toLowerCase();
-      const sameServer =
-        resolveServerId(order.serverId) === resolveServerId(context.serverId);
-      const createdAt = new Date(order.createdAt).getTime();
-      const closeInTime =
-        Number.isFinite(currentCreatedAt) &&
-        Number.isFinite(createdAt) &&
-        Math.abs(createdAt - currentCreatedAt) <= 30 * 60 * 1000;
+function orderFromContext(context: OrderContext) {
+  return {
+    id: context.localOrderId,
+    serviceId: context.serviceId,
+    serviceCode: context.serviceCode,
+    serverId: context.serverId,
+    service: context.service,
+    country: context.country,
+    countryId: context.countryId,
+    phoneNumber: context.phoneNumber,
+    price: context.price,
+    currency: context.currency,
+    status: context.status,
+    otpCode: context.otpCode,
+    createdAt: context.createdAt,
+    expiresAt: context.expiresAt,
+    providerRef: context.providerRef,
+  } satisfies Order;
+}
 
-      return samePhone && sameService && sameServer && closeInTime;
-    });
-    const matchedOrder = directMatch ?? fallbackMatch;
+function waitForProviderHistory(delayMs: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+}
 
-    if (!matchedOrder) {
-      return null;
+async function resolveProviderRefFromHistory(
+  context: OrderContext,
+  options?: {
+    attempts?: number;
+    delayMs?: number;
+  },
+) {
+  const attempts = Math.max(1, options?.attempts ?? 1);
+  const delayMs = Math.max(0, options?.delayMs ?? 0);
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const history = await getHistory();
+      const currentCreatedAt = new Date(context.createdAt).getTime();
+      const directMatch = history.orders.find(
+        (order) =>
+          order.id === context.localOrderId ||
+          order.providerRef === context.localOrderId,
+      );
+      const fallbackMatch = history.orders.find((order) => {
+        const samePhone = order.phoneNumber === context.phoneNumber;
+        const sameService =
+          order.serviceCode.toLowerCase() === context.serviceCode.toLowerCase();
+        const sameServer =
+          resolveServerId(order.serverId) === resolveServerId(context.serverId);
+        const createdAt = new Date(order.createdAt).getTime();
+        const closeInTime =
+          Number.isFinite(currentCreatedAt) &&
+          Number.isFinite(createdAt) &&
+          Math.abs(createdAt - currentCreatedAt) <= 30 * 60 * 1000;
+
+        return samePhone && sameService && sameServer && closeInTime;
+      });
+      const matchedOrder = directMatch ?? fallbackMatch;
+
+      if (!matchedOrder) {
+        if (attempt < attempts && delayMs > 0) {
+          await waitForProviderHistory(delayMs);
+        }
+        continue;
+      }
+
+      const providerRef =
+        matchedOrder.providerRef ??
+        (matchedOrder.id !== context.localOrderId ? matchedOrder.id : undefined);
+
+      if (!providerRef) {
+        if (attempt < attempts && delayMs > 0) {
+          await waitForProviderHistory(delayMs);
+        }
+        continue;
+      }
+
+      return {
+        ...context,
+        upstreamOrderId: providerRef,
+        providerRef,
+        phoneNumber:
+          context.phoneNumber && context.phoneNumber !== "-"
+            ? context.phoneNumber
+            : matchedOrder.phoneNumber,
+        otpCode: context.otpCode ?? matchedOrder.otpCode,
+        status:
+          context.status === "pending" ? matchedOrder.status : context.status,
+      } satisfies OrderContext;
+    } catch (error) {
+      console.error("Gagal mencari providerRef dari history upstream:", error);
+      if (attempt < attempts && delayMs > 0) {
+        await waitForProviderHistory(delayMs);
+      }
     }
-
-    const providerRef =
-      matchedOrder.providerRef ??
-      (matchedOrder.id !== context.localOrderId ? matchedOrder.id : undefined);
-
-    if (!providerRef) {
-      return null;
-    }
-
-    return {
-      ...context,
-      upstreamOrderId: providerRef,
-      providerRef,
-      phoneNumber:
-        context.phoneNumber && context.phoneNumber !== "-"
-          ? context.phoneNumber
-          : matchedOrder.phoneNumber,
-      otpCode: context.otpCode ?? matchedOrder.otpCode,
-      status:
-        context.status === "pending" ? matchedOrder.status : context.status,
-    } satisfies OrderContext;
-  } catch (error) {
-    console.error("Gagal mencari providerRef dari history upstream:", error);
-    return null;
   }
+
+  return null;
 }
 
 function toOrderContext(order: Order): OrderContext {
@@ -2748,7 +2793,10 @@ export async function getOrder(orderId: string, contextToken?: string | null) {
 
   const hydratedFallback =
     !resolvedFallback.providerRef || resolvedFallback.providerRef === resolvedFallback.localOrderId
-      ? await resolveProviderRefFromHistory(resolvedFallback)
+      ? await resolveProviderRefFromHistory(resolvedFallback, {
+          attempts: 3,
+          delayMs: 1000,
+        })
       : null;
   const effectiveFallback = hydratedFallback ?? resolvedFallback;
 
@@ -2776,6 +2824,12 @@ export async function getOrder(orderId: string, contextToken?: string | null) {
   }
 
   if (!payload) {
+    const message = lastError instanceof Error ? lastError.message : "";
+
+    if (effectiveFallback.status === "pending" && /not found|tidak ditemukan|order/i.test(message)) {
+      return await persistOrder(orderFromContext(effectiveFallback));
+    }
+
     throw (lastError instanceof Error ? lastError : new Error("Gagal membaca status order."));
   }
 
@@ -2833,7 +2887,10 @@ export async function cancelOrder(orderId: string, contextToken?: string | null)
 
   const hydratedFallback =
     !fallback.providerRef || fallback.providerRef === fallback.localOrderId
-      ? await resolveProviderRefFromHistory(fallback)
+      ? await resolveProviderRefFromHistory(fallback, {
+          attempts: 5,
+          delayMs: 1200,
+        })
       : null;
   const effectiveFallback = hydratedFallback ?? fallback;
 
