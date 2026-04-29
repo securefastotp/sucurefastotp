@@ -2472,13 +2472,12 @@ export function MemberConsole({
     }
 
     let ignoreResult = false;
-    const provider =
-      selectedServer === "bimasakti" && operatorProviderServerId
-        ? {
-            providerServerId: operatorProviderServerId,
-            providerCountryId: operatorProviderCountryId,
-          }
-        : null;
+    const provider = operatorProviderServerId
+      ? {
+          providerServerId: operatorProviderServerId,
+          providerCountryId: operatorProviderCountryId,
+        }
+      : null;
 
     setOperatorOptions([]);
     setSelectedOperator("");
