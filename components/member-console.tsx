@@ -184,7 +184,7 @@ function getProviderSortWeight(service: Service) {
     return 1;
   }
 
-  if (service.providerServerId === "api3") {
+  if (service.providerServerId === "api2") {
     return 2;
   }
 

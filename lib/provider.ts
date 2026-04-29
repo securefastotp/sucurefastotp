@@ -162,6 +162,10 @@ const otpProviderServers = [
   },
 ] as const;
 
+const orderableProviderServers = otpProviderServers.filter((provider) =>
+  provider.serverId === "api1" || provider.serverId === "api2"
+);
+
 const upstreamCache = upstreamCatalogCache as UpstreamCatalogCache;
 
 const orderContextGlobal = globalThis as typeof globalThis & {
@@ -274,7 +278,7 @@ function isDirectWebServer(
 function normalizeProviderServerId(serverId?: string) {
   const normalized = serverId?.trim().toLowerCase();
 
-  return otpProviderServers.some((provider) => provider.serverId === normalized)
+  return orderableProviderServers.some((provider) => provider.serverId === normalized)
     ? normalized
     : null;
 }
@@ -2036,7 +2040,7 @@ export async function getCatalog(filters: CatalogFilters = {}) {
       if (serverId === "mars") {
         const providerServerIds = requestedProviderServerId
           ? [requestedProviderServerId]
-          : otpProviderServers.map((provider) => provider.serverId);
+          : orderableProviderServers.map((provider) => provider.serverId);
         const providerServices = await Promise.all(
           providerServerIds.map(async (providerServerId) => {
             const providerCountryId =
@@ -2253,7 +2257,11 @@ export async function getServiceProviders(filters: {
         const providerServerId = pickString(provider, ["serverId"], "");
         const upstreamPrice = pickNumber(provider, ["price", "harga"], 0);
 
-        if (!providerServerId || upstreamPrice <= 0) {
+        if (
+          !providerServerId ||
+          normalizeProviderServerId(providerServerId) !== providerServerId ||
+          upstreamPrice <= 0
+        ) {
           return null;
         }
 
@@ -2428,7 +2436,7 @@ export async function getProviderOptions(filters: {
   const pricingRules = await getPricingRulesForCatalog(serverId, countryId);
   const providers = (
     await Promise.all(
-      otpProviderServers.map(async (providerMeta): Promise<ProviderOption | null> => {
+      orderableProviderServers.map(async (providerMeta): Promise<ProviderOption | null> => {
         try {
           const providerCountry = await getProviderCountryMeta(
             providerMeta.serverId,
