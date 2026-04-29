@@ -1,87 +1,21 @@
 import { NextResponse } from "next/server";
-import {
-  isOperatorAllowedForCountry,
-  normalizeOperatorForCountry,
-} from "@/lib/operators";
-import { createOrder } from "@/lib/provider";
-
-type CreateOrderBody = {
-  serviceId?: string;
-  serviceCode?: string;
-  serverId?: string;
-  providerServerId?: string;
-  providerCountryId?: number | string;
-  providerServiceCode?: string;
-  service?: string;
-  country?: string;
-  countryId?: number | string;
-  operator?: string;
-  price?: number;
-  currency?: string;
-};
 
 export const dynamic = "force-dynamic";
-export const preferredRegion = "sin1";
 
-export async function POST(request: Request) {
-  const body = (await request.json().catch(() => null)) as CreateOrderBody | null;
-  const countryId =
-    typeof body?.countryId === "number"
-      ? body.countryId
-      : typeof body?.countryId === "string"
-        ? Number(body.countryId)
-        : NaN;
+function legacyOrderResponse() {
+  return NextResponse.json(
+    {
+      error:
+        "Endpoint order publik sudah dinonaktifkan. Silakan login dan gunakan /api/account/orders agar saldo internal, riwayat, dan refund berjalan aman.",
+    },
+    { status: 410 },
+  );
+}
 
-  if (
-    !body?.serviceId ||
-    !body.serviceCode ||
-    !body.serverId ||
-    !body.service ||
-    !body.country ||
-    !Number.isFinite(countryId)
-  ) {
-    return NextResponse.json(
-      {
-        error:
-          "Field `serviceId`, `serviceCode`, `serverId`, `service`, `country`, dan `countryId` wajib diisi untuk membuat order.",
-      },
-      { status: 400 },
-    );
-  }
+export async function GET() {
+  return legacyOrderResponse();
+}
 
-  if (!isOperatorAllowedForCountry(countryId, body.operator)) {
-    return NextResponse.json(
-      { error: "Provider/operator nomor tidak valid." },
-      { status: 400 },
-    );
-  }
-
-  try {
-    const order = await createOrder({
-      serviceId: body.serviceId,
-      serviceCode: body.serviceCode,
-      serverId: body.serverId,
-      providerServerId: body.providerServerId,
-      providerCountryId:
-        typeof body.providerCountryId === "number"
-          ? body.providerCountryId
-          : typeof body.providerCountryId === "string"
-            ? Number(body.providerCountryId)
-            : undefined,
-      providerServiceCode: body.providerServiceCode,
-      service: body.service,
-      country: body.country,
-      countryId,
-      operator: normalizeOperatorForCountry(countryId, body.operator),
-      price: body.price,
-      currency: body.currency,
-    });
-
-    return NextResponse.json({ order }, { status: 201 });
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Gagal membuat order.";
-
-    return NextResponse.json({ error: message }, { status: 500 });
-  }
+export async function POST() {
+  return legacyOrderResponse();
 }

@@ -165,7 +165,7 @@ export default function DocsPage() {
               <p>
                 2. Browser memanggil route internal seperti `/api/catalog`,
                 `/api/payments`, `/api/payments/:id`, `/api/balance`, atau
-                `/api/orders`.
+                `/api/account/orders`.
               </p>
               <p>
                 3. Saat user klik beli, server membuat QRIS Midtrans custom dan
@@ -185,8 +185,8 @@ export default function DocsPage() {
 {`Browser -> /api/catalog -> Next.js Route -> Upstream Provider
 Browser -> /api/payments -> Next.js Route -> Midtrans QRIS Charge
 Browser -> /api/payments/:id -> Next.js Route -> Midtrans Status
-Browser -> /api/orders -> Next.js Route -> Upstream Provider
-Browser -> /api/orders/:id -> Next.js Route -> Upstream Provider`}
+Browser -> /api/account/orders -> Wallet Debit -> Upstream Provider
+Browser -> /api/account/orders/:id -> Next.js Route -> Upstream Provider`}
             </pre>
           </div>
 
@@ -293,23 +293,20 @@ curl -X POST ${baseUrl}/api/payments \\
 
 curl ${baseUrl}/api/payments/pay_xxxxx
 
-curl -X POST ${baseUrl}/api/orders \\
+curl -X POST ${baseUrl}/api/account/orders \\
   -H "Content-Type: application/json" \\
+  -b "rahmat_otp_auth=SESSION_COOKIE" \\
   -d '{
     "serviceId": "bimasakti-88-wa",
     "serviceCode": "wa",
     "serverId": "bimasakti",
-    "service": "WhatsApp",
-    "country": "Indonesia",
     "countryId": 88,
-    "operator": "any",
-    "price": 3150,
-    "currency": "IDR"
+    "operator": "any"
   }'
 
-curl ${baseUrl}/api/orders/order_xxxxx
+curl ${baseUrl}/api/account/orders/order_xxxxx
 
-curl -X DELETE ${baseUrl}/api/orders/order_xxxxx`}
+curl -X DELETE ${baseUrl}/api/account/orders/order_xxxxx`}
             </pre>
           </div>
 

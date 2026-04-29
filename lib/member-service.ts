@@ -333,6 +333,10 @@ function normalizeUpstreamOrderErrorMessage(error: unknown) {
   return rawMessage;
 }
 
+function isOrderableProviderServer(providerServerId?: string) {
+  return !providerServerId || providerServerId === "api1" || providerServerId === "api2";
+}
+
 export async function purchaseOtpWithWallet(input: PurchaseOrderInput) {
   const catalog = await getCatalog({
     serverId: input.serverId,
@@ -369,6 +373,12 @@ export async function purchaseOtpWithWallet(input: PurchaseOrderInput) {
 
   if (!Number.isFinite(service.stock) || service.stock <= 0) {
     throw new Error("Stok layanan habis. Silakan pilih layanan lain.");
+  }
+
+  if (!isOrderableProviderServer(service.providerServerId)) {
+    throw new Error(
+      "Provider ini tampil di katalog KirimKode, tetapi belum aktif untuk order API. Pilih Mars atau Jupiter.",
+    );
   }
 
   if (!isOperatorAllowedForCountry(service.countryId, input.operator)) {

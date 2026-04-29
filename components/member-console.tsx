@@ -322,6 +322,10 @@ function getProviderTone(providerServerId?: string): "sky" | "violet" | "emerald
   return "sky";
 }
 
+function isOrderableProvider(service?: Service | null) {
+  return !service?.providerServerId || service.providerServerId === "api1" || service.providerServerId === "api2";
+}
+
 const SUPPORT_LINKS = [
   {
     id: "admin",
@@ -1827,22 +1831,28 @@ export function MemberConsole({
   );
   const providerPickerOptions = useMemo(
     () =>
-      selectedProviderVariants.map((variant) => ({
-        id: variant.id,
-        label: getProviderName(variant, selectedServer),
-        code: variant.providerServiceCode?.toUpperCase() ?? variant.serviceCode.toUpperCase(),
-        sublabel: selectedServiceGroup?.service,
-        stock: variant.stock,
-        price: variant.price,
-        currency: variant.currency,
-        disabled: variant.stock <= 0,
-        icon: (
-          <PremiumStormIcon
-            label={getProviderIcon(variant)}
-            tone={getProviderTone(variant.providerServerId)}
-          />
-        ),
-      })),
+      selectedProviderVariants.map((variant) => {
+        const providerOrderable = isOrderableProvider(variant);
+
+        return {
+          id: variant.id,
+          label: getProviderName(variant, selectedServer),
+          code: variant.providerServiceCode?.toUpperCase() ?? variant.serviceCode.toUpperCase(),
+          sublabel: providerOrderable
+            ? selectedServiceGroup?.service
+            : "Tampil di katalog, belum aktif untuk order API",
+          stock: variant.stock,
+          price: variant.price,
+          currency: variant.currency,
+          disabled: variant.stock <= 0 || !providerOrderable,
+          icon: (
+            <PremiumStormIcon
+              label={getProviderIcon(variant)}
+              tone={getProviderTone(variant.providerServerId)}
+            />
+          ),
+        };
+      }),
     [selectedProviderVariants, selectedServer, selectedServiceGroup?.service],
   );
   const operatorPickerOptions = useMemo(
@@ -2830,6 +2840,17 @@ export function MemberConsole({
 
     if (isSelectedOutOfStock) {
       const message = "Stok layanan habis. Silakan pilih layanan lain.";
+      setOrderError(message);
+      setToast({
+        type: "error",
+        message,
+      });
+      return;
+    }
+
+    if (!isOrderableProvider(selectedService)) {
+      const message =
+        "Provider ini tampil di katalog KirimKode, tetapi belum aktif untuk order API. Pilih Mars atau Jupiter.";
       setOrderError(message);
       setToast({
         type: "error",

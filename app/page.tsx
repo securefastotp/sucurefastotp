@@ -116,11 +116,12 @@ export default async function Home() {
                 <pre className="code-block mt-5 overflow-x-auto text-sm">
 {`curl "${baseUrl}/api/catalog?server=bimasakti&countryId=88"
 
-curl -X POST ${baseUrl}/api/orders \\
+curl -X POST ${baseUrl}/api/account/orders \\
   -H "Content-Type: application/json" \\
-  -d '{"serviceId":"bimasakti-88-wa","serviceCode":"wa","serverId":"bimasakti","service":"WhatsApp","country":"Indonesia","countryId":88,"operator":"any","price":3150,"currency":"IDR"}'
+  -b "rahmat_otp_auth=SESSION_COOKIE" \\
+  -d '{"serviceId":"bimasakti-88-wa","serviceCode":"wa","serverId":"bimasakti","countryId":88,"operator":"any"}'
 
-curl ${baseUrl}/api/orders/order_xxxxx`}
+curl ${baseUrl}/api/account/orders/order_xxxxx`}
                 </pre>
               </div>
             </div>
