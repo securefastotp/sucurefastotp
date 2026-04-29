@@ -188,6 +188,10 @@ function getProviderSortWeight(service: Service) {
     return 2;
   }
 
+  if (service.providerServerId === "api3") {
+    return 3;
+  }
+
   return 10;
 }
 
@@ -1767,29 +1771,19 @@ export function MemberConsole({
   );
   const isMarsOperatorFlow = selectedServer === "mars";
   const selectedService = useMemo(() => {
-    const variants = isMarsOperatorFlow
-      ? selectedServiceGroup?.variants ?? []
-      : providerVariants;
+    const variants = providerVariants;
 
-    return (
-      variants.find((service) => service.id === selectedProviderServiceId) ??
-      variants.find((service) => service.stock > 0) ??
-      variants[0] ??
-      null
-    );
-  }, [
-    isMarsOperatorFlow,
-    providerVariants,
-    selectedProviderServiceId,
-    selectedServiceGroup,
-  ]);
+    if (!selectedProviderServiceId) {
+      return null;
+    }
+
+    return variants.find((service) => service.id === selectedProviderServiceId) ?? null;
+  }, [providerVariants, selectedProviderServiceId]);
   const selectedProviderVariants = useMemo(
-    () => (isMarsOperatorFlow ? [] : providerVariants),
-    [isMarsOperatorFlow, providerVariants],
+    () => providerVariants,
+    [providerVariants],
   );
-  const requiresProviderSelection = Boolean(
-    selectedServiceGroup && !isMarsOperatorFlow,
-  );
+  const requiresProviderSelection = Boolean(selectedServiceGroup);
   const operatorProviderServerId = selectedService?.providerServerId;
   const operatorProviderCountryId = selectedService?.providerCountryId;
   const shouldShowOperatorPicker = isMarsOperatorFlow && selectedCountryId !== null;
@@ -2059,7 +2053,10 @@ export function MemberConsole({
   }, [summary?.orders.length]);
 
   useEffect(() => {
-    if (!selectedServiceGroup || selectedServer === "mars") {
+    if (
+      !selectedServiceGroup ||
+      (selectedServer === "mars" && !selectedOperator)
+    ) {
       setProviderVariants([]);
       setProviderError(null);
       setIsProviderLoading(false);
@@ -2092,9 +2089,7 @@ export function MemberConsole({
         }
 
         setProviderVariants(variants);
-        setSelectedProviderServiceId(
-          variants.find((service) => service.stock > 0)?.id ?? variants[0]?.id ?? "",
-        );
+        setSelectedProviderServiceId("");
         setProviderError(
           variants.length > 0
             ? null
@@ -2121,7 +2116,7 @@ export function MemberConsole({
     return () => {
       ignoreResult = true;
     };
-  }, [selectedCountryId, selectedServer, selectedServiceGroup]);
+  }, [selectedCountryId, selectedOperator, selectedServer, selectedServiceGroup]);
 
   useEffect(() => {
     if (!hasPendingOrderTimer) {
@@ -2187,7 +2182,16 @@ export function MemberConsole({
       return "";
     });
     setSelectedServiceId((current) => {
-      if (current && nextCatalog.services.some((service) => service.id === current)) {
+      const stillAvailable =
+        current &&
+        nextCatalog.services.some(
+          (service) =>
+            service.id === current ||
+            `${service.serverId}-${service.countryId}-${service.serviceCode}-group` ===
+              current,
+        );
+
+      if (stillAvailable) {
         return current;
       }
 
@@ -4091,17 +4095,9 @@ export function MemberConsole({
                     }
                     setOpenBuyPicker(null);
                     setServiceSearch("");
-                    if (selectedServer === "bimasakti") {
-                      setSelectedProviderServiceId("");
-                      setProviderVariants([]);
-                      setProviderError(null);
-                    } else {
-                      setSelectedProviderServiceId(
-                        service.variants.find((variant) => variant.stock > 0)?.id ??
-                          service.variants[0]?.id ??
-                          "",
-                      );
-                    }
+                    setSelectedProviderServiceId("");
+                    setProviderVariants([]);
+                    setProviderError(null);
                   }}
                   open={openBuyPicker === "service"}
                   options={servicePickerOptions}
@@ -4134,9 +4130,11 @@ export function MemberConsole({
                     onSearchChange={setProviderSearch}
                     onSelect={(id) => {
                       setSelectedProviderServiceId(id);
-                      setOperatorOptions([]);
-                      setSelectedOperator("");
-                      setOperatorError(null);
+                      if (selectedServer !== "mars") {
+                        setOperatorOptions([]);
+                        setSelectedOperator("");
+                        setOperatorError(null);
+                      }
                       setProviderSearch("");
                       setOpenBuyPicker(null);
                     }}

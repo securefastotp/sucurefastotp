@@ -162,10 +162,6 @@ const otpProviderServers = [
   },
 ] as const;
 
-const orderableProviderServers = otpProviderServers.filter((provider) =>
-  provider.serverId === "api1" || provider.serverId === "api2"
-);
-
 const upstreamCache = upstreamCatalogCache as UpstreamCatalogCache;
 
 const orderContextGlobal = globalThis as typeof globalThis & {
@@ -278,7 +274,7 @@ function isDirectWebServer(
 function normalizeProviderServerId(serverId?: string) {
   const normalized = serverId?.trim().toLowerCase();
 
-  return orderableProviderServers.some((provider) => provider.serverId === normalized)
+  return otpProviderServers.some((provider) => provider.serverId === normalized)
     ? normalized
     : null;
 }
@@ -1299,6 +1295,33 @@ async function getDisplayCountryMeta(countryId: number) {
   return getWebCountryMeta("bimasakti", countryId);
 }
 
+async function getDisplayCountryFromWebCountry(country: {
+  id: number;
+  name: string;
+  code: string;
+  flagEmoji?: string;
+}) {
+  const cacheKey = `web-country:${resolveWebServer("bimasakti")}`;
+  const cached = countryCacheStore.get(cacheKey);
+  const countries =
+    cached && cached.expiresAt > Date.now()
+      ? cached.countries
+      : await fetchWebCountries("bimasakti");
+
+  if (!cached || cached.expiresAt <= Date.now()) {
+    countryCacheStore.set(cacheKey, {
+      countries,
+      expiresAt:
+        Date.now() +
+        (Number.isFinite(getProviderConfig().countryCacheTtlMs)
+          ? getProviderConfig().countryCacheTtlMs
+          : 1800000),
+    });
+  }
+
+  return findMatchingProviderCountry(countries, country) ?? country;
+}
+
 function findMatchingProviderCountry(
   countries: CountryOption[],
   targetCountry: {
@@ -2262,9 +2285,13 @@ export async function getServiceProviders(filters: {
 
   try {
     const country = await getWebCountryMeta(serverId, countryId);
+    const providerLookupCountry =
+      serverId === "mars"
+        ? await getDisplayCountryFromWebCountry(country)
+        : country;
     const payload = await fetchKirimKodeWeb(
       buildPathWithQuery("/api/otp/layanan/providers", {
-        negara: countryId,
+        negara: providerLookupCountry.id,
         code: serviceCode,
       }),
     );
@@ -2469,7 +2496,7 @@ export async function getProviderOptions(filters: {
   const pricingRules = await getPricingRulesForCatalog(serverId, countryId);
   const providers = (
     await Promise.all(
-      orderableProviderServers.map(async (providerMeta): Promise<ProviderOption | null> => {
+      otpProviderServers.map(async (providerMeta): Promise<ProviderOption | null> => {
         try {
           const providerCountry =
             providerMeta.serverId === resolveWebServer(serverId)
