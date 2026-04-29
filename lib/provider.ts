@@ -2770,7 +2770,17 @@ export async function createOrder(input: CreateOrderInput) {
     otpCode: undefined,
   });
 
-  return await persistOrder(order);
+  const hydratedContext =
+    !order.providerRef
+      ? await resolveProviderRefFromHistory(toOrderContext(order), {
+          attempts: 3,
+          delayMs: 1000,
+        })
+      : null;
+
+  return await persistOrder(
+    hydratedContext ? orderFromContext(hydratedContext) : order,
+  );
 }
 
 export async function getOrder(orderId: string, contextToken?: string | null) {
