@@ -87,7 +87,7 @@ const envFields = [
   {
     name: "UPSTREAM_SERVER_MARS_CODE",
     required: "No",
-    description: "Kode katalog/order untuk Blueverifiy/Mars. Default `api1`.",
+    description: "Kode katalog/order untuk Blueverify/Mars. Default `api1`.",
   },
   {
     name: "UPSTREAM_MARKUP_PERCENT",

@@ -43,7 +43,7 @@ type MemberConsoleProps = {
 type ServerId = "bimasakti" | "mars";
 type UiLanguage = "id" | "en";
 type UiTheme = "dark" | "light";
-type BuyPicker = "country" | "service" | "mars-operator" | "provider" | "operator" | null;
+type BuyPicker = "country" | "service" | "provider" | "operator" | null;
 
 type SummaryResponse = {
   summary: DashboardSummary;
@@ -92,7 +92,7 @@ const serverOptions = [
   },
   {
     id: "mars" as const,
-    name: "Blueverifiy",
+    name: "Blueverify",
     description: "Server cadangan, lebih stabil",
     stormTone: "violet" as const,
   },
@@ -292,13 +292,9 @@ function normalizeProviderDisplayIcon(providerIcon?: string, providerServerId?: 
 }
 
 function getProviderName(service: Service, selectedServer: ServerId) {
-  if (selectedServer === "mars") {
-    return "Blueverifiy";
-  }
-
   return (
     normalizeProviderDisplayName(service.providerName, service.providerServerId) ??
-    "Skyword"
+    (selectedServer === "mars" ? "Blueverify" : "Skyword")
   );
 }
 
@@ -1789,23 +1785,11 @@ export function MemberConsole({
         : selectedServiceGroup?.variants ?? [],
     [providerVariants, selectedServer, selectedServiceGroup?.variants],
   );
-  const requiresProviderSelection =
-    selectedServer === "bimasakti" && Boolean(selectedServiceGroup);
-  const operatorProviderServerId =
-    selectedServer === "bimasakti"
-      ? selectedService?.providerServerId
-      : undefined;
-  const operatorProviderCountryId =
-    selectedServer === "bimasakti"
-      ? selectedService?.providerCountryId
-      : undefined;
-  const requiresOperatorBeforeCatalog =
-    selectedServer === "mars" && Boolean(selectedCountry);
-  const selectedCatalogOperatorId =
-    selectedServer === "mars" ? selectedOperatorOption?.id : undefined;
+  const requiresProviderSelection = Boolean(selectedServiceGroup);
+  const operatorProviderServerId = selectedService?.providerServerId;
+  const operatorProviderCountryId = selectedService?.providerCountryId;
   const requiresOperatorBeforeOrder =
-    requiresOperatorBeforeCatalog ||
-    Boolean(selectedServer === "bimasakti" && selectedService && operatorOptions.length > 1);
+    Boolean(selectedService && operatorOptions.length > 1);
   const isOperatorMissing =
     requiresOperatorBeforeOrder && !selectedOperatorOption;
   const isSelectedOutOfStock = Boolean(
@@ -2478,7 +2462,7 @@ export function MemberConsole({
     if (
       !viewer ||
       selectedCountryId === null ||
-      (selectedServer === "bimasakti" && !operatorProviderServerId)
+      !operatorProviderServerId
     ) {
       setOperatorOptions([]);
       setSelectedOperator("");
@@ -2556,8 +2540,7 @@ export function MemberConsole({
   useEffect(() => {
     if (
       !viewer ||
-      selectedCountryId === null ||
-      (selectedServer === "mars" && !selectedCatalogOperatorId)
+      selectedCountryId === null
     ) {
       setCatalog(null);
       setSelectedServiceId("");
@@ -2604,7 +2587,7 @@ export function MemberConsole({
     return () => {
       ignoreResult = true;
     };
-  }, [viewer, selectedServer, selectedCountryId, selectedCatalogOperatorId]);
+  }, [viewer, selectedServer, selectedCountryId]);
 
   useEffect(() => {
     if (!canAccessAdmin || activeTab !== "admin") {
@@ -2838,10 +2821,7 @@ export function MemberConsole({
     }
 
     if (isOperatorMissing) {
-      const message =
-        selectedServer === "mars"
-          ? "Pilih provider/operator dulu sebelum membeli nomor."
-          : "Pilih operator nomor dulu sebelum membeli nomor.";
+      const message = "Pilih operator nomor dulu sebelum membeli nomor.";
       setOrderError(message);
       setToast({
         type: "error",
@@ -4043,51 +4023,7 @@ export function MemberConsole({
               </div>
             </div>
 
-            {selectedServer === "mars" && selectedCountry ? (
-              <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
-                <SectionTitle
-                  icon={<GlobeIcon className="h-4.5 w-4.5" />}
-                  title={text.selectProvider}
-                  action={
-                    isOperatorLoading ? (
-                      <span className="text-[11px] text-sky-100/60">Loading...</span>
-                    ) : null
-                  }
-                />
-                <div className="mt-4 space-y-2">
-                  {operatorError ? (
-                    <div className="rounded-[16px] border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-[12px] text-rose-100">
-                      {operatorError}
-                    </div>
-                  ) : null}
-                  <SearchablePicker
-                    emptyLabel={text.emptyProvider}
-                    loading={isOperatorLoading}
-                    onOpenChange={(open) => setOpenBuyPicker(open ? "mars-operator" : null)}
-                    onSearchChange={setOperatorSearch}
-                    onSelect={(id) => {
-                      setSelectedOperator(id);
-                      setSelectedServiceId("");
-                      setSelectedProviderServiceId("");
-                      setProviderVariants([]);
-                      setOperatorError(null);
-                      setCatalog(null);
-                      setServiceSearch("");
-                      setOpenBuyPicker(null);
-                    }}
-                    open={openBuyPicker === "mars-operator"}
-                    options={operatorPickerOptions}
-                    placeholder={text.selectProvider}
-                    search={operatorSearch}
-                    searchPlaceholder={text.searchProvider}
-                    value={selectedOperator}
-                  />
-                </div>
-              </div>
-            ) : null}
-
-            {selectedCountry &&
-            (selectedServer === "bimasakti" || selectedOperatorOption) ? (
+            {selectedCountry ? (
             <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
               <SectionTitle
                 icon={<CartIcon className="h-4.5 w-4.5" />}
@@ -4109,6 +4045,9 @@ export function MemberConsole({
                     }
 
                     setSelectedServiceId(service.id);
+                    setOperatorOptions([]);
+                    setSelectedOperator("");
+                    setOperatorError(null);
                     setOpenBuyPicker(null);
                     setServiceSearch("");
                     if (selectedServer === "bimasakti") {
@@ -4154,6 +4093,9 @@ export function MemberConsole({
                     onSearchChange={setProviderSearch}
                     onSelect={(id) => {
                       setSelectedProviderServiceId(id);
+                      setOperatorOptions([]);
+                      setSelectedOperator("");
+                      setOperatorError(null);
                       setProviderSearch("");
                       setOpenBuyPicker(null);
                     }}
@@ -4168,8 +4110,7 @@ export function MemberConsole({
               </div>
             ) : null}
 
-            {selectedServer === "bimasakti" &&
-            selectedService &&
+            {selectedService &&
             (isOperatorLoading || operatorError || operatorOptions.length > 1) ? (
               <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
                 <SectionTitle
@@ -4258,7 +4199,7 @@ export function MemberConsole({
                   {isOrderLoading ? (
                     <Spinner className="text-[#08101c]" label={text.processingOrder} />
                   ) : isOperatorMissing ? (
-                    selectedServer === "mars" ? text.chooseProviderFirst : text.chooseOperatorFirst
+                    text.chooseOperatorFirst
                   ) : summary.viewer.walletBalance < selectedService.price ? (
                     text.insufficientBalance
                   ) : isSelectedOutOfStock ? (

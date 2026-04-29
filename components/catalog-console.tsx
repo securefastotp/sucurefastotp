@@ -50,7 +50,7 @@ const serverOptions = [
   },
   {
     id: "mars" as const,
-    name: "Blueverifiy",
+    name: "Blueverify",
     code: "api2",
     iconKey: "saturn" as const,
     description: "Server cadangan, lebih stabil",
@@ -1555,7 +1555,7 @@ export function CatalogConsole({
               <span className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_16px_rgba(103,232,249,0.9)]" />
               Skyword
               <span className="h-1 w-1 rounded-full bg-white/24" />
-              Blueverifiy
+              Blueverify
             </div>
           </div>
         </div>
@@ -2244,7 +2244,7 @@ export function CatalogConsole({
             </p>
             <div className="mt-3 grid gap-2 text-[11px] text-sky-50/62">
               <p>Provider 1: Skyword - unified</p>
-              <p>Provider 2: Blueverifiy - api1</p>
+              <p>Provider 2: Blueverify - api1</p>
               <p>Harga: mengikuti harga asli KirimKode</p>
               <p>Riwayat transaksi: saat ini tersimpan di store aplikasi dan siap dipindah ke Vercel DB.</p>
             </div>

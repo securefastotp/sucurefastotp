@@ -284,7 +284,7 @@ function getOtpProviderServerMeta(serverId: string) {
 }
 
 function getServerName(serverId?: string) {
-  return resolveServerId(serverId) === "mars" ? "Blueverifiy" : "Skyword";
+  return resolveServerId(serverId) === "mars" ? "Blueverify" : "Skyword";
 }
 
 function getSkywordProviderDisplayName(providerServerId: string, upstreamName: string) {
@@ -1148,10 +1148,16 @@ async function fetchOfficialServices(
   options?: {
     providerServerId?: string;
     providerCountryId?: number;
+    displayCountry?: {
+      id: number;
+      name: string;
+      code: string;
+      flagEmoji?: string;
+    };
   },
 ) {
   const resolvedServerId = resolveServerId(serverId);
-  const country = await getWebCountryMeta(resolvedServerId, countryId);
+  const country = options?.displayCountry ?? (await getWebCountryMeta(resolvedServerId, countryId));
   const upstreamServer = options?.providerServerId ?? resolveWebServer(resolvedServerId);
   const upstreamCountryId = options?.providerCountryId ?? countryId;
   const hasExplicitProvider = Boolean(options?.providerServerId);
@@ -1281,6 +1287,10 @@ async function getWebCountryMeta(serverId: string, countryId: number) {
   }
 
   return getCountryMeta(countryId);
+}
+
+async function getDisplayCountryMeta(countryId: number) {
+  return getWebCountryMeta("bimasakti", countryId);
 }
 
 function findMatchingProviderCountry(
@@ -2010,6 +2020,7 @@ export async function getCatalog(filters: CatalogFilters = {}) {
   try {
     const serverId = resolveServerId(filters.serverId);
     const countryId = resolveCountryId(filters.countryId);
+    const displayCountry = await getDisplayCountryMeta(countryId);
     const requestedProviderServerId =
       serverId === "mars"
         ? normalizeProviderServerId(filters.providerServerId)
@@ -2022,6 +2033,41 @@ export async function getCatalog(filters: CatalogFilters = {}) {
       filters,
     );
     const services = await (async () => {
+      if (serverId === "mars") {
+        const providerServerIds = requestedProviderServerId
+          ? [requestedProviderServerId]
+          : otpProviderServers.map((provider) => provider.serverId);
+        const providerServices = await Promise.all(
+          providerServerIds.map(async (providerServerId) => {
+            const providerCountryId =
+              requestedProviderServerId &&
+              filters.providerCountryId !== undefined &&
+              filters.providerCountryId !== null
+                ? resolveCountryId(filters.providerCountryId)
+                : (await getProviderCountryMeta(providerServerId, displayCountry))?.id;
+
+            if (providerCountryId === undefined || providerCountryId === null) {
+              return [] as Service[];
+            }
+
+            const officialServices = await fetchOfficialServices(serverId, countryId, {
+              providerServerId,
+              providerCountryId,
+              displayCountry,
+            });
+            const liveServices = await fetchLiveServices(serverId, countryId, {
+              providerServerId,
+              providerCountryId,
+              displayCountry,
+            }).catch(() => []);
+
+            return mergeCompleteServices(officialServices, liveServices);
+          }),
+        );
+
+        return providerServices.flat();
+      }
+
       if (!requestedProviderServerId) {
         const officialServices = await fetchOfficialServices(serverId, countryId);
         const liveServices = await fetchLiveServices(serverId, countryId).catch(
@@ -2035,11 +2081,10 @@ export async function getCatalog(filters: CatalogFilters = {}) {
         return [];
       }
 
-      const baseCountry = await getWebCountryMeta(serverId, countryId);
       const providerCountryId =
         filters.providerCountryId !== undefined && filters.providerCountryId !== null
         ? resolveCountryId(filters.providerCountryId)
-        : (await getProviderCountryMeta(requestedProviderServerId, baseCountry))?.id;
+        : (await getProviderCountryMeta(requestedProviderServerId, displayCountry))?.id;
 
       if (providerCountryId === undefined || providerCountryId === null) {
         throw new Error("Provider belum tersedia untuk negara yang dipilih.");
@@ -2048,11 +2093,12 @@ export async function getCatalog(filters: CatalogFilters = {}) {
       const officialServices = await fetchOfficialServices(serverId, countryId, {
         providerServerId: requestedProviderServerId,
         providerCountryId,
+        displayCountry,
       });
       const liveServices = await fetchLiveServices(serverId, countryId, {
         providerServerId: requestedProviderServerId,
         providerCountryId,
-        displayCountry: baseCountry,
+        displayCountry,
       }).catch(() => []);
 
       if (officialServices.length > 0 || liveServices.length > 0) {
@@ -2378,7 +2424,7 @@ export async function getProviderOptions(filters: {
     });
   }
 
-  const baseCountry = await getWebCountryMeta(serverId, countryId);
+  const baseCountry = await getDisplayCountryMeta(countryId);
   const pricingRules = await getPricingRulesForCatalog(serverId, countryId);
   const providers = (
     await Promise.all(
@@ -2490,16 +2536,21 @@ export async function getOperatorOptions(filters: {
   const config = getProviderConfig();
   const serverId = resolveServerId(filters.serverId);
   const countryId = resolveCountryId(filters.countryId);
-  const baseCountry = await getWebCountryMeta(serverId, countryId);
+  const baseCountry =
+    serverId === "mars"
+      ? await getDisplayCountryMeta(countryId)
+      : await getWebCountryMeta(serverId, countryId);
   const providerServerId = normalizeProviderServerId(filters.providerServerId);
   const upstreamServerId = providerServerId ?? resolveWebServer(serverId);
   const upstreamCountryId =
     filters.providerCountryId !== undefined && filters.providerCountryId !== null
       ? resolveCountryId(filters.providerCountryId)
-      : countryId;
+      : serverId === "mars" || providerServerId
+        ? (await getProviderCountryMeta(upstreamServerId, baseCountry))?.id ?? countryId
+        : countryId;
   const operatorIds =
     config.mode === "mock"
-      ? serverId === "mars" && countryId === 6
+      ? serverId === "mars" && countryId === defaultCountry.id
         ? [DEFAULT_OPERATOR, "axis", "byu", "indosat", "smartfren", "telkomsel", "three"]
         : [DEFAULT_OPERATOR]
       : await fetchLiveOperators(upstreamServerId, upstreamCountryId);
