@@ -2071,11 +2071,17 @@ export async function getCatalog(filters: CatalogFilters = {}) {
   try {
     const serverId = resolveServerId(filters.serverId);
     const countryId = resolveCountryId(filters.countryId);
-    const displayCountry = await getDisplayCountryMeta(countryId);
     const requestedProviderServerId =
       serverId === "mars"
         ? normalizeProviderServerId(filters.providerServerId)
         : null;
+    const usesDirectMarsCountry =
+      serverId === "mars" &&
+      !requestedProviderServerId &&
+      filters.providerCountryId === undefined;
+    const displayCountry = usesDirectMarsCountry
+      ? await getWebCountryMeta(serverId, countryId)
+      : await getDisplayCountryMeta(countryId);
     const pricingRules = await getPricingRulesForCatalog(serverId, countryId);
     const cachedServices = applyFilters(
       getCachedCatalog(serverId, countryId).map((service) =>
@@ -2089,7 +2095,9 @@ export async function getCatalog(filters: CatalogFilters = {}) {
         const providerCountryId =
           filters.providerCountryId !== undefined && filters.providerCountryId !== null
             ? resolveCountryId(filters.providerCountryId)
-            : (await getProviderCountryMeta(providerServerId, displayCountry))?.id;
+            : usesDirectMarsCountry
+              ? countryId
+              : (await getProviderCountryMeta(providerServerId, displayCountry))?.id;
 
         if (providerCountryId === undefined || providerCountryId === null) {
           return [] as Service[];
@@ -2457,16 +2465,26 @@ export async function getProviderOptions(filters: {
     });
   }
 
-  const baseCountry = await getDisplayCountryMeta(countryId);
+  const baseCountry = await getWebCountryMeta(serverId, countryId);
   const pricingRules = await getPricingRulesForCatalog(serverId, countryId);
   const providers = (
     await Promise.all(
       orderableProviderServers.map(async (providerMeta): Promise<ProviderOption | null> => {
         try {
-          const providerCountry = await getProviderCountryMeta(
-            providerMeta.serverId,
-            baseCountry,
-          );
+          const providerCountry =
+            providerMeta.serverId === resolveWebServer(serverId)
+              ? {
+                  id: countryId,
+                  name: baseCountry.name,
+                  code: baseCountry.code,
+                  flagEmoji: baseCountry.flagEmoji,
+                  availableServices: 0,
+                  serverId,
+                }
+              : await getProviderCountryMeta(
+                  providerMeta.serverId,
+                  baseCountry,
+                );
 
           if (!providerCountry) {
             return null;
@@ -2569,16 +2587,22 @@ export async function getOperatorOptions(filters: {
   const config = getProviderConfig();
   const serverId = resolveServerId(filters.serverId);
   const countryId = resolveCountryId(filters.countryId);
-  const baseCountry =
-    serverId === "mars"
-      ? await getDisplayCountryMeta(countryId)
-      : await getWebCountryMeta(serverId, countryId);
   const providerServerId = normalizeProviderServerId(filters.providerServerId);
   const upstreamServerId = providerServerId ?? resolveWebServer(serverId);
+  const usesDirectMarsCountry =
+    serverId === "mars" &&
+    !providerServerId &&
+    filters.providerCountryId === undefined;
+  const baseCountry =
+    usesDirectMarsCountry || serverId !== "mars"
+      ? await getWebCountryMeta(serverId, countryId)
+      : await getDisplayCountryMeta(countryId);
   const upstreamCountryId =
     filters.providerCountryId !== undefined && filters.providerCountryId !== null
       ? resolveCountryId(filters.providerCountryId)
-      : serverId === "mars" || providerServerId
+      : usesDirectMarsCountry
+        ? countryId
+        : serverId === "mars" || providerServerId
         ? (await getProviderCountryMeta(upstreamServerId, baseCountry))?.id ?? countryId
         : countryId;
   const operatorIds =
