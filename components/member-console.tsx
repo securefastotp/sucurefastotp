@@ -1765,8 +1765,11 @@ export function MemberConsole({
       null,
     [operatorOptions, selectedOperator],
   );
+  const isMarsOperatorFlow = selectedServer === "mars";
   const selectedService = useMemo(() => {
-    const variants = providerVariants;
+    const variants = isMarsOperatorFlow
+      ? selectedServiceGroup?.variants ?? []
+      : providerVariants;
 
     return (
       variants.find((service) => service.id === selectedProviderServiceId) ??
@@ -1774,17 +1777,24 @@ export function MemberConsole({
       variants[0] ??
       null
     );
-  }, [providerVariants, selectedProviderServiceId]);
+  }, [
+    isMarsOperatorFlow,
+    providerVariants,
+    selectedProviderServiceId,
+    selectedServiceGroup,
+  ]);
   const selectedProviderVariants = useMemo(
-    () => providerVariants,
-    [providerVariants],
+    () => (isMarsOperatorFlow ? [] : providerVariants),
+    [isMarsOperatorFlow, providerVariants],
   );
-  const requiresProviderSelection = Boolean(selectedServiceGroup);
+  const requiresProviderSelection = Boolean(
+    selectedServiceGroup && !isMarsOperatorFlow,
+  );
   const operatorProviderServerId = selectedService?.providerServerId;
   const operatorProviderCountryId = selectedService?.providerCountryId;
-  const shouldShowOperatorPicker = false;
+  const shouldShowOperatorPicker = isMarsOperatorFlow && selectedCountryId !== null;
   const requiresOperatorBeforeOrder =
-    shouldShowOperatorPicker && Boolean(selectedService && operatorOptions.length > 1);
+    shouldShowOperatorPicker && operatorOptions.length > 1;
   const isOperatorMissing =
     requiresOperatorBeforeOrder && !selectedOperatorOption;
   const isSelectedOutOfStock = Boolean(
@@ -2049,7 +2059,7 @@ export function MemberConsole({
   }, [summary?.orders.length]);
 
   useEffect(() => {
-    if (!selectedServiceGroup) {
+    if (!selectedServiceGroup || selectedServer === "mars") {
       setProviderVariants([]);
       setProviderError(null);
       setIsProviderLoading(false);
@@ -2441,7 +2451,7 @@ export function MemberConsole({
     if (
       !viewer ||
       selectedCountryId === null ||
-      !operatorProviderServerId
+      !shouldShowOperatorPicker
     ) {
       setOperatorOptions([]);
       setSelectedOperator("");
@@ -2451,12 +2461,15 @@ export function MemberConsole({
     }
 
     let ignoreResult = false;
-    const provider = operatorProviderServerId
-      ? {
-          providerServerId: operatorProviderServerId,
-          providerCountryId: operatorProviderCountryId,
-        }
-      : null;
+    const provider =
+      selectedServer === "mars"
+        ? null
+        : operatorProviderServerId
+          ? {
+              providerServerId: operatorProviderServerId,
+              providerCountryId: operatorProviderCountryId,
+            }
+          : null;
 
     setOperatorOptions([]);
     setSelectedOperator("");
@@ -2511,6 +2524,7 @@ export function MemberConsole({
     viewer,
     selectedServer,
     selectedCountryId,
+    shouldShowOperatorPicker,
     operatorProviderServerId,
     operatorProviderCountryId,
   ]);
@@ -2518,7 +2532,8 @@ export function MemberConsole({
   useEffect(() => {
     if (
       !viewer ||
-      selectedCountryId === null
+      selectedCountryId === null ||
+      (selectedServer === "mars" && !selectedOperator)
     ) {
       setCatalog(null);
       setSelectedServiceId("");
@@ -2535,6 +2550,7 @@ export function MemberConsole({
       selectedServer,
       selectedCountryId,
       null,
+      selectedServer === "mars" ? selectedOperator : undefined,
     )
       .then((result) => {
         if (ignoreResult) {
@@ -2565,7 +2581,7 @@ export function MemberConsole({
     return () => {
       ignoreResult = true;
     };
-  }, [viewer, selectedServer, selectedCountryId]);
+  }, [viewer, selectedServer, selectedCountryId, selectedOperator]);
 
   useEffect(() => {
     if (!canAccessAdmin || activeTab !== "admin") {
@@ -2830,7 +2846,10 @@ export function MemberConsole({
         providerServerId: selectedService.providerServerId,
         providerCountryId: selectedService.providerCountryId,
         providerServiceCode: selectedService.providerServiceCode,
-        operator: "any",
+        operator:
+          selectedServer === "mars"
+            ? selectedOperatorOption?.id ?? "any"
+            : "any",
       });
       setActiveOrder(order);
       await refreshSummary();
@@ -4001,7 +4020,49 @@ export function MemberConsole({
               </div>
             </div>
 
-            {selectedCountry ? (
+            {selectedCountry && shouldShowOperatorPicker ? (
+              <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
+                <SectionTitle
+                  icon={<GlobeIcon className="h-4.5 w-4.5" />}
+                  title={text.selectOperator}
+                  action={
+                    isOperatorLoading ? (
+                      <span className="text-[11px] text-sky-100/60">Loading...</span>
+                    ) : null
+                  }
+                />
+                <div className="mt-4 space-y-2">
+                  {operatorError ? (
+                    <div className="rounded-[16px] border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-[12px] text-rose-100">
+                      {operatorError}
+                    </div>
+                  ) : null}
+                  <SearchablePicker
+                    emptyLabel={text.emptyOperator}
+                    loading={isOperatorLoading}
+                    onOpenChange={(open) => setOpenBuyPicker(open ? "operator" : null)}
+                    onSearchChange={setOperatorSearch}
+                    onSelect={(id) => {
+                      setSelectedOperator(id);
+                      setSelectedServiceId("");
+                      setSelectedProviderServiceId("");
+                      setOperatorError(null);
+                      setOperatorSearch("");
+                      setServiceSearch("");
+                      setOpenBuyPicker(null);
+                    }}
+                    open={openBuyPicker === "operator"}
+                    options={operatorPickerOptions}
+                    placeholder={text.selectOperator}
+                    search={operatorSearch}
+                    searchPlaceholder={text.searchOperator}
+                    value={selectedOperator}
+                  />
+                </div>
+              </div>
+            ) : null}
+
+            {selectedCountry && (!shouldShowOperatorPicker || selectedOperator) ? (
             <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
               <SectionTitle
                 icon={<CartIcon className="h-4.5 w-4.5" />}
@@ -4023,9 +4084,11 @@ export function MemberConsole({
                     }
 
                     setSelectedServiceId(service.id);
-                    setOperatorOptions([]);
-                    setSelectedOperator("");
-                    setOperatorError(null);
+                    if (selectedServer !== "mars") {
+                      setOperatorOptions([]);
+                      setSelectedOperator("");
+                      setOperatorError(null);
+                    }
                     setOpenBuyPicker(null);
                     setServiceSearch("");
                     if (selectedServer === "bimasakti") {
@@ -4083,47 +4146,6 @@ export function MemberConsole({
                     search={providerSearch}
                     searchPlaceholder={text.searchProvider}
                     value={selectedService?.id}
-                  />
-                </div>
-              </div>
-            ) : null}
-
-            {selectedService &&
-            shouldShowOperatorPicker &&
-            (isOperatorLoading || operatorError || operatorOptions.length > 1) ? (
-              <div className="rounded-[24px] border border-white/10 bg-[#0a1525] p-4">
-                <SectionTitle
-                  icon={<GlobeIcon className="h-4.5 w-4.5" />}
-                  title={text.selectOperator}
-                  action={
-                    isOperatorLoading ? (
-                      <span className="text-[11px] text-sky-100/60">Loading...</span>
-                    ) : null
-                  }
-                />
-                <div className="mt-4 space-y-2">
-                  {operatorError ? (
-                    <div className="rounded-[16px] border border-rose-300/20 bg-rose-500/10 px-4 py-3 text-[12px] text-rose-100">
-                      {operatorError}
-                    </div>
-                  ) : null}
-                  <SearchablePicker
-                    emptyLabel={text.emptyOperator}
-                    loading={isOperatorLoading}
-                    onOpenChange={(open) => setOpenBuyPicker(open ? "operator" : null)}
-                    onSearchChange={setOperatorSearch}
-                    onSelect={(id) => {
-                      setSelectedOperator(id);
-                      setOperatorError(null);
-                      setOperatorSearch("");
-                      setOpenBuyPicker(null);
-                    }}
-                    open={openBuyPicker === "operator"}
-                    options={operatorPickerOptions}
-                    placeholder={text.selectOperator}
-                    search={operatorSearch}
-                    searchPlaceholder={text.searchOperator}
-                    value={selectedOperator}
                   />
                 </div>
               </div>

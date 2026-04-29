@@ -1098,6 +1098,7 @@ async function fetchLiveServices(
       code: string;
       flagEmoji?: string;
     };
+    operator?: string;
   },
 ) {
   const resolvedServerId = resolveServerId(serverId);
@@ -1114,6 +1115,7 @@ async function fetchLiveServices(
     buildPathWithQuery("/api/otp/layanan", {
       server: upstreamServer,
       negara: upstreamCountryId,
+      operator: providerOverride?.operator,
     }),
   );
   const entries = extractWebServiceEntries(payload, upstreamCountryId);
@@ -2083,38 +2085,31 @@ export async function getCatalog(filters: CatalogFilters = {}) {
     );
     const services = await (async () => {
       if (serverId === "mars") {
-        const providerServerIds = requestedProviderServerId
-          ? [requestedProviderServerId]
-          : orderableProviderServers.map((provider) => provider.serverId);
-        const providerServices = await Promise.all(
-          providerServerIds.map(async (providerServerId) => {
-            const providerCountryId =
-              requestedProviderServerId &&
-              filters.providerCountryId !== undefined &&
-              filters.providerCountryId !== null
-                ? resolveCountryId(filters.providerCountryId)
-                : (await getProviderCountryMeta(providerServerId, displayCountry))?.id;
+        const providerServerId = requestedProviderServerId ?? resolveWebServer(serverId);
+        const providerCountryId =
+          filters.providerCountryId !== undefined && filters.providerCountryId !== null
+            ? resolveCountryId(filters.providerCountryId)
+            : (await getProviderCountryMeta(providerServerId, displayCountry))?.id;
 
-            if (providerCountryId === undefined || providerCountryId === null) {
-              return [] as Service[];
-            }
+        if (providerCountryId === undefined || providerCountryId === null) {
+          return [] as Service[];
+        }
 
-            const officialServices = await fetchOfficialServices(serverId, countryId, {
-              providerServerId,
-              providerCountryId,
-              displayCountry,
-            });
-            const liveServices = await fetchLiveServices(serverId, countryId, {
-              providerServerId,
-              providerCountryId,
-              displayCountry,
-            }).catch(() => []);
+        const officialServices = await fetchOfficialServices(serverId, countryId, {
+          providerServerId,
+          providerCountryId,
+          displayCountry,
+        });
+        const liveServices = await fetchLiveServices(serverId, countryId, {
+          providerServerId,
+          providerCountryId,
+          displayCountry,
+          operator: filters.operator ? normalizeOperator(filters.operator) : undefined,
+        }).catch(() => []);
 
-            return mergeCompleteServices(officialServices, liveServices);
-          }),
-        );
-
-        return providerServices.flat();
+        return liveServices.length > 0
+          ? liveServices
+          : officialServices;
       }
 
       if (!requestedProviderServerId) {
