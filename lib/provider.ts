@@ -144,20 +144,20 @@ const serviceNameMap: Record<string, string> = {
 const otpProviderServers = [
   {
     serverId: "api1",
-    name: "Senja",
-    icon: "S",
+    name: "Mars",
+    icon: "M",
     sortWeight: 1,
   },
   {
     serverId: "api2",
-    name: "Zayan",
-    icon: "Y",
+    name: "Jupiter",
+    icon: "J",
     sortWeight: 2,
   },
   {
     serverId: "api3",
-    name: "Zynn",
-    icon: "Z",
+    name: "Saturn",
+    icon: "S",
     sortWeight: 3,
   },
 ] as const;
@@ -296,15 +296,15 @@ function getSkywordProviderDisplayName(providerServerId: string, upstreamName: s
   const normalizedName = upstreamName.trim().toLowerCase();
 
   if (normalizedServer === "api1" || normalizedName === "mars") {
-    return "Senja";
+    return "Mars";
   }
 
   if (normalizedServer === "api3" || normalizedName === "saturn") {
-    return "Zynn";
+    return "Saturn";
   }
 
   if (normalizedServer === "api2" || normalizedName === "jupiter") {
-    return "Zayan";
+    return "Jupiter";
   }
 
   return (

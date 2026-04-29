@@ -136,15 +136,15 @@ export function listMockServices(filters?: {
       ? [
           {
             code: "api1",
-            name: "Senja",
-            icon: "S",
+            name: "Mars",
+            icon: "M",
             stockRatio: 1,
             priceRatio: 1,
           },
           {
             code: "api3",
-            name: "Zynn",
-            icon: "Z",
+            name: "Saturn",
+            icon: "S",
             stockRatio: 0.58,
             priceRatio: 1.32,
           },
@@ -152,22 +152,22 @@ export function listMockServices(filters?: {
       : [
           {
             code: "api1",
-            name: "Senja",
-            icon: "S",
+            name: "Mars",
+            icon: "M",
             stockRatio: serverMeta.stockRatio,
             priceRatio: 1,
           },
           {
             code: "api2",
-            name: "Zayan",
-            icon: "Y",
+            name: "Jupiter",
+            icon: "J",
             stockRatio: 0.64,
             priceRatio: 1.05,
           },
           {
             code: "api3",
-            name: "Zynn",
-            icon: "Z",
+            name: "Saturn",
+            icon: "S",
             stockRatio: 0.52,
             priceRatio: 1.28,
           },

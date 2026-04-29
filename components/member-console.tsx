@@ -259,15 +259,15 @@ function normalizeProviderDisplayName(providerName?: string, providerServerId?: 
   const normalizedServer = providerServerId?.trim().toLowerCase() ?? "";
 
   if (normalizedServer === "api1" || normalizedName === "mars") {
-    return "Senja";
+    return "Mars";
   }
 
   if (normalizedServer === "api3" || normalizedName === "saturn") {
-    return "Zynn";
+    return "Saturn";
   }
 
   if (normalizedServer === "api2" || normalizedName === "jupiter") {
-    return "Zayan";
+    return "Jupiter";
   }
 
   return providerName;
@@ -277,15 +277,15 @@ function normalizeProviderDisplayIcon(providerIcon?: string, providerServerId?: 
   const normalizedServer = providerServerId?.trim().toLowerCase() ?? "";
 
   if (normalizedServer === "api1") {
-    return "S";
+    return "M";
   }
 
   if (normalizedServer === "api2") {
-    return "Y";
+    return "J";
   }
 
   if (normalizedServer === "api3") {
-    return "Z";
+    return "S";
   }
 
   return providerIcon;
