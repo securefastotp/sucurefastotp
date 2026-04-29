@@ -760,6 +760,32 @@ function getCountryMeta(countryId?: number | string) {
   };
 }
 
+function isPreferredCountry(country: Pick<CountryOption, "code" | "name">) {
+  return (
+    country.code?.toUpperCase() === "ID" ||
+    country.name.trim().toLowerCase() === "indonesia"
+  );
+}
+
+function compareCountries(left: CountryOption, right: CountryOption) {
+  const leftPreferred = isPreferredCountry(left);
+  const rightPreferred = isPreferredCountry(right);
+
+  if (leftPreferred !== rightPreferred) {
+    return leftPreferred ? -1 : 1;
+  }
+
+  if (left.id === defaultCountry.id && right.id !== defaultCountry.id) {
+    return -1;
+  }
+
+  if (right.id === defaultCountry.id && left.id !== defaultCountry.id) {
+    return 1;
+  }
+
+  return left.name.localeCompare(right.name, "id-ID");
+}
+
 function getCachedCountries(serverId: string): CountryOption[] {
   const serverCache = upstreamCache.servers[resolveServerId(serverId)];
 
@@ -767,21 +793,23 @@ function getCachedCountries(serverId: string): CountryOption[] {
     return [];
   }
 
-  return serverCache.countries.map((country) => {
-    const meta = getCountryMeta(country.id);
-    const code =
-      country.code && /^[a-z]{2}$/i.test(country.code) ? country.code : meta.code;
+  return serverCache.countries
+    .map((country) => {
+      const meta = getCountryMeta(country.id);
+      const code =
+        country.code && /^[a-z]{2}$/i.test(country.code) ? country.code : meta.code;
 
-    return {
-      ...country,
-      name:
-        country.name && !country.name.toLowerCase().startsWith("country ")
-          ? country.name
-          : meta.name,
-      code,
-      flagEmoji: countryCodeToFlagEmoji(code) ?? meta.flagEmoji,
-    };
-  });
+      return {
+        ...country,
+        name:
+          country.name && !country.name.toLowerCase().startsWith("country ")
+            ? country.name
+            : meta.name,
+        code,
+        flagEmoji: countryCodeToFlagEmoji(code) ?? meta.flagEmoji,
+      };
+    })
+    .sort(compareCountries);
 }
 
 function getCachedCatalog(serverId: string, countryId: number) {
@@ -2529,7 +2557,8 @@ export async function getCountries(serverId?: string): Promise<CountryOption[]> 
     return cached.countries;
   }
 
-  const countries = await fetchWebCountries(resolvedServerId).catch(() => []);
+  const countries = (await fetchWebCountries(resolvedServerId).catch(() => []))
+    .sort(compareCountries);
 
   if (countries.length === 0 && cachedCountries.length > 0) {
     return cachedCountries;

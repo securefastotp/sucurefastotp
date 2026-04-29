@@ -2690,7 +2690,10 @@ export function MemberConsole({
       setSummary(nextSummary);
       setCountries(initialCountries);
       setSelectedCountryId(
-        findPreferredCountryId(initialCountries, initialCountryId),
+        findPreferredCountryId(
+          initialCountries,
+          nextSummary.orders[0]?.countryId ?? initialCountryId,
+        ),
       );
       setSelectedProviderServiceId("");
       setProviderVariants([]);
