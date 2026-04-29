@@ -1,5 +1,5 @@
 export const DEFAULT_OPERATOR = "any";
-export const INDONESIA_COUNTRY_ID = 6;
+export const INDONESIA_COUNTRY_ID = 88;
 
 const operatorLabelMap: Record<string, string> = {
   any: "Semua Provider",

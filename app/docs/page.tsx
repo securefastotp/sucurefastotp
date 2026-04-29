@@ -269,7 +269,7 @@ Browser -> /api/orders/:id -> Next.js Route -> Upstream Provider`}
               Example Request
             </p>
             <pre className="code-block mt-5 overflow-x-auto text-sm">
-{`curl "${baseUrl}/api/catalog?server=bimasakti&countryId=6"
+{`curl "${baseUrl}/api/catalog?server=bimasakti&countryId=88"
 
 curl ${baseUrl}/api/balance
 
@@ -278,13 +278,14 @@ curl ${baseUrl}/api/history
 curl -X POST ${baseUrl}/api/payments \\
   -H "Content-Type: application/json" \\
   -d '{
-    "serviceId": "bimasakti-6-wa",
+    "serviceId": "bimasakti-88-wa",
     "serviceCode": "wa",
     "serverId": "bimasakti",
     "service": "WhatsApp",
     "country": "Indonesia",
-    "countryId": 6,
-    "price": 2025,
+    "countryId": 88,
+    "operator": "any",
+    "price": 3150,
     "currency": "IDR",
     "customerName": "Agus",
     "customerPhone": "08123456789"
@@ -295,13 +296,14 @@ curl ${baseUrl}/api/payments/pay_xxxxx
 curl -X POST ${baseUrl}/api/orders \\
   -H "Content-Type: application/json" \\
   -d '{
-    "serviceId": "bimasakti-6-wa",
+    "serviceId": "bimasakti-88-wa",
     "serviceCode": "wa",
     "serverId": "bimasakti",
     "service": "WhatsApp",
     "country": "Indonesia",
-    "countryId": 6,
-    "price": 2025,
+    "countryId": 88,
+    "operator": "any",
+    "price": 3150,
     "currency": "IDR"
   }'
 
@@ -319,14 +321,14 @@ curl -X DELETE ${baseUrl}/api/orders/order_xxxxx`}
 {`{
   "order": {
     "id": "12003637",
-    "serviceId": "bimasakti-6-wa",
+    "serviceId": "bimasakti-88-wa",
     "serviceCode": "wa",
     "serverId": "bimasakti",
     "service": "WhatsApp",
     "country": "Indonesia",
-    "countryId": 6,
+    "countryId": 88,
     "phoneNumber": "+6283821984456",
-    "price": 2025,
+    "price": 3150,
     "currency": "IDR",
     "status": "pending",
     "createdAt": "2026-04-12T10:32:15.000Z",

@@ -13,10 +13,12 @@ import { siteConfig } from "@/lib/site-config";
 
 export const dynamic = "force-dynamic";
 
+const featuredCountryId = 88;
+
 export default async function Home() {
   const featuredCatalog = await getCatalog({
     serverId: "bimasakti",
-    countryId: 6,
+    countryId: featuredCountryId,
   }).catch(() => null);
   const featuredServices = featuredCatalog?.services.slice(0, 6) ?? [];
   const supportedServices = [...new Set(featuredServices.map((service) => service.service))];
@@ -112,11 +114,11 @@ export default async function Home() {
                   </div>
                 </div>
                 <pre className="code-block mt-5 overflow-x-auto text-sm">
-{`curl "${baseUrl}/api/catalog?server=bimasakti&countryId=6"
+{`curl "${baseUrl}/api/catalog?server=bimasakti&countryId=88"
 
 curl -X POST ${baseUrl}/api/orders \\
   -H "Content-Type: application/json" \\
-  -d '{"serviceId":"bimasakti-6-wa","serviceCode":"wa","serverId":"bimasakti","service":"WhatsApp","country":"Indonesia","countryId":6,"price":3000,"currency":"IDR"}'
+  -d '{"serviceId":"bimasakti-88-wa","serviceCode":"wa","serverId":"bimasakti","service":"WhatsApp","country":"Indonesia","countryId":88,"operator":"any","price":3150,"currency":"IDR"}'
 
 curl ${baseUrl}/api/orders/order_xxxxx`}
                 </pre>
